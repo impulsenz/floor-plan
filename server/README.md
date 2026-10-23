@@ -149,6 +149,7 @@ API (all JSON; `{store}` is `sites`, `maps`, `assets` or `meta`):
 | POST | `/api/auth/google` | swap a Google ID token for a session token |
 | GET / POST | `/api/auth/me`, `/api/auth/logout` | who's signed in / sign out |
 | GET / PUT / DELETE | `/api/users[/{email}]` | access list (admins only) |
+| GET / PUT | `/api/prefs` | your own settings (theme, defaults), stored per account |
 | GET | `/api/{store}` | every record (`?siteId=` filters plans by site) |
 | GET | `/api/{store}/{id}` | one record, or 404 |
 | PUT | `/api/{store}/{id}` | create or replace (body `id` must match) |

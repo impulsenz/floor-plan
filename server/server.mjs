@@ -59,6 +59,11 @@ db.exec(`
     created    INTEGER NOT NULL,
     expires    INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS prefs (
+    email   TEXT PRIMARY KEY,          -- each person's own settings (theme etc.), so they follow them to any device
+    data    TEXT NOT NULL,
+    updated INTEGER NOT NULL
+  );
 `);
 
 // Who created each site or plan. Older records (from before ownership) have no owner and only admins can change them.
@@ -71,6 +76,8 @@ const q = {
   row:      db.prepare('SELECT owner FROM records WHERE store = ? AND id = ?'),
   setOwner: db.prepare('UPDATE records SET owner = ? WHERE store = ? AND id = ?'),
   people:   db.prepare('SELECT email, name FROM users'),
+  prefs:    db.prepare('SELECT data FROM prefs WHERE email = ?'),
+  setPrefs: db.prepare('INSERT INTO prefs (email, data, updated) VALUES (?, ?, ?) ON CONFLICT (email) DO UPDATE SET data = excluded.data, updated = excluded.updated'),
   put:      db.prepare(`INSERT INTO records (store, id, site_id, data, updated) VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT (store, id) DO UPDATE SET site_id = excluded.site_id, data = excluded.data, updated = excluded.updated`),
   del:      db.prepare('DELETE FROM records WHERE store = ? AND id = ?'),
@@ -296,6 +303,16 @@ const server = http.createServer(async (req, res) => {
     if (!me) return json(res, 401, { error: 'Please sign in' });
     if (parts[0] === 'users') return await handleUsers(req, res, parts, me);
     if (parts[0] === 'people' && req.method === 'GET') return json(res, 200, AUTH_ON ? q.people.all() : []);
+    if (parts[0] === 'prefs' && parts.length === 1) {
+      if (req.method === 'GET') { const r = q.prefs.get(me.email); return send(res, 200, r ? r.data : '{}'); }
+      if (req.method === 'PUT') {
+        const { obj } = await readJson(req, 64 * 1024);
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return json(res, 400, { error: 'Settings must be an object' });
+        q.setPrefs.run(me.email, JSON.stringify(obj), Date.now());
+        return json(res, 200, { ok: true });
+      }
+      return json(res, 405, { error: 'Method not allowed' });
+    }
 
     const [store, id] = parts;
     if (!STORES.has(store) || parts.length > 2) return json(res, 404, { error: 'Unknown path' });

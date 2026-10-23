@@ -69,6 +69,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .head-actions{display:flex;flex-wrap:wrap;gap:8px}
 .search{height:34px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:0 10px;min-width:0;width:240px;max-width:100%}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+[hidden]{display:none!important}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;transition:border-color .12s, transform .12s}
 .card:hover{border-color:var(--ink-3)}
 .thumb{aspect-ratio:16/10;background:var(--panel-2);display:grid;place-items:center;border-bottom:1px solid var(--line);overflow:hidden;max-width:100%}
@@ -264,6 +265,17 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sv-add:hover{color:var(--accent);border-color:var(--accent)}
 .photo-prev{width:72px;height:48px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);display:grid;place-items:center;font-size:11px;color:var(--ink-3);overflow:hidden;flex:none}
 .photo-prev img{width:100%;height:100%;object-fit:cover}
+.acc-row{display:flex;flex-wrap:wrap;gap:8px}
+.acc-sw{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:11px;color:var(--ink-2)}
+.acc-sw input{position:absolute;opacity:0;pointer-events:none}
+.acc-sw span{width:26px;height:26px;border-radius:50%;background:var(--sw);border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
+.acc-sw input:checked+span{box-shadow:0 0 0 2px var(--ink)}
+.acc-sw input:focus-visible+span{outline:2px solid var(--sel);outline-offset:3px}
+.acc-sw em{font-style:normal}
+.req{font-style:normal;color:var(--danger);font-size:12px}
+.modal .sec-h{margin-top:6px}
+.modal .f .chk input{width:16px;height:16px;min-width:0;flex:none;padding:0}
+.chk{white-space:nowrap}
 .site-head{display:flex;gap:16px;align-items:flex-start;min-width:0}
 .site-photo{width:120px;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--line);flex:none}
 .editor.ro{grid-template-columns:minmax(0,1fr) 330px}
@@ -544,9 +556,28 @@ function modal({title,body,buttons=[{label:'Cancel',value:null},{label:'OK',valu
 async function confirmBox(title,msg,label='Delete'){const r=await modal({title,body:`<p>${msg}</p>`,buttons:[{label:'Cancel',value:null},{label,value:'ok',primary:true}]});return r.value==='ok';}
 
 /* ---------------- theme ---------------- */
-function applyTheme(t){if(t)document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;}
-try{applyTheme(localStorage.getItem('psp-theme'));}catch(e){}
-function toggleTheme(){const cur=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');const n=cur==='dark'?'light':'dark';applyTheme(n);try{localStorage.setItem('psp-theme',n);}catch(e){}}
+function applyTheme(t){if(t&&t!=='system')document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;}
+/* accent colours: [light accent, light soft, dark accent, dark soft] */
+const ACCENTS={orange:['Orange','#d9480f','#fde6d9','#f76b2b','#3b2418'],blue:['Blue','#1971c2','#dbeafe','#4dabf7','#16263a'],green:['Green','#2b8a3e','#dcf3e0','#51cf66','#17301c'],teal:['Teal','#0c8599','#d5f3f6','#3bc9db','#123036'],purple:['Purple','#7048e8','#ece5ff','#9775fa','#2a2140'],red:['Red','#c92a2a','#fde2e2','#ff6b6b','#3a1c1c'],slate:['Slate','#495057','#e9ecef','#adb5bd','#2b2f33']};
+function applyAccent(k){const a=ACCENTS[k]||ACCENTS.orange;let st=document.getElementById('accentCss');if(!st){st=document.createElement('style');st.id='accentCss';document.head.appendChild(st);}
+  const L=`--accent:${a[1]};--accent-soft:${a[2]}`,D=`--accent:${a[3]};--accent-soft:${a[4]}`;
+  st.textContent=`:root{${L}}@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){${D}}}:root[data-theme="dark"]{${D}}`;}
+try{applyTheme(localStorage.getItem('psp-theme'));applyAccent(localStorage.getItem('psp-accent'));}catch(e){}
+function toggleTheme(){const cur=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');Prefs.set('theme',cur==='dark'?'light':'dark');}
+/* Each person's own settings. Saved on the server against their account, so they follow them to any device. */
+const PREF_DEF={theme:'system',accent:'orange',drawnBy:'',portrait:false,showGrid:true,snap:true,siteFilter:'all',siteSort:'updated'};
+const Prefs={v:{...PREF_DEF},t:null,
+  key(){return 'psp-prefs:'+(Store.base||'')+':'+(Store.user?.email||'')},
+  apply(){applyTheme(this.v.theme);applyAccent(this.v.accent);try{localStorage.setItem('psp-theme',this.v.theme);localStorage.setItem('psp-accent',this.v.accent);}catch(e){}},
+  async load(){let local=null,srv=null;try{local=JSON.parse(localStorage.getItem(this.key())||'null');}catch(e){}
+    try{srv=await Store.req('GET','/prefs');}catch(e){}
+    const has=srv&&typeof srv==='object'&&Object.keys(srv).length;
+    this.v={...PREF_DEF,...(has?srv:local||{})};
+    if(!has&&!local){try{const t=localStorage.getItem('psp-theme');if(t)this.v.theme=t;}catch(e){}if(Store.user?.name)this.v.drawnBy=Store.user.name;}
+    this.apply();},
+  set(k,val){if(typeof k==='object')Object.assign(this.v,k);else this.v[k]=val;this.apply();this.save();},
+  save(){try{localStorage.setItem(this.key(),JSON.stringify(this.v));}catch(e){}clearTimeout(this.t);
+    this.t=setTimeout(()=>Store.req('PUT','/prefs',this.v).catch(()=>toast('Your settings could not be saved to the server, so they are only on this device for now.','warn')),300);}};
 const ICON={
   sun:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   undo:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
@@ -594,9 +625,9 @@ E.wallStyle={w:8,color:'#2a2f36',dash:false};E.last={draw:'wall',shapes:'rect'};
 
 const FONTS={'Arial':'Arial, Helvetica, sans-serif','Arial Narrow':'"Arial Narrow", "Roboto Condensed", Arial, sans-serif','Georgia':'Georgia, "Times New Roman", serif','Verdana':'Verdana, Geneva, sans-serif','Courier New':'"Courier New", Courier, monospace','Impact':'Impact, "Arial Black", sans-serif'};
 
-function newMap(siteId,name){return{id:uid(),siteId,name,created:Date.now(),updated:Date.now(),width:1600,height:a4Height(1600,false),elements:[],scale:null,bgMeta:null,
+function newMap(siteId,name){return{id:uid(),siteId,name,created:Date.now(),updated:Date.now(),width:1600,height:a4Height(1600,!!Prefs.v.portrait),elements:[],scale:null,bgMeta:null,
   furn:{legend:{show:true,x:1320,y:20,s:1},title:{show:true,x:1200,y:950,s:1},north:{show:true,x:60,y:60,rot:0,s:1},scalebar:{show:true,x:40,y:1060,s:1}},
-  settings:{grid:20,snap:true,showGrid:true,marker:10,label:12,preparedBy:'',revision:'01',department:'',planDate:isoDate(Date.now()),showFrame:true},thumb:null};}
+  settings:{grid:20,snap:Prefs.v.snap!==false,showGrid:Prefs.v.showGrid!==false,marker:10,label:12,preparedBy:Prefs.v.drawnBy||'',revision:'01',department:'',planDate:isoDate(Date.now()),showFrame:true},thumb:null};}
 function isoDate(t){const d=new Date(t);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function layoutFurn(){const W=M.width,H=M.height,f=M.furn;const s=clamp(Math.min(W,H)/1100,.5,2.2);f.north=f.north||{show:true,rot:0};f.north.s=r2(s);f.north.x=Math.round(46*s);f.north.y=Math.round(46*s);}
 /* The printed sheet = black header band + plan area + bottom information bar. */
@@ -865,18 +896,18 @@ async function showSites(){
   const [sites,maps]=await Promise.all([Store.all('sites'),Store.all('maps')]);
   crumbs([['Sites','#/']]);
   $('#topActions').innerHTML=`<button class="btn ghost hide-narrow" data-top="server" title="Servers">${ICON.globe}<span>${esc(Servers.current()?.name||'Server')}</span></button><button class="btn hide-narrow" data-top="import-site">${ICON.upload}Import backup</button><button class="btn primary" data-top="new-site">${ICON.plus}New site</button>${themeBtn()}${accountBtn()}`;
-  sites.sort((a,b)=>b.updated-a.updated);
+  sites.sort(Prefs.v.siteSort==='name'?(a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}):(a,b)=>b.updated-a.updated);
   const card=s=>{const ms=maps.filter(m=>m.siteId===s.id),mine=canEdit(s),who=ownerLabel(s);
     const find=[s.name,s.address,s.siteRef,s.contractNo,s.client,who,s.owner,...ms.map(m=>m.name)].filter(Boolean).join(' ').toLowerCase();
     return `<article class="card" data-site="${s.id}" data-find="${esc(find)}" data-mine="${s.owner&&s.owner===Store.user?.email?1:0}"><div class="thumb">${s.image?`<img src="${s.image}" alt="">`:`<span class="mono-tile">${esc(s.name.slice(0,2).toUpperCase())}</span>`}</div>
       <div class="meta"><h3>${esc(s.name)}${s.sample?'<span class="tag">Example</span>':''}</h3><p>${esc(s.address||'No address')}</p><p class="small">${ms.length} plan${ms.length===1?'':'s'} · updated ${fmtDate(s.updated)}${who?` · ${esc(who==='You'?'yours':'by '+who)}`:''}</p></div>
       <div class="card-actions">${mine?'<button class="btn ghost" data-act="edit">Edit</button>':''}<button class="btn ghost" data-act="copy">Duplicate</button><button class="btn ghost" data-act="backup">Back up</button>${mine?'<button class="btn ghost danger" data-act="del">Delete</button>':''}</div></article>`;};
   $('#view').innerHTML=`<div class="page"><div class="page-in"><div class="page-head"><div><h1>Sites</h1><p>Each site is a folder for its floor plans. Open a site to see or add its plans.${Store.auth?' You can change your own sites and plans; anyone\'s can be opened and duplicated.':''}</p></div>
-      <div class="head-actions">${Store.auth?`<div class="seg" id="whoF" style="min-width:160px"><label><input type="radio" name="whoF" value="all" checked><span>Everyone</span></label><label><input type="radio" name="whoF" value="mine"><span>Mine</span></label></div>`:''}<input class="search" id="siteQ" type="search" placeholder="Search sites, addresses, refs, plans" aria-label="Search sites"></div></div>
+      <div class="head-actions">${Store.auth?`<div class="seg" id="whoF" style="min-width:200px"><label><input type="radio" name="whoF" value="all" ${Prefs.v.siteFilter!=='mine'?'checked':''}><span>Everybody</span></label><label><input type="radio" name="whoF" value="mine" ${Prefs.v.siteFilter==='mine'?'checked':''}><span>My sites</span></label></div>`:''}<input class="search" id="siteQ" type="search" placeholder="Search sites, addresses, refs, plans" aria-label="Search sites"></div></div>
     ${sites.length?`<div class="grid" id="siteGrid">${sites.map(card).join('')}</div><p class="hint" id="siteNone" hidden>No sites match.</p>`:`<div class="empty"><h3>No sites yet</h3><p>Create a site for each customer location, for example a food plant called Teagle.</p><p style="margin-top:12px"><button class="btn primary" data-top="new-site">${ICON.plus}New site</button></p></div>`}</div></div>`;
   const filter=()=>{const q=($('#siteQ').value||'').toLowerCase().trim(),mine=$('input[name=whoF]:checked')?.value==='mine';let n=0;
     $$('#siteGrid .card').forEach(c=>{const show=(!q||q.split(/\s+/).every(w=>c.dataset.find.includes(w)))&&(!mine||c.dataset.mine==='1');c.hidden=!show;if(show)n++;});const none=$('#siteNone');if(none)none.hidden=n>0;};
-  $('#siteQ').oninput=filter;$('#whoF')?.addEventListener('change',filter);
+  $('#siteQ').oninput=filter;$('#whoF')?.addEventListener('change',filter);filter();
   $('#siteGrid')?.addEventListener('click',async e=>{const c=e.target.closest('.card');if(!c)return;const id=c.dataset.site,b=e.target.closest('[data-act]');
     if(!b){location.hash='#/site/'+id;return;}
     const s=await Store.get('sites',id);
@@ -927,13 +958,13 @@ async function showSite(id){
   site=await Store.get('sites',id);if(!site){location.hash='#/';return;}
   route='site';M=null;const maps=(await Store.mapsOf(id)).sort((a,b)=>b.updated-a.updated);const siteMine=canEdit(site);
   crumbs([['Sites','#/'],[site.name,'#/site/'+id]]);
-  $('#topActions').innerHTML=`<button class="btn hide-narrow" data-top="import-map">${ICON.upload}Import plan</button><button class="btn primary" data-top="new-map">${ICON.plus}New plan</button>${themeBtn()}${accountBtn()}`;
-  const card=m=>{const n=m.elements.filter(e=>e.type==='station').length,mine=canEdit(m),who=ownerLabel(m);
-    return `<article class="card" data-map="${m.id}" data-find="${esc([m.name,m.settings?.department,m.settings?.preparedBy,who,m.owner].filter(Boolean).join(' ').toLowerCase())}"><div class="thumb">${m.thumb?`<img src="${m.thumb}" alt="">`:`<span class="mono-tile">—</span>`}</div><div class="meta"><h3>${esc(m.name)}${mine?'':'<span class="tag" title="Someone else\'s plan: opens view-only">View only</span>'}</h3><p class="small">${n} station${n===1?'':'s'} · v${esc(m.settings?.revision||'01')} · ${fmtDate(m.updated)}${who?` · ${esc(who==='You'?'yours':'by '+who)}`:''}</p></div>
+  $('#topActions').innerHTML=`<button class="btn hide-narrow" data-top="import-map">${ICON.upload}Import plan</button><button class="btn primary" data-top="new-map">${ICON.plus}Create new floor plan</button>${themeBtn()}${accountBtn()}`;
+  const card=m=>{const mine=canEdit(m),who=ownerLabel(m);
+    return `<article class="card" data-map="${m.id}" data-find="${esc([m.name,m.settings?.department,m.settings?.preparedBy,who,m.owner].filter(Boolean).join(' ').toLowerCase())}"><div class="thumb">${m.thumb?`<img src="${m.thumb}" alt="">`:`<span class="mono-tile">—</span>`}</div><div class="meta"><h3>${esc(m.name)}</h3></div>
     <div class="card-actions">${mine?'<button class="btn ghost" data-act="rename">Rename</button>':''}<button class="btn ghost" data-act="dup">Duplicate</button><button class="btn ghost" data-act="file">Save file</button>${mine?'<button class="btn ghost danger" data-act="del">Delete</button>':''}</div></article>`;};
-  $('#view').innerHTML=`<div class="page"><div class="page-in"><div class="page-head"><div class="site-head">${site.image?`<img class="site-photo" src="${site.image}" alt="">`:''}<div><h1>${esc(site.name)}${site.sample?'<span class="tag">Example</span>':''}</h1><div class="site-info">${site.address?`<span><b>Address</b> ${esc(site.address)}</span>`:''}${site.client?`<span><b>Contact</b> ${esc(site.client)}</span>`:''}<span><b>Plans</b> ${maps.length}</span>${Store.auth?`<span><b>Owner</b> ${esc(ownerLabel(site))}</span>`:''}</div>${site.notes?`<p>${esc(site.notes)}</p>`:''}</div></div>
+  $('#view').innerHTML=`<div class="page"><div class="page-in"><div class="page-head"><div class="site-head">${site.image?`<img class="site-photo" src="${site.image}" alt="">`:''}<div><h1>${esc(site.name)}${site.sample?'<span class="tag">Example</span>':''}</h1>${Store.auth?`<div class="site-info"><span><b>Owner</b> ${esc(ownerLabel(site))}</span></div>`:''}</div></div>
     <div class="head-actions">${maps.length>3?`<input class="search" id="planQ" type="search" placeholder="Search plans" aria-label="Search plans">`:''}${siteMine?'<button class="btn" data-top="edit-site">Edit site</button>':''}<button class="btn" data-top="backup">Back up site</button></div></div>
-    ${maps.length?`<div class="grid" id="mapGrid">${maps.map(card).join('')}</div>`:`<div class="empty"><h3>No plans for ${esc(site.name)} yet</h3><p>Start from a blank page, a satellite photo of the property, or an existing plan (image or PDF).</p><p style="margin-top:12px"><button class="btn primary" data-top="new-map">${ICON.plus}New plan</button></p></div>`}</div></div>`;
+    ${maps.length?`<div class="grid" id="mapGrid">${maps.map(card).join('')}</div>`:`<div class="empty"><h3>No plans for ${esc(site.name)} yet</h3><p>Start from a blank page, a satellite photo of the property, or an existing plan (image or PDF).</p><p style="margin-top:12px"><button class="btn primary" data-top="new-map">${ICON.plus}Create new floor plan</button></p></div>`}</div></div>`;
   $('#planQ')?.addEventListener('input',e=>{const q=e.target.value.toLowerCase().trim();$$('#mapGrid .card').forEach(c=>c.hidden=!!q&&!q.split(/\s+/).every(w=>c.dataset.find.includes(w)));});
   $('#mapGrid')?.addEventListener('click',async e=>{const c=e.target.closest('.card');if(!c)return;const mid=c.dataset.map,b=e.target.closest('[data-act]');
     if(!b){location.hash='#/map/'+mid;return;}
@@ -947,12 +978,14 @@ async function showSite(id){
   });
 }
 async function newPlan(){
-  const r=await modal({title:'New plan',body:`<label class="f"><span>Plan name</span><input name="name" placeholder="e.g. Ground floor, Warehouse, Site perimeter"></label>
+  const r=await modal({title:'Create new floor plan',body:`<label class="f"><span>Plan name<em id="npReq" class="req" hidden> (required)</em></span><input name="name" placeholder="e.g. Ground floor, Warehouse, Site perimeter"></label>
     <div class="seg" role="radiogroup"><label><input type="radio" name="start" value="blank" checked><span>Blank page</span></label><label><input type="radio" name="start" value="sat"><span>Satellite photo</span></label><label><input type="radio" name="start" value="file"><span>From a file</span></label></div>
     <label class="f" id="npFile" hidden><span>Plan file</span><input type="file" name="file" accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.pdf,image/*,application/pdf"></label>`,
-    buttons:[{label:'Cancel',value:null},{label:'Create plan',value:'ok',primary:true}],
-    onOpen:(w)=>{w.addEventListener('change',()=>{$('#npFile',w).hidden=$('input[name=start]:checked',w).value!=='file';});},
-    before:(v,d)=>{if(d.start==='file'&&!d.file?.length){toast('Choose a file to start from.','warn');return false;}}});
+    buttons:[{label:'Cancel',value:null},{label:'Create new floor plan',value:'ok',primary:true}],
+    onOpen:(w)=>{const upd=()=>{const f=$('input[name=start]:checked',w).value==='file';$('#npFile',w).hidden=!f;$('#npReq',w).hidden=!f;};w.addEventListener('change',upd);upd();},
+    before:(v,d,w)=>{const nm=$('[name=name]',w);nm.removeAttribute('aria-invalid');
+      if(d.start==='file'&&!String(d.name||'').trim()){nm.setAttribute('aria-invalid','true');nm.focus();toast('Give the plan a name.','warn');return false;}
+      if(d.start==='file'&&!d.file?.length){toast('Choose a file to start from.','warn');return false;}}});
   if(r.value!=='ok')return;
   const m=newMap(site.id,r.data.name.trim()||'Plan '+((await Store.mapsOf(site.id)).length+1));
   await Store.put('maps',m);await Store.put('assets',{id:m.id,data:{}});
@@ -979,8 +1012,8 @@ async function importMapFiles(files){
   }
 }
 
-/* top-bar actions (delegated) */
-$('#topActions').addEventListener('click',async e=>{const b=e.target.closest('[data-top]');if(!b)return;const a=b.dataset.top;
+/* top-bar actions, and the same actions on buttons elsewhere on the page (delegated) */
+document.addEventListener('click',async e=>{const b=e.target.closest('[data-top]');if(!b||b.closest('.modal'))return;const a=b.dataset.top;
   if(a==='theme')return toggleTheme();
   if(a==='server')return openServerDialog();
   if(a==='account')return openAccountMenu(b);
@@ -997,7 +1030,6 @@ $('#topActions').addEventListener('click',async e=>{const b=e.target.closest('[d
   if(a==='export')openExport();
   if(a==='panel')$('#panel').classList.toggle('open');
 });
-document.addEventListener('click',e=>{const b=e.target.closest('[data-top="new-site"],[data-top="new-map"]');if(b&&!b.closest('#topActions'))$(`#topActions [data-top="${b.dataset.top}"]`)?.click();});
 const SHORT={select:'Select',pan:'Pan',room:'Room',objects:'Objects',text:'Text',wall:'Wall',fence:'Fence',line:'Line',arrow:'Arrow'};
 function groupBtn(g){const G=GROUPS[g],cur=G.items.find(x=>x[0]===E.last[g])||G.items[0],lab=g==='draw'?SHORT[cur[0]]:G.label;return `<button type="button" class="tool" data-tool="grp-${g}" data-group="${g}" title="${G.label}: ${G.items.map(x=>x[1].toLowerCase()).join(', ')}" aria-label="${G.label}" aria-haspopup="menu">${toolSvg(cur[3])}<span class="tl">${esc(lab)}</span><span class="more"></span></button>`;}
 function closePop(){$('.popmenu')?.remove();document.removeEventListener('pointerdown',popAway,true);}
@@ -1925,8 +1957,28 @@ setInterval(async()=>{if(!Store.auth||!Store.token||route==='login'||route==='co
 function accountBtn(){const u=Store.user;if(!u)return'';const ini=esc((u.name||u.email).trim().slice(0,1).toUpperCase());
   return `<button class="acct" data-top="account" title="${esc(u.email)}" aria-haspopup="menu">${u.picture?`<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">`:`<span>${ini}</span>`}</button>`;}
 function openAccountMenu(btn){const u=Store.user;if(!u)return;
-  const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'server',label:'Servers'},{v:'out',label:'Sign out'});
-  popMenu(btn,items,'below',async v=>{if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
+  const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
+  popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
+async function openPrefs(){
+  const was={...Prefs.v},v=Prefs.v,seg=(name,opts,cur)=>`<div class="seg" role="radiogroup">${opts.map(([val,lab])=>`<label><input type="radio" name="${name}" value="${val}" ${String(cur)===String(val)?'checked':''}><span>${lab}</span></label>`).join('')}</div>`;
+  const r=await modal({title:'Settings',body:`<p>These are your own settings. They're saved to your account, so they follow you to any device you sign in on.</p>
+    <h3 class="sec-h">Appearance</h3>
+    <div class="f"><span>Theme</span>${seg('theme',[['system','Match device'],['light','Light'],['dark','Dark']],v.theme)}</div>
+    <div class="f"><span>Colour</span><div class="acc-row">${Object.entries(ACCENTS).map(([k,a])=>`<label class="acc-sw" title="${a[0]}"><input type="radio" name="accent" value="${k}" ${v.accent===k?'checked':''}><span style="--sw:${a[1]}"></span><em>${a[0]}</em></label>`).join('')}</div></div>
+    <h3 class="sec-h">New floor plans</h3>
+    <label class="f"><span>Drawn by</span><input name="drawnBy" value="${esc(v.drawnBy||'')}" placeholder="Your name, filled in on new plans"></label>
+    <div class="f"><span>Page</span>${seg('portrait',[['false','A4 landscape'],['true','A4 portrait']],!!v.portrait)}</div>
+    <div class="f"><span>Grid</span><div class="row"><label class="chk"><input type="checkbox" name="showGrid" ${v.showGrid!==false?'checked':''}> Show grid</label><label class="chk"><input type="checkbox" name="snap" ${v.snap!==false?'checked':''}> Snap to grid</label></div></div>
+    <h3 class="sec-h">Sites page</h3>
+    ${Store.auth?`<div class="f"><span>Show</span>${seg('siteFilter',[['all','Everybody'],['mine','My sites']],v.siteFilter)}</div>`:''}
+    <div class="f"><span>Sort by</span>${seg('siteSort',[['updated','Last changed'],['name','Name A–Z']],v.siteSort)}</div>`,
+    buttons:[{label:'Cancel',value:null},{label:'Save',value:'ok',primary:true}],
+    onOpen:w=>{w.addEventListener('change',e=>{if(e.target.name==='theme'){applyTheme(e.target.value);}if(e.target.name==='accent')applyAccent(e.target.value);});}});
+  if(r.value!=='ok'){Prefs.v=was;Prefs.apply();return;}
+  const d=r.data,w=document;
+  Prefs.set({theme:d.theme||v.theme,accent:d.accent||v.accent,drawnBy:String(d.drawnBy||'').trim(),portrait:d.portrait==='true',showGrid:!!d.showGrid,snap:!!d.snap,siteFilter:d.siteFilter||v.siteFilter,siteSort:d.siteSort||v.siteSort});
+  toast('Settings saved');if(route==='sites')showSites();
+}
 async function signOut(){if(route==='map')await leaveEditor();try{await fetch(Store.base+'/api/auth/logout',{method:'POST',headers:Store.hdr(false)});}catch(e){}
   Store.setToken('');Store.user=null;try{google.accounts.id.disableAutoSelect();}catch(e){}location.hash='#/';showLogin('You have signed out.');}
 async function openUsers(){
@@ -1999,6 +2051,7 @@ async function boot(){
   {const why=await Store.whoAmI();if(why!==null){showLogin(why);return;}}
   if(route==='connect'||route==='login')route='';
   Servers.ensure(Store.base);
+  await Prefs.load();
   Store.people=new Map();if(Store.auth){try{for(const p of await Store.req('GET','/people'))Store.people.set(p.email,p.name||p.email.split('@')[0]);}catch(e){}}
   try{const c=await Store.get('meta','cats');if(c?.value?.length)CATS=c.value;}catch(e){}
   if(isAdmin()){

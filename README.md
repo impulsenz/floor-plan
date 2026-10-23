@@ -4,7 +4,8 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 
 ## What it does
 
-- **Sites as folders.** Create a site (e.g. *Teagle*), and every plan for that site is kept inside it. Each site card can show a photo of the site (add it when creating or editing the site); inside a site, plan cards show a preview of each map. Search finds sites by name, address, site ref, contract, client, owner or plan name, and **Mine** shows only your own.
+- **Sites as folders.** Create a site (e.g. *Teagle*), and every plan for that site is kept inside it. Each site card can show a photo of the site (add it when creating or editing the site); inside a site, plan cards show a preview of each map. Search finds sites by name, address, site ref, contract, client, owner or plan name, and **My sites** shows only your own.
+- **Your settings follow you.** Your picture → **Settings**: theme (match device, light or dark), accent colour, the *Drawn by* name and page shape for new floor plans, grid defaults, and how the Sites page is filtered and sorted. They're saved to your account on the server, so they're the same on any device you sign in on.
 - **Your files and everyone else's.** You can create, edit and delete your own sites and plans. Anyone else's can be opened (view only, with export) and duplicated; the copy is yours to edit. Admins can edit and delete everything.
 - **Printed sheet layout.** A fixed-height black heading band across the top, with your logo on the right (upload it once in the Settings tab, shared by every plan). The heading never moves; the logo has size, left/right and up/down controls. A fixed-height bottom bar fills itself from the site and plan details (Title, Address, Department, Date, Version, Site Ref, Drawn By, Contract No) plus a KEY of every station type.
 - **Sites.** Every field on the site form except Notes is required, so the bottom bar is always complete.
