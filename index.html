@@ -87,15 +87,15 @@ button,input,select,textarea{font:inherit;color:inherit}
 .site-info b{color:var(--ink);font-weight:600}
 
 /* editor */
-.editor{display:grid;grid-template-columns:80px minmax(0,1fr) 330px;height:100%;min-height:0}
-.tools{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;overflow-y:auto;user-select:none;-webkit-user-select:none}
+.editor{display:grid;grid-template-columns:112px minmax(0,1fr) 330px;height:100%;min-height:0}
+.tools{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 10px;overflow-y:auto;user-select:none;-webkit-user-select:none}
 .tools .sep{display:none}
-.tool{width:64px;flex:none;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 2px 7px;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--ink-2);cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;outline:none}
+.tool{width:92px;flex:none;display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 4px 11px;border:1px solid transparent;border-radius:11px;background:transparent;color:var(--ink-2);cursor:pointer;position:relative;-webkit-tap-highlight-color:transparent;outline:none}
 .tool:hover{color:var(--ink);background:var(--panel-2)}
 .tool:focus-visible{border-color:var(--sel);box-shadow:0 0 0 2px color-mix(in srgb,var(--sel) 30%,transparent)}
 .tool.on,.tool.on:hover{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 40%,transparent);color:var(--accent)}
-.tool svg{width:22px;height:22px;stroke-width:1.8}
-.tool .tl{font-size:11.5px;font-weight:600;line-height:1;letter-spacing:.1px;white-space:nowrap}
+.tool svg{width:27px;height:27px;stroke-width:1.7}
+.tool .tl{font-size:13.5px;font-weight:600;line-height:1;letter-spacing:.1px;white-space:nowrap}
 .tool.on .tl{font-weight:700}
 .tool .tl,.tool svg{pointer-events:none}
 .stage-wrap{position:relative;background:var(--stage);overflow:hidden;min-width:0;touch-action:none}
@@ -201,6 +201,10 @@ button,input,select,textarea{font:inherit;color:inherit}
 .legend-ed .code{width:62px;font-family:var(--f-mono);text-transform:uppercase}
 .tbl-wrap{overflow-x:auto}
 .filelist{margin:0;padding-left:18px;color:var(--ink-2);font-size:13px}
+.drawbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:5;max-width:calc(100% - 20px);flex-wrap:nowrap;justify-content:center;white-space:nowrap}
+.drawbar .seg{flex:none}
+.drawbar .seg span{padding:5px 10px}
+.dbinfo{font-size:12.5px;color:var(--ink-2);padding:0 4px;white-space:nowrap}
 .popmenu{position:fixed;z-index:40;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px;display:flex;flex-direction:column;gap:2px;min-width:210px}
 .popmenu button{display:flex;align-items:center;gap:10px;border:0;background:none;padding:8px 10px;border-radius:6px;cursor:pointer;text-align:left;font-size:13.5px;color:var(--ink);width:100%}
 .popmenu button:hover{background:var(--panel-2)}
@@ -208,7 +212,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .popmenu svg{width:18px;height:18px;flex:none}
 .popmenu kbd,.popmenu small{margin-left:auto;font-family:var(--f-mono);font-size:11px;color:var(--ink-3)}
 .popmenu small{font-family:inherit;font-size:12px}
-.tool .more{position:absolute;right:7px;top:9px;pointer-events:none;width:0;height:0;border-left:5px solid transparent;border-bottom:5px solid currentColor;opacity:.7}
+.tool .more{position:absolute;right:9px;top:11px;pointer-events:none;width:0;height:0;border-left:5px solid transparent;border-bottom:5px solid currentColor;opacity:.7}
 .sat-search{position:relative}
 .sat-search input{width:100%}
 .sat-list{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:1200;list-style:none;margin:0;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);max-height:300px;overflow-y:auto}
@@ -258,7 +262,9 @@ button,input,select,textarea{font:inherit;color:inherit}
   .tools{flex-direction:row;border-right:0;border-top:1px solid var(--line);overflow-x:auto;overflow-y:hidden;padding:4px max(8px,env(safe-area-inset-left,0px));padding-bottom:max(4px,env(safe-area-inset-bottom,0px));grid-row:2}
   .tools .sep{display:none}
   .tools{gap:2px;padding-top:6px}
-  .tool{width:58px;padding:6px 2px 5px}
+  .tool{width:58px;padding:6px 2px 5px;gap:5px}
+  .tool svg{width:22px;height:22px}
+  .tool .tl{font-size:11.5px}
   .stage-wrap{grid-row:1}
   .panel{position:fixed;right:0;top:50px;bottom:0;width:min(360px,100%);z-index:20;transform:translateX(102%);transition:transform .18s;box-shadow:var(--shadow)}
   .panel.open{transform:none}
@@ -518,7 +524,7 @@ let BRAND={title:'Pest Management Programme Device Location Plan',logo:null};
 let route='', site=null, M=null;
 const E={view:{x:40,y:40,k:1},tool:'select',cat:null,doorKind:'single',sel:new Set(),hist:[],fut:[],drag:null,chain:null,cursor:null,snapHit:null,space:false,assets:{},assetsDirty:false,tab:'stations',catType:{},lastPush:0,pendingSat:false,regFilter:'',regQ:''};
 E.style={stroke:'#1a1f24',fill:'#1971c2',noFill:true,fillOp:.15,sw:2,dash:false,rx:0};
-E.textStyle={size:20,color:'#1a1f24',font:'Arial',bold:false,italic:false,halo:true,align:'start'};
+E.textStyle={size:20,color:'#1a1f24',font:'Arial',bold:false,italic:false,halo:true,haloW:.2,align:'start'};
 E.wallStyle={w:8,color:'#2a2f36',dash:false};E.last={draw:'wall',shapes:'rect'};E.objKind='single';E.fenceStyle={w:3,color:'#495057',dash:true};E.roomFill='#d0ebff';
 
 const FONTS={'Arial':'Arial, Helvetica, sans-serif','Arial Narrow':'"Arial Narrow", "Roboto Condensed", Arial, sans-serif','Georgia':'Georgia, "Times New Roman", serif','Verdana':'Verdana, Geneva, sans-serif','Courier New':'"Courier New", Courier, monospace','Impact':'Impact, "Arial Black", sans-serif'};
@@ -657,7 +663,7 @@ function lineMarkup(el,ex){
 }
 function textMarkup(el){
   const lines=String(el.text||' ').split('\n'),ff=FONTS[el.font]||MAPFONT;
-  const halo=el.halo?` stroke="#ffffff" stroke-width="${r2(el.size/5)}" paint-order="stroke" stroke-linejoin="round"`:'';
+  const hw=el.haloW??(el.halo===false?0:.2),halo=hw>0?` stroke="#ffffff" stroke-width="${r2(el.size*hw)}" paint-order="stroke" stroke-linejoin="round"`:'';
   const ts=lines.map((l,i)=>`<tspan x="${r2(el.x)}" dy="${i?1.2:.9}em">${esc(l)||' '}</tspan>`).join('');
   return `<g data-id="${el.id}"><text x="${r2(el.x)}" y="${r2(el.y)}" font-family="${esc(ff)}" font-size="${el.size}" fill="${el.color}" font-weight="${el.bold?700:400}" font-style="${el.italic?'italic':'normal'}" text-anchor="${el.align||'start'}"${halo}>${ts}</text></g>`;
 }
@@ -713,10 +719,9 @@ function frameMarkup(ex){
   if(BRAND.logo)s+=`<image href="${BRAND.logo}" xlink:href="${BRAND.logo}" x="${r2(lx)}" y="${r2(ly)}" width="${r2(lw)}" height="${r2(lh)}" preserveAspectRatio="xMidYMid meet"/>`;
   else if(!ex)s+=`<rect x="${r2(lx)}" y="${r2(ly)}" width="${r2(lw)}" height="${r2(lh)}" fill="none" stroke="#868e96" stroke-width="${f(1.5)}" stroke-dasharray="${f(6)} ${f(5)}"/>`+T(lx+lw/2,ly+lh/2+f(5),f(14),'Add your logo','fill="#adb5bd" text-anchor="middle"');
   s+=hit('brand:logo',lx-f(4),ly-f(4),lw+f(8),lh+f(8),'Change logo');
-  s+=`<rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="#adb5bd" stroke-width="${f(1)}"/>`;
   // bottom bar
-  const y0=H+f(10),fh=FH-f(10),kx=r2(W*.59),fs=f(15),bold='font-weight="700" fill="#111111"';
-  s+=`<rect x="0" y="${y0}" width="${W}" height="${r2(fh)}" fill="#ffffff" stroke="#111111" stroke-width="${f(2.2)}"/><line x1="${kx}" y1="${y0}" x2="${kx}" y2="${r2(y0+fh)}" stroke="#111111" stroke-width="${f(2.2)}"/>`;
+  const y0=H,fh=FH,kx=r2(W*.59),fs=f(15),bold='font-weight="700" fill="#111111"';
+  s+=`<rect x="0" y="${y0}" width="${W}" height="${r2(fh)}" fill="#ffffff"/><rect x="${f(1.1)}" y="${r2(y0+f(1.1))}" width="${r2(W-f(2.2))}" height="${r2(fh-f(2.2))}" fill="none" stroke="#111111" stroke-width="${f(2.2)}"/><line x1="${kx}" y1="${y0}" x2="${kx}" y2="${r2(y0+fh)}" stroke="#111111" stroke-width="${f(2.2)}"/>`;
   const row=i=>y0+fh*[.28,.56,.84][i],c1=f(14),c2=W*.265,c3=W*.43,cw1=c2-c1-f(8),cw2=c3-c2-f(8),cw3=kx-c3-f(8),n=w=>Math.floor(w/(fs*.56));
   const date=st.planDate?new Date(st.planDate+'T00:00'):new Date(M.created);
   const cell=(field,x,i,w,txt,label)=>T(x,row(i),fs,clip(txt,n(w)),bold)+hit(field,x-f(5),row(i)-fs*1.05,w+f(6),fs*1.45,label);
@@ -727,7 +732,7 @@ function frameMarkup(ex){
   s+=T(kx+f(14),row(0),fs,'KEY:',bold)+hit('key',kx+f(4),y0+f(4),W-kx-f(8),fh-f(8),'Edit station types');
   const{used,tox}=usedCats(),cnt=used.length,cols=cnt<=4?1:cnt<=10?2:3,rows=Math.ceil(cnt/cols),ax=kx+f(64),aw=W-ax-f(10),top=y0+f(6),ah=fh-f(12),cw=aw/cols,rh=ah/Math.max(rows,1);
   const labels=used.map(c=>{const t=tox[c.code];let suf='',col=c.color;if(c.mode==='tox'){if(t&&t.y&&!t.n){suf=' - Toxic';col=TOX;}else if(t&&t.n&&!t.y){suf=' - Non-toxic';col=NONTOX;}else col='#1a1f24';}if(col.toLowerCase()==='#ffffff')col='#111111';return{c,txt:`${c.code}000 - ${c.name}${suf}`,col,t};});
-  const longest=Math.max(...labels.map(l=>l.txt.length),10),kf=Math.max(f(10),Math.min(f(15),rh*.6,(cw-f(30))/(longest*.55)));
+  const longest=Math.max(...used.map(c=>`${c.code}000 - ${c.name}${c.mode==='tox'?' - Non-toxic':''}`.length),10),kf=Math.max(f(10),Math.min(f(15),rh*.6,(cw-f(30))/(longest*.55)));
   labels.forEach((l,i)=>{const cx=ax+Math.floor(i/rows)*cw,cy=top+(i%rows)*rh+rh/2,r=kf*.6,c=l.c;
     const mk=c.mode==='tox'?(l.t&&l.t.y&&!l.t.n?shapeSvg(c.shape,r,TOX):l.t&&l.t.n&&!l.t.y?shapeSvg(c.shape,r,NONTOX):splitSvg(c.shape,r)):shapeSvg(c.shape,r,c.color);
     s+=`<g transform="translate(${r2(cx+r+f(2))} ${r2(cy)})">${mk}</g>`+T(cx+r*2+f(10),cy+kf*.36,kf,clip(l.txt,Math.floor((cw-r*2-f(14))/(kf*.55))),`font-weight="700" fill="${l.col}"`);});
@@ -930,8 +935,10 @@ async function openMap(id){
     <nav class="tools" id="tools" aria-label="Drawing tools">${TOOLS.map(t=>t==='-'?'<div class="sep"></div>':typeof t==='string'?groupBtn(t.slice(2)):`<button type="button" class="tool" data-tool="${t[0]}" title="${t[1]} (${t[2]})" aria-label="${t[1]}">${toolSvg(t[3])}<span class="tl">${SHORT[t[0]]}</span></button>`).join('')}</nav>
     <section class="stage-wrap" id="stageWrap"><svg id="stage" xmlns="${NS}"><defs>${SPLIT_DEF}<pattern id="gridp" patternUnits="userSpaceOnUse" width="20" height="20"><path id="gridpath" d="M20 0H0V20" fill="none" stroke="#9aa5b1" stroke-opacity=".35" stroke-width="1"/></pattern></defs>
       <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-ov"></g></g></svg>
+      <div class="drawbar" id="drawbar" hidden><div class="seg" id="dbMode" role="radiogroup" aria-label="Drawing mode"><label><input type="radio" name="dbmode" value="click"><span>Click points</span></label><label><input type="radio" name="dbmode" value="free"><span>Freehand</span></label></div>
+        <span class="dbinfo" id="dbInfo"></span><button type="button" class="btn sm primary" id="dbEnclose" hidden>Enclose space</button><button type="button" class="btn sm" id="dbFinish" hidden>Finish</button><button type="button" class="btn sm ghost" id="dbCancel" hidden>Cancel</button></div>
       <div class="hud"><div class="hint-box" id="hint"></div><div class="coords" id="coords"></div></div></section>
-    <aside class="panel" id="panel"><div class="tabs" role="tablist">${[['stations','Stations'],['props','Properties'],['register','Register'],['map','Plan']].map(t=>`<button data-tab="${t[0]}" role="tab">${t[1]}</button>`).join('')}</div><div class="tab-body" id="tabBody"></div></aside></div>`;
+    <aside class="panel" id="panel"><div class="tabs" role="tablist">${[['stations','Stations'],['props','Properties'],['register','Register'],['map','Settings']].map(t=>`<button data-tab="${t[0]}" role="tab">${t[1]}</button>`).join('')}</div><div class="tab-body" id="tabBody"></div></aside></div>`;
   bindEditor();
   if(!M.thumb&&M.elements.length)setTimeout(makeThumb,800);
   requestAnimationFrame(()=>{fitView();E.tab='stations';setTool('select');
@@ -1022,8 +1029,8 @@ function renderOverlay(){
     if(E.tool==='room'||E.tool==='rect')s+=`<rect x="${x}" y="${y}" width="${w}" height="${h2}" fill="${sel}" fill-opacity=".06" stroke="${sel}" stroke-width="${E.tool==='room'?E.wallStyle.w:sw}" stroke-opacity="${E.tool==='room'?.5:1}"/>`+lbl(x,y-6/k,`${fmtLen(w)} × ${fmtLen(h2)}`);
     else if(E.tool==='ellipse')s+=`<ellipse cx="${x+w/2}" cy="${y+h2/2}" rx="${w/2}" ry="${h2/2}" fill="none" stroke="${sel}" stroke-width="${sw}"/>`;
     else s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${E.tool==='calib'?'#e8590c':sel}" stroke-width="${r2(2/k)}"/>`+lbl(r2((a.x+b.x)/2+8/k),r2((a.y+b.y)/2-8/k),fmtLen(dist(a,b)));}
-  if(E.chain&&c){const pts=E.chain.pts,q=E.chainCur||c;const all=[...pts,q];
-    s+=`<polyline points="${all.map(p=>p.x+','+p.y).join(' ')}" fill="none" stroke="${isWallTool(E.tool)?chainStyle().color:sel}" stroke-opacity="${isWallTool(E.tool)?.55:1}" stroke-width="${isWallTool(E.tool)?chainStyle().w:sw}"/>`;
+  if(E.chain&&E.chain.pts.length&&c){const pts=E.chain.pts,q=E.chainCur||c;const all=E.chain.stroke?[...pts,...E.chain.stroke]:[...pts,q];
+    s+=`<polyline points="${all.map(p=>p.x+','+p.y).join(' ')}" fill="none" stroke="${isWallTool(E.tool)?chainStyle().color:sel}" stroke-opacity="${isWallTool(E.tool)?.55:1}" stroke-width="${isWallTool(E.tool)?chainStyle().w:sw}"${isWallTool(E.tool)&&chainStyle().dash?` stroke-dasharray="${r2(Math.max(4,chainStyle().w*2.2))} ${r2(Math.max(3,chainStyle().w*1.6))}"`:''}/>`;
     const l=pts[pts.length-1];s+=lbl(r2((l.x+q.x)/2+8/k),r2((l.y+q.y)/2-8/k),fmtLen(dist(l,q)));
     s+=`<circle cx="${pts[0].x}" cy="${pts[0].y}" r="${r2(5/k)}" fill="#fff" stroke="${sel}" stroke-width="${sw}"/>`;}
   if(!d&&c){
@@ -1056,10 +1063,10 @@ function snapRaw(p,e,anchor,skip){
 const HINTS={
   select:'Click to select, drag to move. Drag on empty space to select an area. <kbd>Shift</kbd> adds to the selection.',
   pan:'Drag to move around the plan. Scroll to zoom.',
-  wall:'Click to start a wall, then click each corner. Double-click or <kbd>Enter</kbd> to finish, click the first point to close. <kbd>Shift</kbd> locks angles.',
+  wall:'Click to start a wall, then click each corner. After three nodes, Enclose space joins the last node to the first. <kbd>Enter</kbd> or double-click to finish. Switch to Freehand above to draw by dragging.',
   room:'Drag to draw a room. It is made of four walls you can add doors to.',
   objects:'Pick an object in the panel, then click the plan. Doors and windows snap into the nearest wall. <kbd>Esc</kbd> to stop.',
-  fence:'Click to start a fence line, then click each corner. Double-click or <kbd>Enter</kbd> to finish.',
+  fence:'Click to start a fence line, then click each corner. After three nodes, Enclose space closes it off. Switch to Freehand above to draw by dragging.',
   rect:'Drag to draw a rectangle or zone.',ellipse:'Drag to draw an ellipse.',
   polygon:'Click each corner of the area. Double-click or <kbd>Enter</kbd> to finish.',
   line:'Drag to draw a line. <kbd>Shift</kbd> locks angles.',arrow:'Drag to draw an arrow.',dim:'Drag between two points to add a dimension.',
@@ -1068,12 +1075,12 @@ const HINTS={
 };
 function setTool(t,cat){
   if(E.chain)finishChain(false);
-  E.tool=t;E.cat=t==='station'?cat:null;E.snapHit=null;
+  E.tool=t;E.cat=t==='station'?cat:null;E.snapHit=null;E.chain=null;
   const grp=groupOf(t);if(grp&&E.last[grp]!==t){E.last[grp]=t;const gb=$(`#tools [data-group="${grp}"]`);if(gb)gb.outerHTML=groupBtn(grp);}
   $$('#tools .tool').forEach(b=>b.classList.toggle('on',!!(b.dataset.tool===t||(b.dataset.group&&b.dataset.group===grp))));
   const st=$('#stage');st.classList.toggle('draw',!['select','pan'].includes(t));st.classList.toggle('pan',t==='pan');
   let h=HINTS[t]||'';if(t==='station'){const c=catOf(cat);h=`Click the plan to place <b>${esc(c.code)}${pad(nextNum(c.code))}</b>. Each click adds the next number. <kbd>Esc</kbd> to stop.`;}
-  $('#hint').innerHTML=h;
+  $('#hint').innerHTML=h;updDrawbar();
   if(t==='objects'){E.sel.clear();showTab('props');$('#panel').classList.add('open');}
   else if(['rect','ellipse','polygon','line','arrow','text','wall','fence','room'].includes(t)&&!E.sel.size)showTab('props');
   else renderPanel();
@@ -1094,15 +1101,36 @@ function finishDraw(d){
   }
   if(el)E.sel=new Set([el.id]);changed();
 }
+const CHAIN_TOOLS=['wall','fence','polygon'];
+const isChainTool=t=>CHAIN_TOOLS.includes(t)||(t==='line'&&E.freehand);
+const freehandOK=t=>t==='wall'||t==='fence'||t==='line';
+/* Ramer-Douglas-Peucker: turn a freehand stroke into a few clean nodes */
+function simplify(pts,eps){if(pts.length<3)return pts;let i0=0,dm=0;const a=pts[0],b=pts[pts.length-1],L=dist(a,b)||1;
+  for(let i=1;i<pts.length-1;i++){const p=pts[i],d=Math.abs((b.y-a.y)*p.x-(b.x-a.x)*p.y+b.x*a.y-b.y*a.x)/L;if(d>dm){dm=d;i0=i;}}
+  if(dm>eps){const l=simplify(pts.slice(0,i0+1),eps),r=simplify(pts.slice(i0),eps);return l.slice(0,-1).concat(r);}return[a,b];}
+function freeDown(e,p){const q=E.chain?E.chain.pts[E.chain.pts.length-1]:snapP(p,e);if(!E.chain)E.chain={pts:[q]};E.chain.stroke=[];E.drag={kind:'free'};updDrawbar();renderOverlay();}
+function freeUp(){const ch=E.chain;if(!ch)return;const k=E.view.k,raw=[ch.pts[ch.pts.length-1],...(ch.stroke||[])];ch.stroke=null;
+  const simp=simplify(raw,3.5/k).slice(1).filter((p,i,a)=>i===0?dist(p,raw[0])*k>6:dist(p,a[i-1])*k>6);
+  if(simp.length>2&&dist(simp[simp.length-1],ch.pts[0])*k<12){simp[simp.length-1]={...ch.pts[0]};}
+  ch.pts.push(...simp);updDrawbar();renderOverlay();}
+function encloseChain(){const ch=E.chain;if(!ch||distinctCount(ch.pts)<3)return;const f=ch.pts[0],l=ch.pts[ch.pts.length-1];if(dist(f,l)>.5)ch.pts.push({...f});finishChain(true);}
+const distinctCount=pts=>pts.filter((p,i)=>i===0||dist(p,pts[i-1])>.5).length-(pts.length>1&&dist(pts[0],pts[pts.length-1])<=.5?1:0);
+function updDrawbar(){const bar=$('#drawbar');if(!bar)return;const show=freehandOK(E.tool)||E.tool==='polygon';bar.hidden=!show;if(!show)return;
+  const n=E.chain?distinctCount(E.chain.pts):0;
+  $('#dbMode').hidden=!freehandOK(E.tool);$$('#dbMode input').forEach(i=>i.checked=(i.value==='free')===!!E.freehand);
+  $('#dbEnclose').hidden=!(E.chain&&n>=3);$('#dbFinish').hidden=!(E.chain&&n>=2);$('#dbCancel').hidden=!E.chain;
+  $('#dbInfo').textContent=E.chain?`${n} node${n===1?'':'s'}`:(E.freehand&&freehandOK(E.tool)?'Hold and drag to draw':'Click to place nodes');}
 function chainClick(e,p){
   const k=E.view.k,last=E.chain?.pts[E.chain.pts.length-1],q=snapP(p,e,last);
   if(!E.chain){E.chain={pts:[q]};renderOverlay();return;}
   if(dist(q,last)*k<5){finishChain(false);return;}
+  setTimeout(updDrawbar);
   if(E.chain.pts.length>=2&&dist(q,E.chain.pts[0])*k<9){E.chain.pts.push({...E.chain.pts[0]});finishChain(true);return;}
-  E.chain.pts.push(q);renderOverlay();
+  E.chain.pts.push(q);updDrawbar();renderOverlay();
 }
 function finishChain(closed){
-  const ch=E.chain;E.chain=null;E.chainCur=null;if(!ch)return;const pts=ch.pts;
+  const ch=E.chain;E.chain=null;E.chainCur=null;setTimeout(updDrawbar);if(!ch)return;const pts=ch.pts;
+  if(E.tool==='line'&&pts.length>=2){pushHist();const st=E.style,made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'line',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,stroke:st.stroke,sw:st.sw,dash:st.dash}));E.sel=new Set(made.map(m=>m.id));changed();return;}
   if(isWallTool(E.tool)&&pts.length>=2){pushHist();const ws=chainStyle(),made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'wall',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,w:ws.w,color:ws.color,dash:ws.dash}));changed();
     if(closed&&pts.length>=4){const u=pts.slice(0,-1),xs=u.map(p=>p.x),ys=u.map(p=>p.y),bx=Math.min(...xs),by=Math.min(...ys);nameRoom({x:bx,y:by,w:Math.max(...xs)-bx,h:Math.max(...ys)-by},u,made,ws.dash);}}
   else if(E.tool==='polygon'){const u=closed?pts.slice(0,-1):pts;if(u.length>=3){pushHist();const st=E.style;const el=add({type:'polygon',pts:u.map(p=>[p.x,p.y]),stroke:st.stroke,fill:st.fill,noFill:st.noFill,fillOp:st.fillOp,sw:st.sw,dash:st.dash});E.sel=new Set([el.id]);changed();}else renderOverlay();}
@@ -1199,6 +1227,9 @@ function bindEditor(){
     if(b.dataset.group){const g=GROUPS[b.dataset.group];if($('.popmenu'))return closePop();const narrow=matchMedia('(max-width:820px)').matches;
       popMenu(b,g.items.map(x=>({v:x[0],label:x[1],icon:toolSvg(x[3]),kbd:x[2],on:E.tool===x[0]})),narrow?'above':'right',v=>setTool(v),e.detail===0);return;}
     setTool(t);});
+  $('#drawbar').addEventListener('mousedown',e=>{if(e.target.tagName!=='INPUT')e.preventDefault();});
+  $('#drawbar').addEventListener('change',e=>{if(e.target.name==='dbmode'){E.freehand=e.target.value==='free';if(E.chain&&E.tool==='line')E.chain=null;updDrawbar();setTool(E.tool);}});
+  $('#dbEnclose').onclick=encloseChain;$('#dbFinish').onclick=()=>finishChain(false);$('#dbCancel').onclick=()=>{E.chain=null;E.chainCur=null;updDrawbar();renderOverlay();};
   $('#panel .tabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab);});
   const tb=$('#tabBody');tb.addEventListener('input',onPanelInput);tb.addEventListener('change',onPanelChange);tb.addEventListener('click',onPanelClick);
   const wrap=$('#stageWrap');let dz=null;
@@ -1214,6 +1245,7 @@ function onDown(e){
   if(e.button===1||e.button===2||E.space||t==='pan'){E.drag={kind:'pan',sx:e.clientX,sy:e.clientY,vx:E.view.x,vy:E.view.y};$('#stage').classList.add('panning');return;}
   if(e.button!==0)return;
   if(t==='select')return downSelect(e,p);
+  if(E.freehand&&freehandOK(t))return freeDown(e,p);
   if(isWallTool(t)||t==='polygon')return chainClick(e,p);
   if(['room','rect','ellipse','line','arrow','dim','calib'].includes(t)){const q=snapP(p,e);E.drag={kind:'draw',a:q,b:q};renderOverlay();return;}
   if(t==='text')return createText(p);
@@ -1265,6 +1297,7 @@ function onMove(e){
     case 'node':{if(!d.pushed){pushHist();d.pushed=true;}const q=snapP(p,e,null,d.skip);for(const[wid,end]of d.conn){const w=getEl(wid);if(w){w['x'+end]=q.x;w['y'+end]=q.y;}}render();break;}
     case 'furn':{if(!d.pushed){pushHist();d.pushed=true;}const F=M.furn[d.part],m=26*(F.s||1);F.x=Math.round(clamp(d.ox+p.x-d.start.x,m,M.width-m));F.y=Math.round(clamp(d.oy+p.y-d.start.y,m,M.height-m));render();break;}
     case 'marquee':d.b=p;renderOverlay();break;
+    case 'free':{const q=clampPt(p),s2=E.chain.stroke,last=s2.length?s2[s2.length-1]:E.chain.pts[E.chain.pts.length-1];if(dist(q,last)*k>=4)s2.push(q);renderOverlay();break;}
     case 'draw':d.b=snapP(p,e,['line','arrow','dim','calib'].includes(E.tool)?d.a:null);renderOverlay();break;
   }
 }
@@ -1274,6 +1307,7 @@ function onUp(){
     if(w*E.view.k>3||h*E.view.k>3){for(const el of M.elements){if(el.type==='image'&&el.locked)continue;const b=bboxOf(el);if(b.x<x+w&&b.x+b.w>x&&b.y<y+h&&b.y+b.h>y)E.sel.add(el.id);}if(E.sel.size)showTab('props');}
     renderAll();return;}
   if(d.kind==='draw'){finishDraw(d);return;}
+  if(d.kind==='free'){freeUp();return;}
   if(d.pushed)changed();else renderOverlay();
 }
 
@@ -1348,7 +1382,7 @@ function propsTab(){
     if(t==='objects')return objLibrary();
     if(t==='text')return `<div class="sec"><h3 class="sec-h">New text style</h3>${textFields('text',E.textStyle,false)}</div>`;
     if(t==='fence')return `<div class="sec"><h3 class="sec-h">New fence line style</h3>${F.num('fence','w','Thickness (px)',E.fenceStyle.w,1,1)}${F.color('fence','color','Colour',E.fenceStyle.color)}${F.check('fence','dash','Dashed',E.fenceStyle.dash)}</div>`;
-    if(t==='wall'||t==='room')return `<div class="sec"><h3 class="sec-h">New wall style</h3>${F.num('wall','w','Thickness (px)',E.wallStyle.w,1,1)}${F.color('wall','color','Colour',E.wallStyle.color)}${F.check('wall','dash','Dashed line (fence line)',E.wallStyle.dash)}<p class="hint">${t==='room'?'Drag a box. When you let go you can name the room and pick a fill colour.':'Click the first point again to close the shape and name it as a room.'}</p></div>`;
+    if(t==='wall'||t==='room')return `<div class="sec"><h3 class="sec-h">New wall style</h3>${F.num('wall','w','Thickness (px)',E.wallStyle.w,1,1)}${F.color('wall','color','Colour',E.wallStyle.color)}${F.check('wall','dash','Dashed line (fence line)',E.wallStyle.dash)}<p class="hint">${t==='room'?'Drag a box. When you let go you can name the room and pick a fill colour.':'After three nodes, use Enclose space (top of the plan) to close the shape and name it as a room. Freehand lets you draw by dragging.'}</p></div>`;
     if(['rect','ellipse','polygon','line','arrow'].includes(t))return `<div class="sec"><h3 class="sec-h">New shape style</h3>${styleFields('style',E.style,t)}</div>`;
     return `<div class="sec"><p class="hint">Nothing selected. Click something on the plan to edit it, or drag across an area to select several things.</p><p class="hint">Shortcuts: <kbd>Ctrl+D</kbd> duplicate, <kbd>Delete</kbd> remove, arrow keys nudge, <kbd>Ctrl+Z</kbd> undo.</p></div>`;
   }
@@ -1391,7 +1425,8 @@ function styleFields(sc,o,type){const closed=['rect','ellipse','polygon'].includ
   return `${F.color(sc,'stroke','Line colour',o.stroke)}${F.num(sc,'sw','Line width',o.sw,.5,0)}${F.check(sc,'dash','Dashed line',o.dash)}
     ${closed?`${F.check(sc,'noFill','No fill',o.noFill)}${o.noFill?'':F.color(sc,'fill','Fill colour',o.fill)+F.range(sc,'fillOp','Fill opacity',o.fillOp,0,1,.05)}${type==='rect'?F.num(sc,'rx','Corner radius',o.rx||0,1,0):''}`:''}`;}
 function textFields(sc,o){return `${F.num(sc,'size','Size',o.size,1,4)}${F.color(sc,'color','Colour',o.color)}${F.sel(sc,'font','Font',o.font,Object.keys(FONTS).map(f=>[f,f]))}${F.sel(sc,'align','Align',o.align||'start',[['start','Left'],['middle','Centre'],['end','Right']])}
-  <div class="row">${F.check(sc,'bold','Bold',o.bold)}${F.check(sc,'italic','Italic',o.italic)}${F.check(sc,'halo','White outline',o.halo)}</div>`;}
+  <div class="row">${F.check(sc,'bold','Bold',o.bold)}${F.check(sc,'italic','Italic',o.italic)}</div>
+  ${(()=>{const hw=o.haloW??(o.halo===false?0:.2);return `<div class="f"><span>White outline</span><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-halo="-1" data-s="${sc}" aria-label="Thinner outline">−</button><input type="range" data-s="${sc}" data-k="haloW" min="0" max="0.6" step="0.02" value="${hw}" aria-label="Outline thickness" style="flex:1;min-width:0"><button class="btn sm" data-halo="1" data-s="${sc}" aria-label="Thicker outline">+</button><button class="btn sm ghost" data-halo="0" data-s="${sc}">None</button></div></div>`;})()}`;}
 function polyArea(pts){let a=0;for(let i=0;i<pts.length;i++){const[x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];a+=x1*y2-x2*y1;}return Math.abs(a/2)/(M.scale*M.scale);}
 
 function registerTab(){
@@ -1465,6 +1500,8 @@ async function onPanelClick(e){
   const sw=e.target.closest('[data-sw]');if(sw){const inp=sw.closest('.f').querySelector('input[type=color]');inp.value=sw.dataset.sw;setVal(sw.dataset.s,sw.dataset.k,sw.dataset.sw);return;}
   const cat=e.target.closest('[data-cat]');if(cat){const c=cat.dataset.cat;if(E.tool==='station'&&E.cat===c)setTool('select');else{E.sel.clear();setTool('station',c);}renderPanel();return;}
   const ob=e.target.closest('[data-obj]');if(ob){E.objKind=ob.dataset.obj;if(E.tool!=='objects')setTool('objects');renderPanel();renderOverlay();$('#panel').classList.remove('open');return;}
+  const hb=e.target.closest('[data-halo]');if(hb){const sc=hb.dataset.s,d=+hb.dataset.halo,cur=o=>o.haloW??(o.halo===false?0:.2),nv=o=>d===0?0:clamp(r2(cur(o)+d*.05),0,.6);
+    if(sc==='text'){E.textStyle.haloW=nv(E.textStyle);}else{pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='text')el.haloW=nv(el);}changed();}renderPanel();return;}
   const zf=e.target.closest('[data-zfill]');if(zf){pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='zone')el.fill=zf.dataset.zfill;}changed();return;}
   const de=e.target.closest('[data-door-el]');if(de){pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='door'){el.kind=de.dataset.doorEl;el.width=defaultDoorWidth(el.kind);const w=getEl(el.wall);if(w){el.width=Math.min(el.width,wallLen(w)*.95);el.t=clampT(el.t,w,el.width);}}}changed();return;}
   const loc=e.target.closest('[data-loc]');if(loc){const el=getEl(loc.dataset.loc);E.sel=new Set([el.id]);if(E.view.k<.6)E.view.k=1;centerOn(el.x,el.y);renderPanel();return;}
@@ -1585,7 +1622,7 @@ async function importIntoEditor(files,forceMode){
       buttons:[{label:'Cancel',value:null},{label:'Import',value:'ok',primary:true}]});
     if(r.value!=='ok')return;mode=r.data.mode;page=parseInt(r.data.page||'1',10)||1;}
   toast('Importing…');
-  for(let i=0;i<ok.length;i++){try{const im=await fileToImg(ok[i],page);if(i===0&&mode==='bg'){setBackground(im);if(!M.scale)toast('Background set. Use Plan › Calibrate to set the scale from a known length.');}else placeImage(im,i);}
+  for(let i=0;i<ok.length;i++){try{const im=await fileToImg(ok[i],page);if(i===0&&mode==='bg'){setBackground(im);if(!M.scale)toast('Background set. Use Settings › Calibrate to set the scale from a known length.');}else placeImage(im,i);}
     catch(e){console.error(e);toast(`${ok[i].name} could not be imported: ${e.message}`,'warn');}}
 }
 
