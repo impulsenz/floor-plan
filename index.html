@@ -393,7 +393,7 @@ const STATION_TYPES=[['Toxic bait station',1],['Toxic wax block',1],['Toxic soft
   ['Vertebrate monitor',0],['Live capture trap',0],['Bird deterrent',0],['Inspection point',0],['Control panel',0]];
 const SHAPES=[['circle','Circle'],['square','Square'],['triangle','Triangle'],['diamond','Diamond'],['hexagon','Hexagon'],['pentagon','Pentagon'],['panel','Panel']];
 /* (bi-fold doors, strip and air curtains were removed from the library; ones already on plans still draw) */
-const DOORS=[['single','Single door',.9],['double','Double door',1.8],['sliding','Sliding door',1.8],['roller','Roller door',3.5],['revolving','Revolving door',2],['exit','Fire exit',.9],['gate','Gate',3],['window','Window',1.2],['opening','Opening',1.0]];
+const DOORS=[['single','Single door',.9],['double','Double door',1.8],['sliding','Sliding door',1.8],['roller','Roller door',3.5],['revolving','Revolving door',.9],['exit','Fire exit',.9],['gate','Gate',3],['window','Window',1.2],['opening','Opening',1.0]];
 const isDoorKind=k=>DOORS.some(d=>d[0]===k);
 /* Free-standing objects: [id, name, group, width m, depth m, viewBox w, viewBox h, symbol markup] */
 const TX=(x,y,s,t,c='#1a1f24',w=700)=>`<text x="${x}" y="${y}" font-size="${s}" font-weight="${w}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" fill="${c}" stroke="none">${t}</text>`;
