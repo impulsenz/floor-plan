@@ -50,7 +50,7 @@ Plans are saved on your own **Station Planner server** (Node.js + SQLite, behind
 - The server also serves the app, so its address is all you need.
 - To use the GitHub Pages copy, open it once with `?api=https://your-server-address`, or set the address with the **Server** button on the Sites page.
 - Plans made before the server existed can be copied up with **Server → Copy them to the server**.
-- There is no login yet; authentication will be added in front of the API next.
+- **Google sign-in:** only approved Google accounts (or a whole company domain) can get in, admins manage the list under **Users and access**, and people are signed out after 5 minutes without activity. Setup steps are in [`server/README.md`](server/README.md#google-sign-in).
 
 ## Keyboard shortcuts
 

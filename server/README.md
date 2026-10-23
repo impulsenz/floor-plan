@@ -3,7 +3,7 @@
 The app saves every site, plan, image and setting to this server, so plans are the same on every device.
 The server is one small Node.js program with an SQLite database, behind Caddy for HTTPS.
 
-> **No login yet.** Anyone who knows the server address can open, change or delete plans. Keep the address to yourself until authentication is added.
+> **Sign-in:** the server starts with sign-in **off**. Switch on Google sign-in with the steps in *Google sign-in* below, so only people you approve can get in.
 
 ## What you need
 
@@ -75,6 +75,46 @@ Plans you made before the server existed are still in the browser where you made
 
 Anything already on the server is left as it is, so it's safe to run again.
 
+## Google sign-in
+
+Once this is on, people sign in with their Google account. Only accounts on your access list (or from a company domain you allow) get in, and anyone is signed out after **5 minutes without activity**.
+
+### A. Create a Google sign-in ID (Google Cloud website)
+
+1. Go to **console.cloud.google.com** and sign in with your Google account.
+2. Click the project picker at the top → **New project** → name it `Station Planner` → **Create**. Make sure the new project is selected at the top.
+3. Open **☰ → APIs & Services → OAuth consent screen** (it may be called **Google Auth Platform**) → **Get started**.
+   - **App name:** `Station Planner`. **User support email:** your email → **Next**.
+   - **Audience:** **External** → **Next**.
+   - **Contact information:** your email → **Next** → tick the agreement → **Create**.
+4. Go to **Audience** in the left menu → **Publish app** → **Confirm**. This lets anyone *try* to sign in; the server still only lets in people on your list. No Google review is needed, because the app only asks for name and email.
+5. Go to **Clients** (or **Credentials**) → **Create client**:
+   - **Application type:** **Web application**. **Name:** `Station Planner`.
+   - **Authorized JavaScript origins** → **Add URI**: your server address exactly, e.g. `https://140-238-12-34.sslip.io` (no slash at the end). Add `https://impulsenz.github.io` as well if you use the GitHub Pages copy.
+   - Leave **Authorized redirect URIs** empty → **Create**.
+6. Copy the **Client ID**, which ends in `.apps.googleusercontent.com`. You don't need the client secret.
+
+### B. Switch it on (on the server)
+
+SSH in as before, then run, using your Client ID and email:
+
+```
+curl -fsSL https://raw.githubusercontent.com/impulsenz/floor-plan/main/server/setup-floorplan-server.sh -o setup.sh
+sudo bash setup.sh --google-client-id 1234-abc.apps.googleusercontent.com --admin you@gmail.com
+```
+
+Optional: add `--allow-domain yourcompany.co.nz` to let every Google account at that domain in without adding them one by one. Several admins can be listed with commas.
+
+### C. Sign in and add people
+
+1. Open your server address. You'll see **Sign in with Google**. Sign in with the admin email.
+2. Click your picture (top right) → **Users and access** → type someone's Google email → **Add**. Choose **Admin** if they should be able to manage users too.
+3. Removing someone signs them out straight away.
+
+New Google sign-in IDs can take a few minutes to start working. If the button says the origin isn't allowed, wait 5–10 minutes, then check the address in step A5 matches exactly.
+
+To switch sign-in off again: `sudo bash setup.sh --no-auth`.
+
 ## Looking after the server
 
 | Task | Command |
@@ -105,7 +145,10 @@ API (all JSON; `{store}` is `sites`, `maps`, `assets` or `meta`):
 
 | Method | Path | Does |
 |---|---|---|
-| GET | `/api/health` | `{ok, app, counts}` |
+| GET | `/api/health` | `{ok, app, auth}` (+ `counts` when signed in) |
+| POST | `/api/auth/google` | swap a Google ID token for a session token |
+| GET / POST | `/api/auth/me`, `/api/auth/logout` | who's signed in / sign out |
+| GET / PUT / DELETE | `/api/users[/{email}]` | access list (admins only) |
 | GET | `/api/{store}` | every record (`?siteId=` filters plans by site) |
 | GET | `/api/{store}/{id}` | one record, or 404 |
 | PUT | `/api/{store}/{id}` | create or replace (body `id` must match) |
@@ -113,4 +156,4 @@ API (all JSON; `{store}` is `sites`, `maps`, `assets` or `meta`):
 
 Settings live in `/etc/systemd/system/floorplan.service`. `ALLOWED_ORIGINS` limits which web addresses may use the server (for example `https://impulsenz.github.io`), and is `*` (any) for now.
 
-When login is added, it goes in front of these routes in `server.mjs`, and the app's `Store` object sends the token with each request.
+With sign-in on, every `/api/{store}` and `/api/users` call needs `Authorization: Bearer <token>`. The token comes from `POST /api/auth/google {credential}` (a Google ID token, checked against Google's signing keys and your client ID). Only a hash of each token is stored, and tokens expire after `SESSION_MINUTES` (5) without activity. `/etc/floorplan.env` holds `GOOGLE_CLIENT_ID`, `ADMIN_EMAILS`, `ALLOWED_DOMAINS`, `ALLOWED_ORIGINS` and `SESSION_MINUTES`; restart with `sudo systemctl restart floorplan` after editing it.
