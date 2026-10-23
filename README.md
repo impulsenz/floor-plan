@@ -39,7 +39,8 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Import** PNG, JPG, GIF, WEBP, BMP, SVG and PDF (any page) as a background or a movable image. On a site page, Import plan accepts `.json` and `.svg` plan files; SVGs exported from Station Planner come back fully editable, and any other drawing becomes a new plan with it as the background.
 - **Export** PNG, JPG, PDF and SVG with no margins (an A4 plan exports as an exact A4 page), always at print resolution (3×) with backgrounds included. The Register tab exports a station register as CSV, and sites back up as JSON.
 - **Register tab:** every station in one list, search and filter, duplicate-number warnings, and *Close gaps* renumbering.
-- Scale calibration from any known length, grid with snapping, undo/redo, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
+- **Undo history** of 100 steps per plan, saved with the plan so you can still undo after closing and reopening it.
+- Scale calibration from any known length, grid with snapping, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
 
 ## Storage
 
