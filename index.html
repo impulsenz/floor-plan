@@ -820,7 +820,7 @@ function layoutLabels(){
   for(const e of sts){const r=base*(e.size||1)*1.3;obst.push({x:e.x-r,y:e.y-r,w:2*r,h:2*r,id:e.id});}
   for(const e of M.elements){if(e.type==='obj'||e.type==='text'){const b=bboxOf(e);obst.push({...b,id:e.id});}
     if(e.type==='wall'||e.type==='line'||e.type==='arrow')segs.push([e.x1,e.y1,e.x2,e.y2]);}
-  for(const e of sts){const r=base*(e.size||1),f=lf*(e.size||1),w=stId(e).length*f*.62+2,h=f*1.15,gap=r*1.25+3;
+  for(const e of sts){const r=base*(e.size||1),f=lf*(e.tsize??e.size??1),w=stId(e).length*f*.62+2,h=f*1.15,gap=r*1.25+3;
     const R={x:e.x+gap,y:e.y-h/2,w,h},L={x:e.x-gap-w,y:e.y-h/2,w,h};
     if(e.labelSide==='left'||e.labelSide==='right'){out.set(e.id,e.labelSide);placed.push(e.labelSide==='left'?L:R);continue;}
     const score=rc=>{let n=0;if(rc.x<0||rc.x+rc.w>M.width)n+=20;for(const o of obst)if(o.id!==e.id&&rectsHit(rc,o))n+=4;for(const q of placed)if(rectsHit(rc,q))n+=5;for(const g of segs)if(segHitsRect(g[0],g[1],g[2],g[3],rc))n+=2;return n;};
@@ -828,7 +828,7 @@ function layoutLabels(){
   LABEL_SIDES=out;
 }
 function stationMarkup(el,ghost){
-  const cat=catOf(el.code),r=M.settings.marker*(el.size||1),fs=M.settings.label*(el.size||1),col=stColor(el,cat);
+  const cat=catOf(el.code),r=M.settings.marker*(el.size||1),fs=M.settings.label*(el.tsize??el.size??1),col=stColor(el,cat);
   const halo=`stroke="#ffffff" stroke-width="${r2(fs/3.5)}" paint-order="stroke" stroke-linejoin="round"`;
   const type=false?`<text y="${r2(r*1.25+fs*2.05)}" text-anchor="middle" font-family="${MAPFONT}" font-size="${r2(fs*.78)}" fill="#343a40" ${halo}>${esc(el.stype)}</text>`:'';
   const side=ghost?'right':(LABEL_SIDES.get(el.id)||'right'),gap=r*1.25+3;
@@ -1701,7 +1701,10 @@ function stationsTab(){
       <label class="f"><span>Next number</span><input type="number" id="nextFrom" min="1" step="1" value="${nextNum(c.code)}" aria-describedby="nextHint"></label>
       <p class="hint" id="nextHint">Type a number to jump ahead, e.g. 40. New stations use the first free number from there, so you can come back and fill 11, 12… later.${(M.nextFrom||{})[c.code]>1?' <button class="btn sm ghost" data-act="nextreset">Back to first free</button>':''}</p>
       ${F.text('arm','type','New stations',type,'Station type','stypes')}${c.mode==='tox'?F.check('arm','toxic','Toxic bait (shows the toxic colour)',tox):''}</div>`;}
-  return `<div class="sec"><p class="hint">Pick a station type, then click the plan. Each click adds the next number, so T001, T002, T003. Drag stations in Select mode to move them.</p></div>${armed}
+  const own=M.elements.filter(e=>e.type==='station'&&(e.size&&e.size!==1||e.tsize!==undefined)).length;
+  return `<div class="sec"><p class="hint">Pick a station type, then click the plan. Each click adds the next number, so T001, T002, T003. Drag stations in Select mode to move them.</p></div>
+    <div class="sec"><h3 class="sec-h">Size of all stations on this plan</h3>${F.range('set','marker',`Icon size (${M.settings.marker})`,M.settings.marker,4,40,1)}${F.range('set','label',`Text size (${M.settings.label})`,M.settings.label,5,40,1)}
+      <p class="hint">${own?`${own} station${own===1?' has':'s have'} its own size, which stays in proportion. <button type="button" class="btn sm" data-act="st-all-plan">Make all the same</button>`:'Click a single station to give it its own size.'}</p></div>${armed}
     <div class="cats">${CATS.map((c,i)=>`<button class="cat ${E.tool==='station'&&E.cat===c.code?'on':''}" data-cat="${esc(c.code)}">${catIcon(c,24)}<span class="cat-main"><span class="cat-code">${esc(c.code)}${pad(nextNum(c.code))}</span><span class="cat-name">${esc(c.name)}</span></span><span class="cat-count" title="On this plan">${counts[c.code]||0}</span>${i<9?`<kbd>${i+1}</kbd>`:'<span></span>'}</button>`).join('')}</div>
     <div class="key"><span><i style="background:${TOX}"></i>Toxic</span><span><i style="background:${NONTOX}"></i>Non-toxic</span></div>
     <div class="row"><button class="btn" data-act="new-type">${ICON.plus}New station type</button><button class="btn ghost" data-act="edit-legend">Edit types</button></div>`;
@@ -1731,7 +1734,9 @@ function propsTab(){
     case 'station':{const c=catOf(el.code),dup=M.elements.filter(e=>e.type==='station'&&e.code===el.code&&e.num===el.num).length>1;
       body=`<div class="row" style="gap:10px">${catIcon({...c,mode:'fixed',color:stColor(el,c)},30)}<span class="idbig">${stId(el)}</span></div>${dup?`<p class="warn">Another station already uses ${stId(el)}.</p>`:''}
         ${F.sel('el','code','Category',el.code,CATS.map(x=>[x.code,`${x.code} · ${x.name}`]))}${F.num('el','num','Number',el.num,1,1)}${F.text('el','stype','Station type',el.stype,'e.g. Snap trap','stypes')}
-        ${c.mode==='tox'?F.check('el','toxic','Toxic bait (shows the toxic colour)',el.toxic):''}${F.sel('el','labelSide','Label side',el.labelSide||'auto',[['auto','Automatic (keeps it clear)'],['right','Always right'],['left','Always left']])}${F.area('el','notes','Notes',el.notes||'')}${F.range('el','size','Marker size',el.size||1,.5,3,.1)}`;break;}
+        ${c.mode==='tox'?F.check('el','toxic','Toxic bait (shows the toxic colour)',el.toxic):''}${F.sel('el','labelSide','Label side',el.labelSide||'auto',[['auto','Automatic (keeps it clear)'],['right','Always right'],['left','Always left']])}${F.area('el','notes','Notes',el.notes||'')}
+        <h3 class="sec-h" style="margin-top:6px">Size of this station</h3>${F.range('el','size',`Icon (${Math.round((el.size||1)*100)}%)`,el.size||1,.3,4,.05)}${F.range('el','tsize',`Text (${Math.round((el.tsize??el.size??1)*100)}%)`,el.tsize??el.size??1,.3,4,.05)}
+        <div class="row">${el.size||el.tsize!==undefined?'<button class="btn sm" data-act="st-plan-size">Use the plan\'s sizes</button>':''}</div><p class="hint">Sizes are relative to the plan-wide sizes in the Stations tab.</p>`;break;}
     case 'wall':body=`<h3 class="sec-h">Wall</h3>${F.num('el','len',`Length (${unit()})`,toU(wallLen(el)),M.scale?.01:1,0)}${F.num('el','w','Thickness (px)',el.w,1,1)}${thickRow('el','w',el.w)}${F.color('el','color','Colour',el.color)}${F.sel('el','ls','Line style',wallLs(el),WALL_LS)}<p class="hint">Drag the wall to move it; the walls joined to it stretch to follow, and the room colour follows the new shape. Drag a round corner node to reshape.</p>`;break;
     case 'obj':{const d=OBJMAP[el.kind];body=`<div class="row" style="gap:10px"><span style="width:44px;height:34px;background:#fff;border:1px solid var(--line);border-radius:5px;display:grid;place-items:center">${objPreview(el.kind).replace('<svg ','<svg width="36" height="28" ')}</span><h3 class="sec-h" style="margin:0">${esc(d?d[1]:'Object')}</h3></div>
       ${F.text('el','label','Label',el.label||'','Optional, shown under it')}${F.num('el','wU',`Width (${unit()})`,toU(el.w),M.scale?.01:1,0)}${F.num('el','hU',`Depth (${unit()})`,toU(el.h),M.scale?.01:1,0)}
@@ -1823,6 +1828,8 @@ function onPanelInput(e){
 function onPanelChange(e){const t=e.target;if(t.id==='regF'){E.regFilter=t.value;renderPanel();return;}
   if(t.type==='checkbox'||t.tagName==='SELECT')renderPanel();
   else if(t.dataset.k==='stype')renderPanel();}
+function updLabel(sc,k,v){const lab=$(`#panel input[type=range][data-s="${sc}"][data-k="${k}"]`)?.closest('.f')?.querySelector('span');if(!lab||!/\(/.test(lab.textContent))return;
+  lab.textContent=lab.textContent.replace(/\([^)]*\)/,`(${k==='size'||k==='tsize'?Math.round(v*100)+'%':r2(v)})`);}
 function setVal(sc,k,v){
   if(String(sc).startsWith('img:')){const el=getEl(sc.slice(4));if(!el)return;softPush();imgSet(el,k,v);render();scheduleSave();
     const lab=$(`#panel [data-s="${sc}"][data-k="${k}"]`)?.closest('.f')?.querySelector('span');if(lab&&k==='size')lab.textContent=`Size (${Math.round(v)}%)`;if(lab&&k==='rot')lab.textContent=`Turn (${r2(v)}°)`;return;}
@@ -1834,7 +1841,7 @@ function setVal(sc,k,v){
   if(sc==='brand'){BRAND[k]=k==='logoRight'?-v:v;saveBrand();render();return;}
   softPush();
   if(sc==='map'){if(k==='name'){M.name=v;crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[v,'#/map/'+M.id]]);}else if(v>=50)M[k]=Math.round(v);changed();return;}
-  if(sc==='set'){if(k==='revision')E.manualRev=true;M.settings[k]=v;changed();return;}
+  if(sc==='set'){if(k==='revision')E.manualRev=true;M.settings[k]=v;changed();updLabel(sc,k,v);return;}
   if(sc==='furn'){const[p,kk]=k.split('.');M.furn[p][kk]=v;changed();return;}
   if(sc==='set'&&k==='showFrame'){M.settings[k]=v;changed();fitView();return;}
   for(const id of E.sel){const el=getEl(id);if(!el)continue;
@@ -1845,6 +1852,7 @@ function setVal(sc,k,v){
       case 'w':if(el.type==='image'){const ar=el.w/el.h;el.w=Math.max(4,v);el.h=el.w/ar;}else el.w=v;break;
       case 'stype':el.stype=v;{const kt=knownTox(v);if(kt!==null)el.toxic=kt;}break;
       case 'num':el.num=Math.max(1,Math.round(v));break;
+      case 'size':case 'tsize':if(el.type==='station'){el[k]=v;updLabel(sc,k,v);}else el[k]=v;break;
       case 'zdash':for(const w of zoneWalls(el))w.dash=v;break;
       case 'ftext':case 'ffill':case 'fstroke':if(el.type==='svg')fragEdit(el,k,v);break;
       case 'zls':for(const w of zoneWalls(el))setLs(w,v);break;
@@ -1879,6 +1887,8 @@ async function onPanelClick(e){
   const b=e.target.closest('[data-act]');if(!b)return;
   switch(b.dataset.act){
     case 'stop':setTool('select');break;
+    case 'st-plan-size':pushHist();for(const id of E.sel){const x=getEl(id);if(x?.type==='station'){delete x.size;delete x.tsize;}}changed();renderPanel();break;
+    case 'st-all-plan':pushHist();for(const x of M.elements)if(x.type==='station'){delete x.size;delete x.tsize;}changed();renderPanel();break;
     case 'group':{pushHist();const g='g'+uid();for(const id of E.sel){const x=getEl(id);if(x)x.grp=g;}changed();toast('Grouped. Click any of them to pick the whole group.');break;}
     case 'ungroup':{pushHist();for(const id of E.sel){const x=getEl(id);if(x)delete x.grp;}changed();toast('Ungrouped');break;}
     case 'zonefill':pushHist();M.elements=M.elements.filter(x=>!(E.sel.has(x.id)&&x.type==='zone'));E.sel.clear();changed();break;
@@ -2022,6 +2032,23 @@ async function svgToPieces(text,name){
         text:tag==='text'?(leaf.textContent||'').replace(/\s+/g,' ').trim():undefined,x0:Math.min(...cs4.map(p=>p.x)),y0:Math.min(...cs4.map(p=>p.y)),x1:Math.max(...cs4.map(p=>p.x)),y1:Math.max(...cs4.map(p=>p.y))});
       if(++n%400===0)await new Promise(r=>setTimeout(r));}
     if(!parts.length)return 0;
+    // words drawn one letter at a time (common in PDF conversions): join touching letters with the same look into one editable text
+    const inv=m=>{const[a,b,c,d,e,f]=m,D=a*d-b*c||1;return[d/D,-b/D,-c/D,a/D,(c*f-d*e)/D,(b*e-a*f)/D];};
+    const mul=(p,q)=>[p[0]*q[0]+p[2]*q[1],p[1]*q[0]+p[3]*q[1],p[0]*q[2]+p[2]*q[3],p[1]*q[2]+p[3]*q[3],p[0]*q[4]+p[2]*q[5]+p[4],p[1]*q[4]+p[3]*q[5]+p[5]];
+    const look=p=>p.fill+'|'+Math.round((p.fs||0)*4);
+    // next letter on the same line, just after the last one (in the letters' own direction, so turned text works too)
+    const sameLine=(a,b)=>{const im=inv(a.m),sc=Math.sqrt(Math.abs(a.m[0]*a.m[3]-a.m[1]*a.m[2]))||1,fsL=(a.fs||10)/sc,c=p=>{const x=(p.x0+p.x1)/2,y=(p.y0+p.y1)/2;return{x:im[0]*x+im[2]*y+im[4],y:im[1]*x+im[3]*y+im[5]};};
+      const A=c(a),B=c(b),w=Math.abs(im[0]*(a.x1-a.x0))+Math.abs(im[2]*(a.y1-a.y0));return Math.abs(B.y-A.y)<fsL*.35&&B.x>A.x&&B.x-A.x<w/2+fsL*1.4;};
+    {const out=[];let run=[];const flush=()=>{if(run.length<2){out.push(...run);run=[];return;}
+        const f=run[0],im=inv(f.m),sc=Math.sqrt(Math.abs(f.m[0]*f.m[3]-f.m[1]*f.m[2]))||1,fsL=(f.fs||10)/sc;let mk=f.markup,txt=f.text||'',prev=null;
+        const loc=p=>{const cx=(p.x0+p.x1)/2,cy=(p.y0+p.y1)/2;return{x:im[0]*cx+im[2]*cy+im[4],y:im[1]*cx+im[3]*cy+im[5]};};prev=loc(f);
+        for(const p of run.slice(1)){const rel=mul(im,p.m).map(v=>Math.round(v*1e4)/1e4),l=loc(p);mk+=`<g transform="matrix(${rel.join(' ')})">${p.markup}</g>`;
+          txt+=(Math.abs(l.y-prev.y)>fsL*.6?'\n':(l.x-prev.x>fsL*.95+(p.text||'').length*fsL*.3?' ':''))+(p.text||'');prev=l;}
+        out.push({...f,markup:mk,text:txt,x0:Math.min(...run.map(p=>p.x0)),y0:Math.min(...run.map(p=>p.y0)),x1:Math.max(...run.map(p=>p.x1)),y1:Math.max(...run.map(p=>p.y1)),merged:run.length,grp:run.find(p=>p.grp)?.grp||null});run=[];};
+      for(const p of parts){const last=run[run.length-1];
+        if(p.isText&&last&&look(p)===look(last)&&sameLine(last,p)&&(!p.grp||!last.grp||p.grp===last.grp)&&(p.text||'').length<=3)run.push(p);
+        else{flush();run=p.isText?[p]:[];if(!p.isText)out.push(p);}}
+      flush();parts.length=0;parts.push(...out);}
     // lines of one text block drawn as separate texts: keep them together
     for(let i=1;i<parts.length;i++){const a=parts[i-1],b=parts[i];if(!a.isText||!b.isText||b.grp&&a.grp!==b.grp)continue;
       const fs=Math.max(a.fs||0,b.fs||0)||10,sameLook=Math.abs((a.fs||0)-(b.fs||0))<.5&&a.fill===b.fill;
@@ -2043,12 +2070,12 @@ function fragBox(el){const n=$(`#L-main [data-id="${el.id}"]`)?.querySelector(':
 /* change one imported part: its text, fill or line colour */
 function fragEdit(el,k,v){const d=new DOMParser().parseFromString(`<svg xmlns="${NS}">${el.markup}</svg>`,'image/svg+xml'),n=d.documentElement.querySelector(':scope > :not(defs)'),df=d.documentElement.querySelector(':scope > defs');if(!n)return;
   const setStyle=(node,prop,val)=>{const st=(node.getAttribute('style')||'').split(';').filter(x=>x&&!x.trim().startsWith(prop+':'));st.push(prop+':'+val);node.setAttribute('style',st.join(';')+';');};
-  if(k==='ftext'&&n.nodeName==='text'){const first=n.querySelector('tspan')||n,x=(first.getAttribute('x')||n.getAttribute('x')||'0').trim().split(/[\s,]+/)[0],y=(first.getAttribute('y')||n.getAttribute('y')||'0').trim().split(/[\s,]+/)[0];
+  if(k==='ftext'&&n.nodeName==='text'){while(n.nextSibling)n.parentNode.removeChild(n.nextSibling);const first=n.querySelector('tspan')||n,x=(first.getAttribute('x')||n.getAttribute('x')||'0').trim().split(/[\s,]+/)[0],y=(first.getAttribute('y')||n.getAttribute('y')||'0').trim().split(/[\s,]+/)[0];
     const tsStyle=first!==n?first.getAttribute('style'):null;while(n.firstChild)n.removeChild(n.firstChild);n.setAttribute('x',x);n.setAttribute('y',y);
     String(v).split('\n').forEach((line,i)=>{const t=d.createElementNS(NS,'tspan');t.setAttribute('x',x);if(i)t.setAttribute('dy','1.2em');else t.setAttribute('y',y);if(tsStyle)t.setAttribute('style',tsStyle);t.textContent=line||' ';n.appendChild(t);});el.text=String(v).replace(/\s+/g,' ').trim();}
-  if(k==='ffill'){setStyle(n,'fill',v);n.querySelectorAll('tspan').forEach(t=>setStyle(t,'fill',v));}
+  if(k==='ffill'){setStyle(n,'fill',v);d.documentElement.querySelectorAll('tspan, :scope > g text').forEach(t=>setStyle(t,'fill',v));}
   if(k==='fstroke')setStyle(n,'stroke',v);
-  const ser=x=>new XMLSerializer().serializeToString(x).replace(/ xmlns(:\w+)?="[^"]*"/g,'');el.markup=(df?ser(df):'')+ser(n);}
+  const ser=x=>new XMLSerializer().serializeToString(x).replace(/ xmlns(:\w+)?="[^"]*"/g,'');el.markup=(df?ser(df):'')+[...d.documentElement.children].filter(c=>c!==df).map(ser).join('');}
 function fragStyle(el,prop){const m=el.markup.match(new RegExp('style="[^"]*?(?:^|;|")'+prop+':([^;"]+)'));const v=m?m[1].trim():'';return cssHex(v)||'';}
 
 async function importIntoEditor(files,forceMode){
@@ -2272,6 +2299,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
+  ['v16','24 Oct 2026',['Words drawn one letter at a time in an SVG come in as one editable text (straight or turned)','Stations tab: icon and text size for every station on the plan; single stations can still have their own']],
   ['v15','24 Oct 2026',['Background button at the top (or double-click the background) for its settings','Groups from SVG drawings stay together; Group and Ungroup (Ctrl+G); resize and turn a group with handles or buttons','Much less data: plans kept on the device, sent at most once a minute when changed and when you leave, and only downloaded again if they changed','Save indicator moved to the left of undo']],
   ['v14','24 Oct 2026',['SVG drawings import looking exactly like the original, with every part still separate: move, recolour, edit text or delete any of it','Background file settings: see-through, size, turn, flip, move, lock, fit, replace','Retry button when the server can\'t be reached','Click the save indicator to see the data sent and received for each floor plan']],
   ['v13','24 Oct 2026',['Walls you drag take their joined walls with them, and the room colour follows the new shape','Wall thickness quick picks and line styles: solid, dashed, long dash, dotted, dash dot, double','Colour wheel next to every colour choice','SVG drawings import as separate pieces you can move, edit and delete','Standard and HD export quality','Ctrl+D puts the copy where your mouse is','Change log of app updates','Only one sign-in per account at a time','Coordinates box removed from the bottom of the plan','Toxic and non-toxic colours can be changed for each station type','W is now Vertebrate control, with toxic / non-toxic']],
