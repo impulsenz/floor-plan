@@ -1179,7 +1179,7 @@ async function openMap(id){
   $('#view').innerHTML=`<div class="editor${E.readOnly?' ro':''}">
     <nav class="tools" id="tools" aria-label="Drawing tools">${TOOLS.map(t=>t==='-'?'<div class="sep"></div>':typeof t==='string'?groupBtn(t.slice(2)):`<button type="button" class="tool" data-tool="${t[0]}" title="${t[1]} (${t[2]})" aria-label="${t[1]}">${toolSvg(t[3])}<span class="tl">${SHORT[t[0]]}</span></button>`).join('')}<div class="sep"></div><button type="button" class="tool" data-top="bg" title="Background: see-through, size, turn, move, lock" aria-label="Background"><svg viewBox="0 0 20 20" width="22" height="22" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 14l4-4.5 3 3 2-2 3 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="13.5" cy="7" r="1.4" fill="currentColor"/></svg><span class="tl">Background</span></button></nav>
     <section class="stage-wrap" id="stageWrap"><svg id="stage" xmlns="${NS}"><defs>${SPLIT_DEF}<pattern id="gridp" patternUnits="userSpaceOnUse" width="20" height="20"><path id="gridpath" d="M20 0H0V20" fill="none" stroke="#9aa5b1" stroke-opacity=".35" stroke-width="1"/></pattern></defs>
-      <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-ov"></g><g id="L-peers" pointer-events="none"></g></g></svg>
+      <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-drag"></g><g id="L-rdrag" pointer-events="none"></g><g id="L-ov"></g><g id="L-peers" pointer-events="none"></g></g></svg>
       <div class="drawbar" id="drawbar" hidden><div class="seg" id="dbMode" role="radiogroup" aria-label="Drawing mode"><label><input type="radio" name="dbmode" value="click"><span>Click points</span></label><label><input type="radio" name="dbmode" value="free"><span>Freehand</span></label></div>
         <span class="dbinfo" id="dbInfo"></span><button type="button" class="btn sm primary" id="dbEnclose" hidden>Enclose space</button><button type="button" class="btn sm" id="dbFinish" hidden>Finish</button><button type="button" class="btn sm ghost" id="dbCancel">Cancel</button></div>
       ${E.readOnly?`<div class="ro-bar"><span><b>View only.</b> ${esc(ownerLabel(M)==='Admin'?'This plan belongs to an admin.':`This is ${ownerLabel(M)}'s plan.`)} Ask to edit it, or duplicate it to make your own copy.</span><button type="button" class="btn sm" data-ro-ask>Ask to edit</button><button type="button" class="btn sm primary" data-ro-copy>Duplicate to edit</button></div>`:''}
@@ -1333,12 +1333,30 @@ function renderImages(){
     n.style.pointerEvents=el.locked?'none':'auto';layer.appendChild(n);}
   for(const n of [...layer.children])if(!keep.has(n.getAttribute('data-id')))n.remove();
 }
+/* redraw at most once per screen frame while dragging (several mouse moves can arrive between frames) */
+function rafRender(){if(E.rafR)return;E.rafR=requestAnimationFrame(()=>{E.rafR=null;render();});}
+/* Dragging things: lift their drawing onto its own layer once, then just slide that layer as the mouse moves,
+   so the rest of the plan isn't redrawn. Falls back to a once-per-frame redraw when other walls have to stretch. */
+const FAST_TYPES=new Set(['station','text','obj','svg','rect','ellipse','polygon','line','arrow','dim','wall','zone','door','image']);
+function dragFast(d,dx,dy){
+  if(d.fast===undefined){const ids=new Set(d.orig.keys());let ok=!(d.att&&d.att.length)&&[...d.orig.values()].every(o=>FAST_TYPES.has(o.type)&&!(o.type==='door'&&d.orig.size===1));
+    for(const z of M.elements)if(z.type==='zone'&&z.walls.some(w=>ids.has(w))&&!z.walls.every(w=>ids.has(w)))ok=false;
+    const doors=M.elements.filter(e=>e.type==='door'&&ids.has(e.wall)).map(e=>e.id),zones=M.elements.filter(z=>z.type==='zone'&&z.walls.length&&z.walls.every(w=>ids.has(w))).map(z=>z.id);
+    d.fast=ok;d.nodes=[...new Set([...ids,...doors,...zones])];d.hasImg=[...d.orig.values()].some(o=>o.type==='image');d.ox=0;d.oy=0;}
+  if(!d.fast){rafRender();return;}
+  d.dx=dx;d.dy=dy;
+  if(!d.fastOn){const L=$('#L-drag');L.innerHTML='';for(const id of d.nodes){const n=$(`#L-main > [data-id="${CSS.escape(id)}"]`);if(n)L.appendChild(n);}d.fastOn=true;d.ox=dx;d.oy=dy;}
+  if(!E.rafD)E.rafD=requestAnimationFrame(()=>{E.rafD=null;const dd=E.drag;if(!dd?.fastOn)return;$('#L-drag').setAttribute('transform',`translate(${r2(dd.dx-dd.ox)} ${r2(dd.dy-dd.oy)})`);if(dd.hasImg)renderImages();renderOverlay();});
+  Live.dragMsg(d,dx,dy);}
 function render(){
   if(route!=='map'||!M)return;
+  {const L=$('#L-drag');if(L){L.innerHTML='';L.removeAttribute('transform');const d=E.drag;if(d?.fastOn){d.fastOn=false;}}}   // a full redraw puts everything back in place
+  {const R=$('#L-rdrag');if(R)R.innerHTML='';Live.rdrag?.clear();}
   const sg=sheet();$('#board').setAttribute('width',sg.W);$('#board').setAttribute('y',sg.top);$('#board').setAttribute('height',sg.H);
   const g=$('#gridr');g.setAttribute('width',M.width);g.setAttribute('height',M.height);g.style.display=M.settings.showGrid?'':'none';
   const gp=$('#gridp'),gs=M.settings.grid||20;gp.setAttribute('width',gs);gp.setAttribute('height',gs);$('#gridpath').setAttribute('d',`M${gs} 0H0V${gs}`);
   renderImages();$('#L-main').innerHTML=mainMarkup(false);renderOverlay();Live.soon();
+  {const d=E.drag;if(d?.kind==='move'&&d.fast&&d.dx!==undefined)dragFast(d,d.dx,d.dy);}   // keep sliding after a redraw mid-drag
 }
 function renderOverlay(){
   if(route!=='map')return;const k=E.view.k,sel=getComputedStyle(document.documentElement).getPropertyValue('--sel').trim()||'#1c7ed6';
@@ -1679,7 +1697,7 @@ function onMove(e){
         if(el.type==='door'){if(d.orig.size===1){const nw=nearestWall(p);if(nw){el.wall=nw.wall.id;el.t=clampT(nw.t,nw.wall,el.width);}}continue;}
         Object.assign(el,clone(o));moveEl(el,dx,dy);}
       for(const[wid,end,ox,oy]of d.att||[]){const w=getEl(wid);if(w){w['x'+end]=ox+dx;w['y'+end]=oy+dy;}}
-      render();break;}
+      dragFast(d,dx,dy);break;}
     case 'handle':{const el=getEl(d.id);if(!d.pushed){pushHist();d.pushed=true;}const o=d.orig;
       if(d.h==='p1'||d.h==='p2'){const anchor=d.h==='p1'?{x:o.x2,y:o.y2}:{x:o.x1,y:o.y1};const q=snapP(p,e,anchor,d.skip);el['x'+d.h[1]]=q.x;el['y'+d.h[1]]=q.y;
         for(const[wid,end]of d.conn||[]){const w=getEl(wid);if(w){w['x'+end]=q.x;w['y'+end]=q.y;}}}
@@ -1687,20 +1705,20 @@ function onMove(e){
       else if(d.h==='se'&&el.type==='obj'){p=clampPt(p);const a=-(el.rot||0)*Math.PI/180,dx=p.x-el.x,dy=p.y-el.y,lx=dx*Math.cos(a)-dy*Math.sin(a),ly=dx*Math.sin(a)+dy*Math.cos(a);let w=Math.max(4,Math.abs(lx)*2),h=Math.max(4,Math.abs(ly)*2);if(e.shiftKey){const ar=o.w/o.h;h=w/ar;}el.w=w;el.h=h;}
       else if(d.h==='se'){const q=snapP(p,e);let w=Math.max(4,q.x-el.x),h=Math.max(4,q.y-el.y);if(el.type==='image'&&!e.shiftKey){const ar=o.w/o.h;h=w/ar;}el.w=w;el.h=h;}
       else if(d.h[0]==='v'){const q=snapP(p,e);el.pts[+d.h.slice(1)]=[q.x,q.y];}
-      render();break;}
+      rafRender();break;}
     case 'gx':{if(!d.pushed){pushHist();d.pushed=true;}const C=d.C;
       if(d.mode==='gscale'){const s0=Math.hypot(d.start.x-C.x,d.start.y-C.y)||1;groupXf(d.base,C,Math.max(.05,Math.hypot(p.x-C.x,p.y-C.y)/s0),0);}
       else{let a=(Math.atan2(p.y-C.y,p.x-C.x)-Math.atan2(d.start.y-C.y,d.start.x-C.x))*180/Math.PI;if(!e.altKey)a=Math.round(a/15)*15;groupXf(d.base,C,1,a);}
-      render();break;}
-    case 'node':{if(!d.pushed){pushHist();d.pushed=true;}const q=snapP(p,e,null,d.skip);for(const[wid,end]of d.conn){const w=getEl(wid);if(w){w['x'+end]=q.x;w['y'+end]=q.y;}}render();break;}
-    case 'furn':{if(!d.pushed){pushHist();d.pushed=true;}const F=M.furn[d.part],m=26*(F.s||1);F.x=Math.round(clamp(d.ox+p.x-d.start.x,m,M.width-m));F.y=Math.round(clamp(d.oy+p.y-d.start.y,m,M.height-m));render();break;}
+      rafRender();break;}
+    case 'node':{if(!d.pushed){pushHist();d.pushed=true;}const q=snapP(p,e,null,d.skip);for(const[wid,end]of d.conn){const w=getEl(wid);if(w){w['x'+end]=q.x;w['y'+end]=q.y;}}rafRender();break;}
+    case 'furn':{if(!d.pushed){pushHist();d.pushed=true;}const F=M.furn[d.part],m=26*(F.s||1);F.x=Math.round(clamp(d.ox+p.x-d.start.x,m,M.width-m));F.y=Math.round(clamp(d.oy+p.y-d.start.y,m,M.height-m));rafRender();break;}
     case 'marquee':d.b=p;renderOverlay();break;
     case 'free':{const q=clampPt(p),s2=E.chain.stroke,last=s2.length?s2[s2.length-1]:E.chain.pts[E.chain.pts.length-1];if(dist(q,last)*k>=4)s2.push(q);renderOverlay();break;}
     case 'draw':d.b=snapP(p,e,['line','arrow','dim','calib'].includes(E.tool)?d.a:null);renderOverlay();break;
   }
 }
 function onUp(){
-  const d=E.drag;E.drag=null;$('#stage').classList.remove('panning');if(!d)return;if(d.kind==='draw'||d.kind==='free')setTimeout(()=>Live.cursor(E.cursor,true,true));
+  const d=E.drag;E.drag=null;if(E.rafR){cancelAnimationFrame(E.rafR);E.rafR=null;}if(d?.kind==='move'&&d.fastOn)Live.dragEnd(d);$('#stage').classList.remove('panning');if(!d)return;if(d.kind==='draw'||d.kind==='free')setTimeout(()=>Live.cursor(E.cursor,true,true));
   if(d.kind==='marquee'){const x=Math.min(d.a.x,d.b.x),y=Math.min(d.a.y,d.b.y),w=Math.abs(d.b.x-d.a.x),h=Math.abs(d.b.y-d.a.y);
     if(w*E.view.k>3||h*E.view.k>3){for(const el of M.elements){if(el.type==='image'&&el.locked)continue;const b=bboxOf(el);if(b.x<x+w&&b.x+b.w>x&&b.y<y+h&&b.y+b.h>y)E.sel.add(el.id);}if(E.sel.size)showTab('props');}
     renderAll();return;}
@@ -2212,13 +2230,27 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
     else if(m.type==='need-state')this.sendState(m.for);
     else if(m.type==='state')this.applyState(m.state);
     else if(m.type==='ops')this.applyOps(m.ops);
+    else if(m.type==='drag')this.onDrag(m);
     else if(m.type==='cursor'){const c=this.cursors.get(m.from);
       if(m.on){if(c&&!c.hide){c.tx=m.x;c.ty=m.y;c.draft=m.draft||null;}else this.cursors.set(m.from,{x:m.x,y:m.y,tx:m.x,ty:m.y,draft:m.draft||null});}
       else if(c?.draft)c.hide=true;else this.cursors.delete(m.from);
       this.animate();}},
-  /* glide each pointer smoothly toward the latest position it was sent */
+  /* while I drag: a tiny "these moved by this much" message about 20 times a second; the real change follows when I let go */
+  dragMsg(d,dx,dy){if(!this.others().length||E.readOnly)return;const now=Date.now();d.tok=d.tok||('d'+uid());d.lastDx=dx;d.lastDy=dy;
+    if(now-(d.sentT||0)<50){if(!d.later)d.later=setTimeout(()=>{d.later=null;if(E.drag===d)this.dragMsg(d,d.lastDx,d.lastDy);},50);return;}
+    d.sentT=now;const first=!d.sentIds;d.sentIds=true;this.post({type:'drag',tok:d.tok,ids:first?d.nodes:undefined,dx:r2(dx),dy:r2(dy)});},
+  dragEnd(d){clearTimeout(d.later);if(d.tok&&this.others().length){this.post({type:'drag',tok:d.tok,end:true});}},
+  rdrag:new Map(),rdIds:new Map(),
+  onDrag(m){const R=$('#L-rdrag');if(!R)return;let g=this.rdrag.get(m.from);
+    if(m.end){if(g){setTimeout(()=>{const g2=this.rdrag.get(m.from);if(g2&&g2.tok===m.tok){render();}},700);}return;}
+    if(m.ids)this.rdIds.set(m.from,{tok:m.tok,ids:m.ids});
+    if(!g||g.tok!==m.tok){const ids=m.ids||(this.rdIds.get(m.from)?.tok===m.tok?this.rdIds.get(m.from).ids:null);if(!ids)return;
+      const el=document.createElementNS(NS,'g');R.appendChild(el);g={tok:m.tok,el,x:0,y:0,tx:m.dx,ty:m.dy,ids};
+      for(const id of ids){const n=$(`#L-main > [data-id="${CSS.escape(id)}"]`);if(n)el.appendChild(n);}this.rdrag.set(m.from,g);g.x=m.dx;g.y=m.dy;}
+    g.tx=m.dx;g.ty=m.dy;this.animate();},
   animate(){if(this.raf)return;const step=()=>{this.raf=null;let moving=false;for(const c of this.cursors.values()){if(c.tx===undefined)continue;const dx=c.tx-c.x,dy=c.ty-c.y;
         if(Math.abs(dx)+Math.abs(dy)>.3){c.x+=dx*.35;c.y+=dy*.35;moving=true;}else{c.x=c.tx;c.y=c.ty;}}
+      for(const g of this.rdrag.values()){const dx=g.tx-g.x,dy=g.ty-g.y;if(Math.abs(dx)+Math.abs(dy)>.2){g.x+=dx*.4;g.y+=dy*.4;moving=true;}else{g.x=g.tx;g.y=g.ty;}g.el.setAttribute('transform',`translate(${r2(g.x)} ${r2(g.y)})`);}
       this.draw();if(moving)this.raf=requestAnimationFrame(step);};this.raf=requestAnimationFrame(step);},
   draw(){const L=$('#L-peers');if(!L)return;L.innerHTML=route==='map'&&M?this.markup(E.view.k):'';},
   setPeers(list){const before=new Set(this.others().map(p=>p.id));this.peers=list||[];for(const k of [...this.cursors.keys()])if(!this.peers.some(p=>p.id===k))this.cursors.delete(k);
@@ -2227,7 +2259,7 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
     this.greeted=true;if(this.others().length)this.baseline();updPeers();renderOverlay();},
   async post(body){const payload=JSON.stringify({...body,from:this.id});Net.add('/live/'+this.mapId,payload.length+300,300,null);
     try{await fetch(Store.base+'/api/live/'+encodeURIComponent(this.mapId),{method:'POST',headers:Store.hdr(true),body:payload,cache:'no-store'});}catch(e){}},
-  soon(){if(!this.others().length||E.readOnly||this.sendT||!M||M.id!==this.mapId)return;this.sendT=setTimeout(()=>{this.sendT=null;this.flush();},110);},
+  soon(){if(!this.others().length||E.readOnly||this.sendT||!M||M.id!==this.mapId||E.drag?.fastOn)return;this.sendT=setTimeout(()=>{this.sendT=null;this.flush();},110);},
   flush(){if(!M||M.id!==this.mapId||!this.others().length||E.readOnly)return;const up=[],rm=[],seen=new Set();
     M.elements.forEach((e,i)=>{seen.add(e.id);const s=JSON.stringify(e),was=this.base.get(e.id);if(was!==s){up.push(was===undefined?{el:e,at:i}:{el:e});this.base.set(e.id,s);}});
     for(const id of [...this.base.keys()])if(!seen.has(id)){rm.push(id);this.base.delete(id);}
@@ -2474,7 +2506,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='requests')openRequests();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
-  ['v20','24 Oct 2026',['You stay signed in until you sign out (no more sign-out after 5 minutes)','Access requests: search, Waiting / Can edit / All filters, and lists that scroll inside the window','Other people\'s pointers move smoothly']],
+  ['v20','24 Oct 2026',['You stay signed in until you sign out (no more sign-out after 5 minutes)','Access requests: search, Waiting / Can edit / All filters, and lists that scroll inside the window','Other people\'s pointers move smoothly','Smooth dragging: what you move slides without redrawing the whole plan, and glides on other people\'s screens too']],
   ['v19','24 Oct 2026',['Live editing: when two or more people have the same plan open, everyone sees changes and each other\'s pointers as they happen','Ask to edit someone else\'s site or plan; the owner or an admin approves it under Access requests','Walls stay visible while you draw them, with a dot on every corner','Others on the plan see walls, fences, lines and boxes while you are still drawing them','Shapes get room-style fill colours; text align removed; no dashed outline around selected items']],
   ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved)','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
   ['v17','24 Oct 2026',['Background button moved to the left toolbar','Print button next to Export prints the plan straight from the browser on one A4 page']],

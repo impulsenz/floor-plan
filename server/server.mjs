@@ -462,6 +462,7 @@ const server = http.createServer(async (req, res) => {
         const deny = writeCheck(me, 'maps', planId, 'PUT');
         if (deny) return json(res, 403, { error: deny });
         if (obj.type === 'ops') liveCast(planId, { type: 'ops', from, by: me.name || me.email, ops: obj.ops }, from);
+        else if (obj.type === 'drag') liveCast(planId, { type: 'drag', from, tok: String(obj.tok || '').slice(0, 40), ids: Array.isArray(obj.ids) ? obj.ids.slice(0, 20000) : undefined, dx: +obj.dx || 0, dy: +obj.dy || 0, end: !!obj.end }, from);
         else if (obj.type === 'state' && obj.to) liveCast(planId, { type: 'state', from, state: obj.state }, from, String(obj.to));
         else return json(res, 400, { error: 'Unknown message' });
         return json(res, 200, { ok: true, peers: room.size - 1 });
