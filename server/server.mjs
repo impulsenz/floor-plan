@@ -73,10 +73,20 @@ db.exec(`
 // Who created each site or plan. Older records (from before ownership) have no owner and only admins can change them.
 if (!db.prepare("SELECT 1 FROM pragma_table_info('records') WHERE name = 'owner'").get()) db.exec('ALTER TABLE records ADD COLUMN owner TEXT');
 
+// a light listing of plans for the site pages: no drawing data, just what the cards need
+const SUMMARY = `SELECT json_object('id', id, 'siteId', site_id, 'name', json_extract(data, '$.name'), 'updated', json_extract(data, '$.updated'),
+  'created', json_extract(data, '$.created'), 'owner', json_extract(data, '$.owner'), 'thumb', json_extract(data, '$.thumb'),
+  'settings', json_object('department', json_extract(data, '$.settings.department'), 'preparedBy', json_extract(data, '$.settings.preparedBy'), 'revision', json_extract(data, '$.settings.revision'))) AS data
+  FROM records WHERE store = 'maps'`;
 const q = {
   list:     db.prepare('SELECT data FROM records WHERE store = ? ORDER BY updated DESC'),
   listSite: db.prepare('SELECT data FROM records WHERE store = ? AND site_id = ? ORDER BY updated DESC'),
-  get:      db.prepare('SELECT data FROM records WHERE store = ? AND id = ?'),
+  get:      db.prepare('SELECT data, updated FROM records WHERE store = ? AND id = ?'),
+  stamp:    db.prepare('SELECT updated FROM records WHERE store = ? AND id = ?'),
+  ver:      db.prepare('SELECT COUNT(*) AS n, MAX(updated) AS m FROM records WHERE store = ?'),
+  verSite:  db.prepare('SELECT COUNT(*) AS n, MAX(updated) AS m FROM records WHERE store = ? AND site_id = ?'),
+  sum:      db.prepare(SUMMARY + ' ORDER BY updated DESC'),
+  sumSite:  db.prepare(SUMMARY + ' AND site_id = ? ORDER BY updated DESC'),
   row:      db.prepare('SELECT owner FROM records WHERE store = ? AND id = ?'),
   setOwner: db.prepare('UPDATE records SET owner = ? WHERE store = ? AND id = ?'),
   people:   db.prepare('SELECT email, name FROM users'),
@@ -170,11 +180,14 @@ function cors(req, res) {
   res.setHeader('Access-Control-Allow-Origin', any ? '*' : origin);
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, If-None-Match');
+  res.setHeader('Access-Control-Expose-Headers', 'ETag');
   res.setHeader('Access-Control-Max-Age', '86400');
 }
-function send(res, code, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store' });
+function send(res, code, body, type = 'application/json; charset=utf-8', etag) {
+  const h = { 'Content-Type': type, 'Cache-Control': 'no-store' };
+  if (etag) h.ETag = etag;
+  res.writeHead(code, h);
   res.end(body);
 }
 const json = (res, code, obj) => send(res, code, JSON.stringify(obj));
@@ -332,15 +345,21 @@ const server = http.createServer(async (req, res) => {
 
     if (!id) {
       if (req.method !== 'GET') return json(res, 405, { error: 'Method not allowed' });
-      const siteId = url.searchParams.get('siteId');
-      const rows = siteId ? q.listSite.all(store, siteId) : q.list.all(store);
-      return send(res, 200, '[' + rows.map(r => r.data).join(',') + ']');
+      // unchanged since the browser last fetched it? answer "not modified" with no body, to save data
+      const siteId = url.searchParams.get('siteId'), summary = store === 'maps' && url.searchParams.has('summary');
+      const v = siteId ? q.verSite.get(store, siteId) : q.ver.get(store), etag = `"${summary ? 's' : 'f'}${v.n}-${v.m || 0}"`;
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304, { ETag: etag }); return res.end(); }
+      const rows = summary ? (siteId ? q.sumSite.all(siteId) : q.sum.all()) : (siteId ? q.listSite.all(store, siteId) : q.list.all(store));
+      return send(res, 200, '[' + rows.map(r => r.data).join(',') + ']', undefined, etag);
     }
     if (id.length > 200) return json(res, 400, { error: 'Bad id' });
 
     if (req.method === 'GET') {
-      const row = q.get.get(store, id);
-      return row ? send(res, 200, row.data) : json(res, 404, { error: 'Not found' });
+      const st = q.stamp.get(store, id);
+      if (!st) return json(res, 404, { error: 'Not found' });
+      const etag = `"r${st.updated}"`;
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304, { ETag: etag }); return res.end(); }
+      return send(res, 200, q.get.get(store, id).data, undefined, etag);
     }
     if (req.method === 'PUT' || req.method === 'DELETE') {
       const deny = writeCheck(me, store, id, req.method);
@@ -350,16 +369,18 @@ const server = http.createServer(async (req, res) => {
       const { text, obj } = await readJson(req);
       if (!obj || typeof obj !== 'object' || Array.isArray(obj) || obj.id !== id) return json(res, 400, { error: 'The record id must match the address' });
       let body = text;
+      let now = Date.now(); const prev = q.stamp.get(store, id); if (prev && prev.updated >= now) now = prev.updated + 1;
       if (OWNED.has(store)) {
         // the server decides the owner: whoever first created it (never changed by later edits, even an admin's)
         const ex = q.row.get(store, id);
         const owner = ex ? ex.owner : (me.open ? null : me.email);
         obj.owner = owner || undefined;
         body = JSON.stringify(obj);
-        q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, body, Date.now());
+        q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, body, now);
         if (!ex) q.setOwner.run(owner, store, id);
-      } else q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, body, Date.now());
-      return json(res, 200, { ok: true, owner: obj.owner || null });
+      } else q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, body, now);
+      // the new version tag lets the browser keep its own copy instead of downloading it again
+      return json(res, 200, { ok: true, owner: obj.owner || null, etag: `"r${now}"` });
     }
     if (req.method === 'DELETE') {
       q.del.run(store, id);

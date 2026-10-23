@@ -150,12 +150,15 @@ API (all JSON; `{store}` is `sites`, `maps`, `assets` or `meta`):
 | GET / POST | `/api/auth/me`, `/api/auth/logout` | who's signed in / sign out |
 | GET / PUT / DELETE | `/api/users[/{email}]` | access list (admins only) |
 | GET / PUT | `/api/prefs` | your own settings (theme, defaults), stored per account |
+| GET | `/api/maps?summary=1[&siteId=]` | plan list without drawing data (for site pages) |
 | GET | `/api/{store}` | every record (`?siteId=` filters plans by site) |
 | GET | `/api/{store}/{id}` | one record, or 404 |
 | PUT | `/api/{store}/{id}` | create or replace (body `id` must match) |
 | DELETE | `/api/{store}/{id}` | remove |
 
 Settings live in `/etc/systemd/system/floorplan.service`. `ALLOWED_ORIGINS` limits which web addresses may use the server (for example `https://impulsenz.github.io`), and is `*` (any) for now.
+
+Every GET answers with an `ETag`; send it back as `If-None-Match` and an unchanged record or list comes back as `304 Not Modified` with no body, so browsers re-use their own copy. A PUT returns the new `etag`.
 
 Sites and plans record an `owner` (the email of whoever created them). Only the owner or an admin may change or delete them; images and history follow their plan's owner. Records made before ownership existed have no owner, so only admins can change those. `GET /api/people` lists names for showing who owns what.
 

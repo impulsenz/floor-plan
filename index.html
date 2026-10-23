@@ -267,7 +267,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .photo-prev{width:72px;height:48px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);display:grid;place-items:center;font-size:11px;color:var(--ink-3);overflow:hidden;flex:none}
 .photo-prev img{width:100%;height:100%;object-fit:cover}
 .lg-c{display:inline-flex;gap:8px;align-items:center}.lg-c label{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;color:var(--ink-2)}.lg-c em{font-style:normal}
-.save-pill{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:15px;border:1px solid var(--line);background:var(--panel);font:inherit;font-size:12px;cursor:pointer;max-width:300px;white-space:nowrap;flex:none}
+.save-pill{margin-right:6px;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:15px;border:1px solid var(--line);background:var(--panel);font:inherit;font-size:12px;cursor:pointer;max-width:300px;white-space:nowrap;flex:none}
 .save-pill span{overflow:hidden;text-overflow:ellipsis}
 .pill-retry{margin-left:2px;padding:2px 9px;border-radius:10px;background:#f59f00;color:#1a1209;font-size:11.5px;font-weight:700;cursor:pointer}
 .pill-retry:hover{background:#e67700;color:#fff}
@@ -276,7 +276,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .net-sum{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 10px}.net-sum>div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
 .save-pill .spin
 .save-pill.saved{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,var(--line))}
-.save-pill.saving{color:var(--ink-3)}
+.save-pill.saving,.save-pill.device{color:var(--ink-3)}
 .save-pill.local{color:#b35c00;background:color-mix(in srgb,#f59f00 12%,var(--panel));border-color:#f59f00}
 .save-pill .spin{width:11px;height:11px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -524,16 +524,23 @@ const Store={
   async req(method,path,body){
     if(!this.base)throw new Error('No server address set');
     const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),body?120000:30000),payload=body!==undefined?JSON.stringify(body):undefined;
-    let r;try{r=await fetch(this.base+'/api'+path,{method,signal:ctl.signal,cache:'no-store',headers:this.hdr(body!==undefined),body:payload});}
+    const cached=method==='GET'?await HttpCache.get(path):null,headers=this.hdr(body!==undefined);if(cached?.etag)headers['If-None-Match']=cached.etag;
+    let r;try{r=await fetch(this.base+'/api'+path,{method,signal:ctl.signal,cache:'no-store',headers,body:payload});}
     catch(e){this.online=false;throw new Error(e.name==='AbortError'?'The server took too long to answer':'Cannot reach the server');}
     finally{clearTimeout(t);}
     this.online=true;
     if(r.status===404&&method==='GET')return undefined;
     if(r.status===401&&this.auth){const why=await r.json().catch(()=>({}));this.setToken('');this.user=null;signedOut(why.code==='elsewhere'?why.error:'Your sign-in has ended. Please sign in again.');throw new Error('Please sign in');}
+    if(r.status===304&&cached){Net.add(path,400,250,body,true);const j=JSON.parse(cached.text);this.nameCache(path,j);return j;}
     const txt=await r.text().catch(()=>'');Net.add(path,(payload?.length||0)+400,txt.length+300,body);
+    if(r.ok&&method==='GET'){const et=r.headers.get('ETag');if(et)HttpCache.put(path,{etag:et,text:txt});}
     if(!r.ok){let m='';try{m=JSON.parse(txt).error;}catch(e){}throw new Error(m||('Server error '+r.status));}
-    const j=txt?JSON.parse(txt):null;if(/^\/maps(\/|$)/.test(path))for(const x of Array.isArray(j)?j:j?[j]:[])if(x?.id&&x.name)Net.names[x.id]=x.name;return j;
+    const j=txt?JSON.parse(txt):null;this.nameCache(path,j);
+    if(method==='PUT'&&j?.etag){const own=/^\/(sites|maps)\//.test(path);HttpCache.put(path,{etag:j.etag,text:own?JSON.stringify({...body,owner:j.owner||undefined}):payload});}
+    if(method==='DELETE')HttpCache.del(path);
+    return j;
   },
+  nameCache(path,j){if(/^\/maps(\/|\?|$)/.test(path))for(const x of Array.isArray(j)?j:j?[j]:[])if(x?.id&&x.name)Net.names[x.id]=x.name;},
   async health(base=this.base){const r=await fetch(base.replace(/\/+$/,'')+'/api/health',{cache:'no-store',headers:this.hdr(false)});if(!r.ok)throw new Error('Server error '+r.status);const j=await r.json();if(j.app!=='station-planner')throw new Error('That address is not a Station Planner server');return j;},
   async open(){if(!this.base)return false;if(!this.token)this.loadToken();try{const h=await this.health();this.auth=h.auth||null;this.online=true;return true;}catch(e){this.online=false;return false;}},
   /* null = signed in (or sign-in is off); otherwise the reason the login screen should show */
@@ -544,7 +551,9 @@ const Store={
   get(s,id){return this.req('GET',`/${s}/${encodeURIComponent(id)}`);},
   put(s,v){return this.req('PUT',`/${s}/${encodeURIComponent(v.id)}`,v);},
   del(s,id){return this.req('DELETE',`/${s}/${encodeURIComponent(id)}`);},
-  mapsOf(siteId){return this.req('GET','/maps?siteId='+encodeURIComponent(siteId));}
+  mapsOf(siteId){return this.req('GET','/maps?summary=1&siteId='+encodeURIComponent(siteId));},   // light list: no drawing data
+  mapList(){return this.req('GET','/maps?summary=1');},
+  async fullMapsOf(siteId){const out=[];for(const m of await this.mapsOf(siteId)){const f=await this.get('maps',m.id);if(f)out.push(f);}return out;}
 };
 
 /* ---------------- small UI helpers ---------------- */
@@ -798,7 +807,7 @@ function textMarkup(el){
   const lines=String(el.text||' ').split('\n'),ff=FONTS[el.font]||MAPFONT;
   const hw=el.haloW??(el.halo===false?0:.2),halo=hw>0?` stroke="#ffffff" stroke-width="${r2(el.size*hw)}" paint-order="stroke" stroke-linejoin="round"`:'';
   const ts=lines.map((l,i)=>`<tspan x="${r2(el.x)}" dy="${i?1.2:.9}em">${esc(l)||' '}</tspan>`).join('');
-  return `<g data-id="${el.id}"><text x="${r2(el.x)}" y="${r2(el.y)}" font-family="${esc(ff)}" font-size="${el.size}" fill="${el.color}" font-weight="${el.bold?700:400}" font-style="${el.italic?'italic':'normal'}" text-anchor="${el.align||'start'}"${halo}>${ts}</text></g>`;
+  return `<g data-id="${el.id}"${el.rot?` transform="rotate(${r2(el.rot)} ${r2(el.x)} ${r2(el.y)})"`:''}><text x="${r2(el.x)}" y="${r2(el.y)}" font-family="${esc(ff)}" font-size="${el.size}" fill="${el.color}" font-weight="${el.bold?700:400}" font-style="${el.italic?'italic':'normal'}" text-anchor="${el.align||'start'}"${halo}>${ts}</text></g>`;
 }
 /* Station IDs sit to the right of the marker, and move to the left when that side is crowded
    by other stations, labels, objects, text or walls (or runs off the page). */
@@ -924,7 +933,7 @@ const isAdmin=()=>!Store.auth||Store.user?.role==='admin';
 const canEdit=rec=>!Store.auth||isAdmin()||(!!rec?.owner&&rec.owner===Store.user?.email);
 function ownerLabel(rec){if(!Store.auth)return'';const o=rec?.owner;if(!o)return'Admin';if(o===Store.user?.email)return'You';return Store.people?.get(o)||o.split('@')[0];}
 const NOT_YOURS='This belongs to someone else. You can open it and duplicate it, but only the owner or an admin can change it.';
-async function copyPlan(m,siteId,name){const a=await Store.get('assets',m.id);const n={...clone(m),id:uid(),siteId,name:name||m.name+' (copy)',created:Date.now(),updated:Date.now()};delete n.owner;
+async function copyPlan(m,siteId,name){if(!m.elements)m=await Store.get('maps',m.id);const a=await Store.get('assets',m.id);const n={...clone(m),id:uid(),siteId,name:name||m.name+' (copy)',created:Date.now(),updated:Date.now()};delete n.owner;
   await Store.put('maps',n);await Store.put('assets',{id:n.id,data:a?.data||{}});return n;}
 async function copySite(s0){const s={...clone(s0),id:uid(),name:s0.name+' (copy)',created:Date.now(),updated:Date.now()};delete s.owner;delete s.sample;await Store.put('sites',s);
   for(const m of await Store.mapsOf(s0.id))await copyPlan(m,s.id,m.name);return s;}
@@ -932,7 +941,7 @@ const imgThumb=async(file,max=900)=>{const im=await fileToImg(file);const i=awai
 
 async function showSites(){
   route='sites';M=null;site=null;
-  const [sites,maps]=await Promise.all([Store.all('sites'),Store.all('maps')]);
+  const [sites,maps]=await Promise.all([Store.all('sites'),Store.mapList()]);
   crumbs([['Sites','#/']]);
   $('#topActions').innerHTML=`<button class="btn ghost hide-narrow" data-top="server" title="Servers">${ICON.globe}<span>${esc(Servers.current()?.name||'Server')}</span></button><button class="btn hide-narrow" data-top="import-site">${ICON.upload}Import backup</button><button class="btn primary" data-top="new-site">${ICON.plus}New site</button>${themeBtn()}${accountBtn()}`;
   sites.sort(Prefs.v.siteSort==='name'?(a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}):(a,b)=>b.updated-a.updated);
@@ -976,7 +985,7 @@ async function editSite(s,focus){
   try{await Store.put('sites',s);}catch(e){toast(e.message,'warn');return null;}return s;
 }
 async function backupSite(s){
-  const ms=await Store.mapsOf(s.id),assets={};for(const m of ms){const a=await Store.get('assets',m.id);assets[m.id]=a?.data||{};}
+  const ms=await Store.fullMapsOf(s.id),assets={};for(const m of ms){const a=await Store.get('assets',m.id);assets[m.id]=a?.data||{};}
   download(new Blob([JSON.stringify({format:'pest-station-planner-site',version:1,exported:new Date().toISOString(),site:s,maps:ms,assets,categories:CATS})],{type:'application/json'}),safeName(s.name)+' - site backup.json');
   toast('Backup saved');
 }
@@ -1067,6 +1076,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-top]
   if(a==='zin')zoomBy(1.25);if(a==='zout')zoomBy(.8);if(a==='fit')fitView();
   if(a==='import'){if($('.popmenu'))return closePop();popMenu(b,[{v:'file',label:'Image or PDF file',icon:ICON.upload,note:'PNG, JPG, SVG, PDF'},{v:'sat',label:'Satellite photo',icon:ICON.globe,note:'Search an address'}],'below',v=>v==='file'?$('#fileIn').click():openSatellite());}
   if(a==='export')openExport();
+  if(a==='bg'){if(M?.elements.some(e=>e.bg))openBg();else{if($('.popmenu'))return closePop();popMenu(b,[{v:'file',label:'Image or PDF file',icon:ICON.upload,note:'Use it as the background'},{v:'sat',label:'Satellite photo',icon:ICON.globe,note:'Search an address'}],'below',v=>v==='file'?pick('.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.pdf,image/*,application/pdf',f=>importIntoEditor(f,'bgimg')):openSatellite());}}
   if(a==='panel')$('#panel').classList.toggle('open');
 });
 const SHORT={select:'Select',pan:'Pan',room:'Room',objects:'Objects',text:'Text',wall:'Wall',fence:'Fence',line:'Line',arrow:'Arrow'};
@@ -1098,12 +1108,12 @@ async function openMap(id){
   {const u=M.width/1600,old=M.height+Math.round(112*u)+Math.round(212*u);if(M.settings.showFrame!==false&&(Math.abs(old/M.width-1/Math.SQRT2)<.01||Math.abs(old/M.width-Math.SQRT2)<.01))setA4(old>M.width);}
   E.assets=(await Store.get('assets',id).catch(()=>null))?.data||{};E.assetsDirty=false;
   if(recovered&&pend.assets){E.assets={...E.assets,...pend.assets};E.assetsDirty=true;}
-  {const h=(await Store.get('meta','hist:'+id).catch(()=>null))?.value;E.hist=Array.isArray(h?.hist)?h.hist.slice(-HIST_MAX):[];E.fut=Array.isArray(h?.fut)?h.fut.slice(-HIST_MAX):[];}E.changedSinceOpen=false;E.manualRev=false;E.sel.clear();E.tool='select';E.chain=null;E.drag=null;
+  {const h=(await Store.get('meta','hist:'+id).catch(()=>null))?.value;E.hist=Array.isArray(h?.hist)?h.hist.slice(-HIST_MAX):[];E.fut=Array.isArray(h?.fut)?h.fut.slice(-HIST_MAX):[];}E.changedSinceOpen=false;E.manualRev=false;E.dirty=!!recovered;E.histDirty=false;E.siteDirty=false;E.changeSeq=0;E.localOk=true;clearTimeout(syncT);syncT=null;E.sel.clear();E.tool='select';E.chain=null;E.drag=null;
   crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[M.name,'#/map/'+id]]);
-  $('#topActions').innerHTML=`<button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
+  $('#topActions').innerHTML=`<button type="button" class="save-pill saved" id="saveSt" data-save></button><button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
     <span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button><button class="ib" data-top="fit" title="Fit to screen (0)" aria-label="Fit to screen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></button></span>
-    <button class="btn" data-top="import" title="Import a plan image, PDF or satellite photo" aria-haspopup="menu">${ICON.upload}<span class="hide-narrow">Import</span></button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button>
-    <button type="button" class="save-pill saved" id="saveSt" data-save></button><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
+    <button class="btn" data-top="import" title="Import a plan image, PDF or satellite photo" aria-haspopup="menu">${ICON.upload}<span class="hide-narrow">Import</span></button><button class="btn" data-top="bg" title="Background: see-through, size, turn, move, lock"><svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M4 14l4-4.5 3 3 2-2 3 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="13.5" cy="7" r="1.4" fill="currentColor"/></svg><span class="hide-narrow">Background</span></button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button>
+    <button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
   if(E.readOnly)$('#topActions').innerHTML=`<span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button></span>
     <button class="btn" data-top="ro-copy">Duplicate to edit</button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
   savedAt=recovered?0:(m.updated||0);setSave(recovered?'local':'saved',recovered?'Changes from this browser not yet sent':'');
@@ -1134,25 +1144,30 @@ function bumpIfChanged(){if(!M||!E.changedSinceOpen)return;E.changedSinceOpen=fa
 async function leaveEditor(){
   if(route!=='map'||!M)return;
   if(E.readOnly){route='';return;}
-  bumpIfChanged();await saveNow(true);
-  const used=new Set(M.elements.filter(e=>e.type==='image').map(e=>e.asset));let gc=false;
-  const histTxt=E.hist.join('')+E.fut.join('');
-  for(const k of Object.keys(E.assets))if(!used.has(k)&&!histTxt.includes(k)){delete E.assets[k];gc=true;}
-  if(gc)await Store.put('assets',{id:M.id,data:E.assets});
-  try{await makeThumb();}catch(e){}
+  const changed_=E.changedSinceOpen;bumpIfChanged();
+  if(changed_){E.siteDirty=true;E.dirty=true;try{await makeThumb();}catch(e){}
+    const used=new Set(M.elements.filter(e=>e.asset).map(e=>e.asset));const histTxt=E.hist.join('')+E.fut.join('');
+    for(const k of Object.keys(E.assets))if(!used.has(k)&&!histTxt.includes(k)){delete E.assets[k];E.assetsDirty=true;}}
+  await saveNow(true);
   route='';
 }
-window.addEventListener('beforeunload',e=>{if(route==='map'){bumpIfChanged();saveNow(true);if(saveState!=='saved'){e.preventDefault();e.returnValue='';}}});
+window.addEventListener('beforeunload',e=>{if(route==='map'&&!E.readOnly&&(E.dirty||E.assetsDirty)){bumpIfChanged();saveNow(true);if(!E.localOk||E.assetsDirty){e.preventDefault();e.returnValue='';}}});
 window.addEventListener('online',()=>{if(route==='map'&&saveState!=='saved')saveNow(true);flushPending();});
 document.addEventListener('click',e=>{if(e.target.closest('[data-retry]')){e.stopPropagation();retrySave();return;}if(e.target.closest('[data-save]'))openSaveInfo();});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&route==='map')saveNow(true);});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&route==='map'&&(E.dirty||E.assetsDirty))saveNow(true);});
 
 /* ----- saving ----- */
 let saveT=null,thumbT=null;
 /* Copies kept in this browser until the server confirms it has them, so nothing is lost while offline. */
-const LocalQ={db:null,
-  async open(){if(!this.db)this.db=await new Promise((res,rej)=>{const r=indexedDB.open('psp-local',1);r.onupgradeneeded=()=>r.result.createObjectStore('pending');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return this.db;},
-  async run(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('pending',mode),r=fn(t.objectStore('pending'));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});},
+let IDB=null;const idb=()=>IDB||(IDB=new Promise((res,rej)=>{const r=indexedDB.open('psp-local',2);r.onupgradeneeded=()=>{const d=r.result;for(const n of ['pending','http'])if(!d.objectStoreNames.contains(n))d.createObjectStore(n);};r.onsuccess=()=>res(r.result);r.onerror=()=>{IDB=null;rej(r.error);};}));
+/* Copies of what the server sent, with its version tag: asked again, the server just says "not changed" and nothing is downloaded. */
+const HttpCache={key(p){return (Store.base||'')+'|'+p;},
+  async run(mode,fn){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction('http',mode),r=fn(t.objectStore('http'));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});},
+  get(p){return this.run('readonly',st=>st.get(this.key(p))).catch(()=>null);},
+  put(p,v){return this.run('readwrite',st=>st.put(v,this.key(p))).catch(()=>{});},
+  del(p){return this.run('readwrite',st=>st.delete(this.key(p))).catch(()=>{});}};
+const LocalQ={
+  async run(mode,fn){const db=await idb();return new Promise((res,rej)=>{const t=db.transaction('pending',mode),r=fn(t.objectStore('pending'));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});},
   key(id){return (Store.base||'')+'|'+id;},
   put(id,v){return this.run('readwrite',st=>st.put(v,this.key(id)));},
   get(id){return this.run('readonly',st=>st.get(this.key(id))).catch(()=>null);},
@@ -1164,7 +1179,7 @@ const Net={sess:{up:0,down:0,n:0},since:Date.now(),plans:{},all:null,names:{},t:
   key(){return 'psp-net:'+(Store.base||'');},
   load(){if(this.all)return;try{this.all=JSON.parse(localStorage.getItem(this.key())||'null');}catch(e){}if(!this.all||typeof this.all!=='object')this.all={plans:{},up:0,down:0,n:0,since:Date.now()};},
   planOf(path,body){let m=path.match(/^\/(?:maps|assets)\/([^/?]+)/);if(m)return decodeURIComponent(m[1]);m=path.match(/^\/meta\/hist(?::|%3A)([^/?]+)/i);if(m)return decodeURIComponent(m[1]);return '';},
-  add(path,up,down,body){this.load();const id=this.planOf(path,body);const bump=o=>{o.up=(o.up||0)+up;o.down=(o.down||0)+down;o.n=(o.n||0)+1;o.last=Date.now();};
+  add(path,up,down,body,hit){this.load();if(hit){this.sess.hits=(this.sess.hits||0)+1;this.all.hits=(this.all.hits||0)+1;}const id=this.planOf(path,body);const bump=o=>{o.up=(o.up||0)+up;o.down=(o.down||0)+down;o.n=(o.n||0)+1;o.last=Date.now();};
     bump(this.sess);bump(this.all);if(id){bump(this.plans[id]=this.plans[id]||{});bump(this.all.plans[id]=this.all.plans[id]||{});if(body?.name&&body.siteId)this.names[id]=body.name;}
     clearTimeout(this.t);this.t=setTimeout(()=>{try{localStorage.setItem(this.key(),JSON.stringify(this.all));}catch(e){}},2000);
     if($('#netBox'))renderNet($('#netBox'));},
@@ -1172,32 +1187,45 @@ const Net={sess:{up:0,down:0,n:0},since:Date.now(),plans:{},all:null,names:{},t:
 const fmtBytes=b=>b<1024?`${b} B`:b<1048576?`${(b/1024).toFixed(1)} KB`:b<1073741824?`${(b/1048576).toFixed(1)} MB`:`${(b/1073741824).toFixed(2)} GB`;
 function renderNet(box){Net.load();const ids=[...new Set([...Object.keys(Net.all.plans),...Object.keys(Net.plans)])].sort((a,b)=>((Net.all.plans[b]?.up||0)+(Net.all.plans[b]?.down||0))-((Net.all.plans[a]?.up||0)+(Net.all.plans[a]?.down||0)));
   const nm=id=>id===M?.id?M.name:(Net.names[id]||'Plan '+id.slice(0,6)),S=o=>o?`${fmtBytes(o.up||0)} ↑ · ${fmtBytes(o.down||0)} ↓`:'—';
-  box.innerHTML=`<div class="net-sum"><div><span class="hint">This session</span><b>${S(Net.sess)}</b><span class="hint">${Net.sess.n} requests</span></div><div><span class="hint">This device, since ${esc(fmtDate(Net.all.since))}</span><b>${S(Net.all)}</b><span class="hint">${Net.all.n} requests</span></div></div>
+  box.innerHTML=`<div class="net-sum"><div><span class="hint">This session</span><b>${S(Net.sess)}</b><span class="hint">${Net.sess.n} requests${Net.sess.hits?`, ${Net.sess.hits} answered from this device's copy`:''}</span></div><div><span class="hint">This device, since ${esc(fmtDate(Net.all.since))}</span><b>${S(Net.all)}</b><span class="hint">${Net.all.n} requests${Net.all.hits?`, ${Net.all.hits} from this device's copy`:''}</span></div></div>
     <div class="tbl-wrap"><table class="legend-ed"><thead><tr><th>Floor plan</th><th>This session</th><th>This device</th><th>Last</th></tr></thead><tbody>${ids.length?ids.map(id=>`<tr${id===M?.id?' class="on"':''}><td><b>${esc(nm(id))}</b></td><td>${S(Net.plans[id])}</td><td>${S(Net.all.plans[id])}</td><td class="hint">${Net.all.plans[id]?.last?esc(new Date(Net.all.plans[id].last).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})):''}</td></tr>`).join(''):'<tr><td colspan="4" class="hint">Nothing sent or received yet.</td></tr>'}</tbody></table></div>
     <p class="hint">↑ sent to the server, ↓ received from it. Lists of sites and plans, settings and sign-in checks count in the totals but not against a single plan.</p>`;}
 async function retrySave(){setSave('saving');const s=$('#saveSt span');if(s)s.textContent='Reconnecting…';
   const ok=await Store.open();if(!ok){setSave('local','Cannot reach the server');toast("Still can't reach the server. Your changes are kept in this browser.",'warn');return;}
-  await saveNow(true);flushPending();if(saveState==='saved')toast('Reconnected. Your plan is saved to the server.');}
+  E.dirty=true;await saveNow(true);flushPending();if(saveState==='saved')toast('Reconnected. Your plan is saved to the server.');}
 async function openSaveInfo(){const tm=savedAt?new Date(savedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'';
   await modal({title:'Saving and data use',wide:true,body:`<div class="save-state ${saveState}">${SAVE_ICON[saveState]}<div>${saveState==='saved'?`<b>Saved to the server</b><br><span class="hint">The server confirmed it has this version${tm?' at '+tm:''}.</span>`:saveState==='local'?`<b>Not on the server yet</b><br><span class="hint">${esc(saveErr||'')} Your changes are kept in this browser and sent as soon as the server answers.</span>`:'<b>Saving…</b>'}</div>${saveState==='local'?'<button type="button" class="btn primary" id="siRetry">Retry now</button>':''}</div>
+    ${saveState==='device'?'<div class="row"><button type="button" class="btn" id="siSend">Send to the server now</button><span class="hint">Otherwise it goes within a minute, and when you leave the plan.</span></div>':''}
+    <p class="hint">To save data, plans are kept on this device while you edit and sent to the server at most once a minute when something has changed, and when you leave the plan. Plans you've opened before are only downloaded again if someone changed them.</p>
     <h3 class="sec-h">Data sent and received</h3><div id="netBox"></div>`,
     buttons:[{label:'Reset counters',value:'reset'},{label:'Close',value:'ok',primary:true}],
-    onOpen:w=>{renderNet($('#netBox',w));$('#siRetry',w)?.addEventListener('click',async()=>{$('#siRetry',w).disabled=true;$('#siRetry',w).textContent='Reconnecting…';await retrySave();w.closest('.modal-bg,.modal-wrap,dialog')?.querySelector('footer .primary')?.click();});},
+    onOpen:w=>{renderNet($('#netBox',w));$('#siSend',w)?.addEventListener('click',async()=>{$('#siSend',w).disabled=true;await saveNow(true);$('#siSend',w).textContent=saveState==='saved'?'Sent':'Not sent';});$('#siRetry',w)?.addEventListener('click',async()=>{$('#siRetry',w).disabled=true;$('#siRetry',w).textContent='Reconnecting…';await retrySave();w.closest('.modal-bg,.modal-wrap,dialog')?.querySelector('footer .primary')?.click();});},
     before:v=>{if(v==='reset'){Net.reset();renderNet($('#netBox'));return false;}}});}
-const SAVE_ICON={saving:'<span class="spin" aria-hidden="true"></span>',saved:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',local:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.5L15 14H1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6v3.6M8 11.6v.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'};
+const SAVE_ICON={device:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="2" y="3" width="12" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M5 14h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',saving:'<span class="spin" aria-hidden="true"></span>',saved:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',local:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.5L15 14H1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6v3.6M8 11.6v.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'};
 function setSave(state,err){saveState=state;saveErr=err||'';const s=$('#saveSt');if(!s)return;const tm=savedAt?new Date(savedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
-  const txt=state==='saving'?'Saving…':state==='saved'?`Saved to server${tm?' '+tm:''}`:`Not on server: ${String(err||'error').replace(/\.+$/,'')}`;
+  const txt=state==='device'?'Saved on this device':state==='saving'?'Saving…':state==='saved'?`Saved to server${tm?' '+tm:''}`:`Not on server: ${String(err||'error').replace(/\.+$/,'')}`;
   s.className='save-pill '+state;s.innerHTML=SAVE_ICON[state]+`<span>${esc(txt)}</span>`+(state==='local'?'<b class="pill-retry" data-retry role="button" title="Try to reconnect and save now">Retry</b>':'');
+  if(state==='device'){s.title=`Kept on this device. Sent to the server within a minute (about ${Math.max(0,Math.round((syncDue-Date.now())/1000))}s), and when you leave the plan. Click for details or to send it now.`;return;}
   s.title=state==='saved'?'Saved and confirmed by the server. Click to see the data sent and received.':state==='local'?`${err||''} Your changes are kept safely in this browser and will be sent as soon as the server answers. Click Retry to reconnect now.`:'Sending your changes to the server…';}
 function setStatus(t){setSave(t==='Saved'?'saved':t==='Saving…'?'saving':'local',t);}
-function scheduleSave(){setSave('saving');clearTimeout(saveT);saveT=setTimeout(saveNow,450);clearTimeout(thumbT);thumbT=setTimeout(makeThumb,4000);}
+/* Every change is kept on this device straight away; the server gets it at most once a minute while
+   you're editing (only if something changed), and again when you leave the plan or close the tab. */
+const SYNC_MS=60000;let localT=null,syncT=null,syncDue=0;
+function scheduleSave(){if(!M||E.readOnly)return;E.dirty=true;E.changeSeq=(E.changeSeq||0)+1;if(saveState!=='local')setSave('device');
+  clearTimeout(localT);localT=setTimeout(saveLocal,700);if(!syncT){syncDue=Date.now()+SYNC_MS;syncT=setTimeout(()=>{syncT=null;saveNow();},SYNC_MS);}}
+async function saveLocal(){clearTimeout(localT);if(!M||E.readOnly||!E.dirty)return;const m=M;
+  try{await LocalQ.put(m.id,{map:JSON.parse(JSON.stringify({...m,updated:Date.now()})),assets:E.assetsDirty?{...E.assets}:null,at:Date.now()});E.localOk=true;}catch(e){E.localOk=false;console.warn('local copy failed',e);}}
 let lastHistSave=0,saveFailNote=0;
-async function saveNow(force){clearTimeout(saveT);if(!M||E.readOnly)return;const m=M;m.updated=Date.now();const seq=++saveSeq;
-  if(saveState!=='local')setSave('saving');
-  try{await LocalQ.put(m.id,{map:JSON.parse(JSON.stringify(m)),assets:E.assetsDirty?{...E.assets}:null,at:Date.now()});}catch(e){console.warn('local copy failed',e);}
-  try{await Store.put('maps',m);if(M===m&&(force||Date.now()-lastHistSave>15000)){await Store.put('meta',{id:'hist:'+m.id,value:{hist:trimHist(E.hist.slice(-HIST_MAX),HIST_SAVE_BYTES),fut:trimHist(E.fut.slice(-HIST_MAX),HIST_SAVE_BYTES/4)}});lastHistSave=Date.now();}if(E.assetsDirty){await Store.put('assets',{id:m.id,data:E.assets});E.assetsDirty=false;}if(site&&canEdit(site)){site.updated=Date.now();await Store.put('sites',site).catch(()=>{});}
-    if(seq===saveSeq){await LocalQ.del(m.id);savedAt=Date.now();if(M===m)setSave('saved');}}
-  catch(e){console.error(e);if(seq!==saveSeq)return;setSave('local',e.message);if(Date.now()-saveFailNote>20000){saveFailNote=Date.now();toast(`Not saved to the server: ${e.message.replace(/\.+$/,'')}. Your changes are kept in this browser and will be sent when it answers.`,'warn');}clearTimeout(saveT);saveT=setTimeout(saveNow,8000);}}
+async function saveNow(force){clearTimeout(saveT);clearTimeout(syncT);syncT=null;if(!M||E.readOnly)return;const m=M;
+  if(!E.dirty&&!E.assetsDirty&&!(force&&E.histDirty)){if(saveState!=='local')setSave('saved');return;}
+  const seq=++saveSeq,changeAt=E.changeSeq;if(saveState!=='local')setSave('saving');
+  if(E.dirty){m.updated=Date.now();await saveLocal();}
+  try{if(E.dirty)await Store.put('maps',m);
+    if(E.assetsDirty){await Store.put('assets',{id:m.id,data:E.assets});E.assetsDirty=false;}
+    if(force&&E.histDirty&&M===m){await Store.put('meta',{id:'hist:'+m.id,value:{hist:trimHist(E.hist.slice(-HIST_MAX),HIST_SAVE_BYTES),fut:trimHist(E.fut.slice(-HIST_MAX),HIST_SAVE_BYTES/4)}});E.histDirty=false;}
+    if(force&&E.siteDirty&&site&&canEdit(site)){site.updated=Date.now();await Store.put('sites',site).catch(()=>{});E.siteDirty=false;}
+    if(seq===saveSeq){if(E.changeSeq===changeAt){E.dirty=false;await LocalQ.del(m.id);}else scheduleSave();savedAt=Date.now();if(M===m)setSave(E.dirty?'device':'saved');}}
+  catch(e){console.error(e);if(seq!==saveSeq)return;setSave('local',e.message);if(Date.now()-saveFailNote>20000){saveFailNote=Date.now();toast(`Not saved to the server: ${e.message.replace(/\.+$/,'')}. Your changes are kept in this browser and will be sent when it answers.`,'warn');}clearTimeout(saveT);saveT=setTimeout(()=>saveNow(),30000);}}
 /* Send any plans this browser kept while the server couldn't be reached. */
 let flushing=false;
 async function flushPending(){if(flushing||!Store.base)return;flushing=true;let n=0;
@@ -1206,18 +1234,18 @@ async function flushPending(){if(flushing||!Store.base)return;flushing=true;let 
       await Store.put('maps',p.map);if(p.assets)await Store.put('assets',{id,data:p.assets});await LocalQ.del(id);n++;}
     catch(e){if(/belongs to|only the owner|403/i.test(e.message))await LocalQ.del(id);}}}
   finally{flushing=false;}if(n)toast(`${n} plan${n===1?'':'s'} saved on this browser while offline ${n===1?'has':'have'} now been saved to the server.`);}
-async function makeThumb(){if(!M||E.readOnly)return;const m=M;try{const c=await rasterize(Math.min(1,420/m.width));m.thumb=c.toDataURL('image/jpeg',.72);await Store.put('maps',m);}catch(e){}}
+async function makeThumb(){if(!M||E.readOnly)return;const m=M;try{const c=await rasterize(Math.min(1,420/m.width));m.thumb=c.toDataURL('image/jpeg',.72);}catch(e){}}
 
 /* ----- history ----- */
 const snap=()=>JSON.stringify({elements:M.elements,furn:M.furn,width:M.width,height:M.height,scale:M.scale,bgMeta:M.bgMeta,settings:M.settings});
 const HIST_MAX=100; /* undo steps kept, and saved with the plan */
 const HIST_BYTES=60e6,HIST_SAVE_BYTES=8e6;
 function trimHist(list,max){let t=0,i=list.length;while(i>0&&t+list[i-1].length<=max){t+=list[i-1].length;i--;}return i>0?list.slice(i):list;}
-function pushHist(){E.changedSinceOpen=true;E.hist.push(snap());if(E.hist.length>HIST_MAX)E.hist.shift();E.hist=trimHist(E.hist,HIST_BYTES);E.fut=[];updUndo();}
+function pushHist(){E.changedSinceOpen=true;E.histDirty=true;E.hist.push(snap());if(E.hist.length>HIST_MAX)E.hist.shift();E.hist=trimHist(E.hist,HIST_BYTES);E.fut=[];updUndo();}
 function softPush(){if(Date.now()-E.lastPush>900)pushHist();E.lastPush=Date.now();}
 function restore(s){Object.assign(M,JSON.parse(s));for(const id of [...E.sel])if(!getEl(id))E.sel.delete(id);E.chain=null;renderAll();scheduleSave();updUndo();}
-function undo(){if(!E.hist.length)return;E.fut.push(snap());restore(E.hist.pop());}
-function redo(){if(!E.fut.length)return;E.hist.push(snap());restore(E.fut.pop());}
+function undo(){if(!E.hist.length)return;E.histDirty=true;E.fut.push(snap());restore(E.hist.pop());}
+function redo(){if(!E.fut.length)return;E.histDirty=true;E.hist.push(snap());restore(E.fut.pop());}
 function updUndo(){const u=$('#bUndo'),r=$('#bRedo');if(u)u.disabled=!E.hist.length;if(r)r.disabled=!E.fut.length;}
 function changed(){render();refreshPanel();scheduleSave();}
 
@@ -1256,7 +1284,10 @@ function renderOverlay(){
   else if(selEls.length===1&&selEls[0].type==='obj'){const cs=objCorners(selEls[0]);s+=`<polygon points="${cs.map(q=>r2(q.x)+','+r2(q.y)).join(' ')}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;}
   else if(selEls.length){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;const all=[...selEls];for(const el of selEls)if(el.type==='zone')all.push(...zoneWalls(el));
     for(const el of all){const bb=bboxOf(el);if(!bb.w&&!bb.h&&!bb.x&&!bb.y)continue;x0=Math.min(x0,bb.x);y0=Math.min(y0,bb.y);x1=Math.max(x1,bb.x+bb.w);y1=Math.max(y1,bb.y+bb.h);}
-    if(isFinite(x0)){const p=6/k;s+=`<rect x="${r2(x0-p)}" y="${r2(y0-p)}" width="${r2(x1-x0+2*p)}" height="${r2(y1-y0+2*p)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash} rx="${r2(3/k)}"/>`;}}
+    if(isFinite(x0)){const p=6/k;s+=`<rect x="${r2(x0-p)}" y="${r2(y0-p)}" width="${r2(x1-x0+2*p)}" height="${r2(y1-y0+2*p)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash} rx="${r2(3/k)}"/>`;
+      if(E.tool==='select'&&!E.readOnly&&canGroupXf()){const hs=10/k,bx=x1+p,by=y1+p,tx=(x0+x1)/2,ty=y0-p,ry=ty-24/k;
+        s+=`<rect data-handle="gscale" x="${r2(bx-hs/2)}" y="${r2(by-hs/2)}" width="${r2(hs)}" height="${r2(hs)}" fill="#fff" stroke="${sel}" stroke-width="${sw}" style="cursor:nwse-resize"><title>Drag to resize the group</title></rect>
+          <line x1="${r2(tx)}" y1="${r2(ty)}" x2="${r2(tx)}" y2="${r2(ry)}" stroke="${sel}" stroke-width="${sw}"/><circle data-handle="grot" cx="${r2(tx)}" cy="${r2(ry)}" r="${r2(6/k)}" fill="#fff" stroke="${sel}" stroke-width="${sw}" style="cursor:grab"><title>Drag to turn the group</title></circle>`;}}}
   /* corner nodes: only on the selected walls/rooms and the walls joined to them */
   if(E.tool==='select'&&selEls.length){const base=new Set();for(const el of selEls){if(el.type==='wall')base.add(el.id);if(el.type==='zone')zoneWalls(el).forEach(w=>base.add(w.id));}
     if(base.size){const pts=[];for(const id of base){const w=getEl(id);if(w)pts.push([w.x1,w.y1],[w.x2,w.y2]);}
@@ -1298,6 +1329,30 @@ function attachedEnds(ids){const out=[];for(const id of ids){const o=getEl(id);i
 function wallChain(id){const inRoom=new Set(M.elements.filter(z=>z.type==='zone').flatMap(z=>z.walls)),all=walls().filter(w=>!inRoom.has(w.id)),seen=new Set([id]),q=[getEl(id)];
   while(q.length){const w=q.pop();const ends=[{x:w.x1,y:w.y1},{x:w.x2,y:w.y2}];for(const o of all){if(seen.has(o.id))continue;
     if(ends.some(P=>dist(P,{x:o.x1,y:o.y1})<.6||dist(P,{x:o.x2,y:o.y2})<.6)){seen.add(o.id);q.push(o);}}}return[...seen];}
+/* Resize and turn a group of items about centre C (scale s, angle in degrees), starting from their saved state. */
+function groupXf(base,C,s,ang){const r=ang*Math.PI/180,co=Math.cos(r),si=Math.sin(r),A=[s*co,-s*si,s*si,s*co];
+  const P=(x,y)=>{const dx=x-C.x,dy=y-C.y;return{x:C.x+A[0]*dx+A[1]*dy,y:C.y+A[2]*dx+A[3]*dy};};
+  for(const[id,o]of base){const el=getEl(id);if(!el)continue;for(const k of Object.keys(el))if(!(k in o))delete el[k];Object.assign(el,clone(o));
+    switch(el.type){
+      case 'svg':{const[a,b,c,d,e,f]=o.m,t=P(e,f);el.m=[A[0]*a+A[1]*b,A[2]*a+A[3]*b,A[0]*c+A[1]*d,A[2]*c+A[3]*d,t.x,t.y].map(v=>Math.round(v*1e4)/1e4);
+        const bb=o.bb,cs=[P(bb.x,bb.y),P(bb.x+bb.w,bb.y),P(bb.x,bb.y+bb.h),P(bb.x+bb.w,bb.y+bb.h)],x=Math.min(...cs.map(q=>q.x)),y=Math.min(...cs.map(q=>q.y));el.bb={x,y,w:Math.max(...cs.map(q=>q.x))-x,h:Math.max(...cs.map(q=>q.y))-y};break;}
+      case 'wall':case 'line':case 'arrow':case 'dim':{const a=P(o.x1,o.y1),b=P(o.x2,o.y2);Object.assign(el,{x1:r2(a.x),y1:r2(a.y),x2:r2(b.x),y2:r2(b.y)});if(el.type==='wall')el.w=r2(Math.max(1,o.w*s));else if(o.sw)el.sw=r2(o.sw*s);if(el.type==='dim'&&o.size)el.size=r2(o.size*s);break;}
+      case 'polygon':el.pts=o.pts.map(q=>{const t=P(q[0],q[1]);return[r2(t.x),r2(t.y)];});if(o.sw)el.sw=r2(o.sw*s);break;
+      case 'rect':if(Math.abs(ang)>.01){const cs=[[o.x,o.y],[o.x+o.w,o.y],[o.x+o.w,o.y+o.h],[o.x,o.y+o.h]];el.type='polygon';el.pts=cs.map(q=>{const t=P(q[0],q[1]);return[r2(t.x),r2(t.y)];});delete el.x;delete el.y;delete el.w;delete el.h;delete el.rx;if(o.sw)el.sw=r2(o.sw*s);break;}
+      // falls through
+      case 'ellipse':{const c=P(o.x+o.w/2,o.y+o.h/2);el.w=r2(o.w*s);el.h=r2(o.h*s);el.x=r2(c.x-el.w/2);el.y=r2(c.y-el.h/2);if(o.sw)el.sw=r2(o.sw*s);if(o.rx)el.rx=r2(o.rx*s);break;}
+      case 'text':{const t=P(o.x,o.y);el.x=r2(t.x);el.y=r2(t.y);el.size=r2(Math.max(2,o.size*s));el.rot=r2((((o.rot||0)+ang+540)%360)-180);break;}
+      case 'station':{const t=P(o.x,o.y);el.x=r2(t.x);el.y=r2(t.y);break;}
+      case 'obj':{const t=P(o.x,o.y);el.x=r2(t.x);el.y=r2(t.y);el.w=r2(o.w*s);el.h=r2(o.h*s);el.rot=r2((((o.rot||0)+ang+540)%360)-180);break;}
+      case 'image':{const t=P(o.x+o.w/2,o.y+o.h/2);el.w=r2(o.w*s);el.h=r2(o.h*s);el.x=r2(t.x-el.w/2);el.y=r2(t.y-el.h/2);el.rot=r2((((o.rot||0)+ang+540)%360)-180);if(o.fitW)el.fitW=o.fitW;break;}
+      case 'door':el.width=r2(o.width*s);break;
+      case 'zone':if(o.nameSize)el.nameSize=r2(Math.max(4,o.nameSize*s));break;}}}
+function groupStart(){const ids=withZoneWalls(E.sel);for(const e of M.elements)if(e.type==='door'&&ids.has(e.wall))ids.add(e.id);const base=new Map([...ids].map(i=>[i,clone(getEl(i))]).filter(x=>x[1]));
+  const bb=groupBox([...base.values()]);return{base,C:bb?{x:bb.x+bb.w/2,y:bb.y+bb.h/2}:{x:M.width/2,y:M.height/2}};}
+const canGroupXf=()=>E.sel.size>1||[...E.sel].some(i=>getEl(i)?.type==='svg');
+function groupPanel(){return `<h3 class="sec-h" style="margin-top:4px">Size and turn</h3><div class="row" style="gap:4px"><button class="btn sm" data-gx="s:0.9" title="10% smaller">− Smaller</button><button class="btn sm" data-gx="s:1.1111" title="10% bigger">+ Bigger</button><button class="btn sm" data-gx="s:0.5">50%</button><button class="btn sm" data-gx="s:2">200%</button></div>
+  <div class="row" style="gap:4px"><button class="btn sm" data-gx="a:-90">⟲ 90°</button><button class="btn sm" data-gx="a:-15">⟲ 15°</button><button class="btn sm" data-gx="a:15">⟳ 15°</button><button class="btn sm" data-gx="a:90">⟳ 90°</button></div>
+  <p class="hint">Or drag the square corner handle to resize and the round handle to turn. Hold <kbd>Alt</kbd> while turning for any angle.</p>`;}
 function withZoneWalls(sel){const ids=new Set(sel);for(const i of sel){const z=getEl(i);if(z?.type==='zone')z.walls.forEach(w=>ids.add(w));}return ids;}
 function groupBox(list){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const o of list){if(o.type==='door'||(o.type==='image'&&o.bg))continue;const b=bboxOf(o);x0=Math.min(x0,b.x);y0=Math.min(y0,b.y);x1=Math.max(x1,b.x+b.w);y1=Math.max(y1,b.y+b.h);}return isFinite(x0)?{x:x0,y:y0,w:x1-x0,h:y1-y0}:null;}
 function snapP(p,e,anchor,skip){return clampPt(snapRaw(p,e,anchor,skip));}
@@ -1454,6 +1509,7 @@ function duplicateSel(atMouse){
   for(const e of src)if(e.type==='door'){const n=clone(e);n.id=uid();if(map.has(e.wall))n.wall=map.get(e.wall);else{const w=getEl(e.wall);n.t=clampT(e.t+e.width/(wallLen(w)||1)*1.2,w,e.width);}out.push(n);}
   for(const e of M.elements)if(e.type==='door'&&map.has(e.wall)&&!E.sel.has(e.id)){const n=clone(e);n.id=uid();n.wall=map.get(e.wall);out.push(n);}
   for(const n of out)if(n.type==='zone')n.walls=n.walls.map(w=>map.get(w)).filter(Boolean);
+  {const gm=new Map();for(const n of out)if(n.grp){if(!gm.has(n.grp))gm.set(n.grp,'g'+uid());n.grp=gm.get(n.grp);}}
   M.elements.push(...out.filter(n=>n.type!=='zone'||n.walls.length>=3));E.sel=new Set(out.map(o=>o.id));changed();
 }
 function selectAll(){E.sel=new Set(M.elements.filter(e=>!(e.type==='image'&&e.locked)).map(e=>e.id));renderAll();}
@@ -1478,6 +1534,7 @@ function bindEditor(){
   const up=e=>{ptrs.delete(e.pointerId);if(pinch){if(ptrs.size<2)pinch=null;return;}onUp(e);};
   st.addEventListener('pointerup',up);st.addEventListener('pointercancel',up);
   st.addEventListener('pointerleave',()=>{if(!E.drag){E.cursor=null;renderOverlay();}});
+  st.addEventListener('dblclick',e=>{if(route!=='map'||E.readOnly||E.tool!=='select'||e.target.closest('#vp [data-id],[data-handle],[data-node],[data-furn],[data-field]'))return;if(M.elements.some(x=>x.bg))openBg();});
   st.addEventListener('wheel',e=>{e.preventDefault();
     if(!e.ctrlKey&&(Math.abs(e.deltaX)>Math.abs(e.deltaY)*.5)&&e.deltaMode===0&&!Number.isInteger(e.deltaY)){E.view.x-=e.deltaX;E.view.y-=e.deltaY;applyView();return;}
     zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*(e.ctrlKey?.012:.0016)*(e.deltaMode===1?30:1)));},{passive:false});
@@ -1516,6 +1573,7 @@ function onDown(e){
 }
 function downSelect(e,p){
   const tg=e.target,h=tg.closest('[data-handle]');
+  if(h&&(h.dataset.handle==='gscale'||h.dataset.handle==='grot')){const g=groupStart();E.drag={kind:'gx',mode:h.dataset.handle,start:p,...g,pushed:false};return;}
   if(h&&E.sel.size===1){const el=getEl([...E.sel][0]);const d={kind:'handle',h:h.dataset.handle,id:el.id,orig:clone(el),start:p,pushed:false};
     if(el.type==='wall'&&(d.h==='p1'||d.h==='p2')){const P=d.h==='p1'?{x:el.x1,y:el.y1}:{x:el.x2,y:el.y2};d.conn=[];for(const w of walls()){if(w.id===el.id)continue;if(dist({x:w.x1,y:w.y1},P)<.6)d.conn.push([w.id,'1']);if(dist({x:w.x2,y:w.y2},P)<.6)d.conn.push([w.id,'2']);}}
     d.skip=new Set([el.id,...(d.conn||[]).map(c=>c[0])]);E.drag=d;return;}
@@ -1528,7 +1586,8 @@ function downSelect(e,p){
   if(g&&g.closest('#vp')){let id=g.getAttribute('data-id');const el0=getEl(id);let pick=[id];
     /* walls behave like an area outline: a click takes the whole room, or the whole joined run of walls. Alt+click takes one wall. */
     if(el0?.type==='wall'&&!e.altKey){const z=M.elements.find(z=>z.type==='zone'&&z.walls.includes(id));if(z){id=z.id;pick=[id];}else pick=wallChain(id);}
-    if(e.shiftKey){const on=E.sel.has(id);for(const i of pick)on?E.sel.delete(i):E.sel.add(i);}else if(!E.sel.has(id))E.sel=new Set(pick);
+    if(el0?.grp&&!e.altKey){pick=[...new Set([...pick,...M.elements.filter(x=>x.grp===el0.grp).map(x=>x.id)])];}
+    if(e.shiftKey){const on=E.sel.has(id);for(const i of pick)on?E.sel.delete(i):E.sel.add(i);}else if(e.altKey||!E.sel.has(id))E.sel=new Set(pick);
     const ids=new Set(E.sel);for(const i of E.sel){const z=getEl(i);if(z?.type==='zone')z.walls.forEach(w=>ids.add(w));}
     const orig=new Map([...ids].map(i=>[i,clone(getEl(i))]).filter(x=>x[1]));
     E.drag={kind:'move',start:p,orig,att:attachedEnds(new Set(orig.keys())),bb:groupBox([...orig.values()]),pushed:false};showTab('props');renderOverlay();return;}
@@ -1559,6 +1618,10 @@ function onMove(e){
       else if(d.h==='se'){const q=snapP(p,e);let w=Math.max(4,q.x-el.x),h=Math.max(4,q.y-el.y);if(el.type==='image'&&!e.shiftKey){const ar=o.w/o.h;h=w/ar;}el.w=w;el.h=h;}
       else if(d.h[0]==='v'){const q=snapP(p,e);el.pts[+d.h.slice(1)]=[q.x,q.y];}
       render();break;}
+    case 'gx':{if(!d.pushed){pushHist();d.pushed=true;}const C=d.C;
+      if(d.mode==='gscale'){const s0=Math.hypot(d.start.x-C.x,d.start.y-C.y)||1;groupXf(d.base,C,Math.max(.05,Math.hypot(p.x-C.x,p.y-C.y)/s0),0);}
+      else{let a=(Math.atan2(p.y-C.y,p.x-C.x)-Math.atan2(d.start.y-C.y,d.start.x-C.x))*180/Math.PI;if(!e.altKey)a=Math.round(a/15)*15;groupXf(d.base,C,1,a);}
+      render();break;}
     case 'node':{if(!d.pushed){pushHist();d.pushed=true;}const q=snapP(p,e,null,d.skip);for(const[wid,end]of d.conn){const w=getEl(wid);if(w){w['x'+end]=q.x;w['y'+end]=q.y;}}render();break;}
     case 'furn':{if(!d.pushed){pushHist();d.pushed=true;}const F=M.furn[d.part],m=26*(F.s||1);F.x=Math.round(clamp(d.ox+p.x-d.start.x,m,M.width-m));F.y=Math.round(clamp(d.oy+p.y-d.start.y,m,M.height-m));render();break;}
     case 'marquee':d.b=p;renderOverlay();break;
@@ -1586,6 +1649,7 @@ document.addEventListener('keydown',e=>{
   if(mod&&key==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
   if(mod&&key==='y'){e.preventDefault();redo();return;}
   if(mod&&key==='d'){e.preventDefault();duplicateSel(true);return;}
+  if(mod&&key==='g'&&E.sel.size){e.preventDefault();pushHist();if(e.shiftKey){for(const id of E.sel){const x=getEl(id);if(x)delete x.grp;}toast('Ungrouped');}else{const g='g'+uid();for(const id of E.sel){const x=getEl(id);if(x)x.grp=g;}toast('Grouped');}changed();return;}
   if(mod&&key==='a'){e.preventDefault();selectAll();return;}
   if(mod&&key==='s'){e.preventDefault();saveNow();toast('Saved');return;}
   if(mod||e.altKey)return;
@@ -1652,13 +1716,16 @@ function propsTab(){
     if(t==='fence')return `<div class="sec"><h3 class="sec-h">New fence line style</h3>${F.num('fence','w','Thickness (px)',E.fenceStyle.w,1,1)}${thickRow('fence','w',E.fenceStyle.w)}${F.color('fence','color','Colour',E.fenceStyle.color)}${F.sel('fence','ls','Line style',wallLs(E.fenceStyle),WALL_LS)}</div>`;
     if(t==='wall'||t==='room')return `<div class="sec"><h3 class="sec-h">New wall style</h3>${F.num('wall','w','Thickness (px)',E.wallStyle.w,1,1)}${thickRow('wall','w',E.wallStyle.w)}${F.color('wall','color','Colour',E.wallStyle.color)}${F.sel('wall','ls','Line style',wallLs(E.wallStyle),WALL_LS)}<p class="hint">${t==='room'?'Drag a box. When you let go you can name the room and pick a fill colour.':'After three nodes, use Enclose space (top of the plan) to close the shape and name it as a room. Freehand lets you draw by dragging.'}</p></div>`;
     if(['rect','ellipse','polygon','line','arrow'].includes(t))return `<div class="sec"><h3 class="sec-h">New shape style</h3>${styleFields('style',E.style,t)}</div>`;
-    return `<div class="sec"><p class="hint">Nothing selected. Click something on the plan to edit it, or drag across an area to select several things.</p><p class="hint">Shortcuts: <kbd>Ctrl+D</kbd> duplicate, <kbd>Delete</kbd> remove, arrow keys nudge, <kbd>Ctrl+Z</kbd> undo.</p></div>`;
+    const bgEl=M.elements.find(e=>e.bg);
+    return `${bgEl?'<div class="sec"><button class="btn" data-bg-open>Adjust the background</button></div>':''}<div class="sec"><p class="hint">Nothing selected. Click something on the plan to edit it, or drag across an area to select several things.</p><p class="hint">Shortcuts: <kbd>Ctrl+D</kbd> duplicate, <kbd>Delete</kbd> remove, arrow keys nudge, <kbd>Ctrl+Z</kbd> undo.</p></div>`;
   }
   const actions=`<div class="row"><button class="btn sm" data-act="dup">Duplicate</button><button class="btn sm danger" data-act="del">Delete</button></div>`;
   if(sel.length>1&&sel.every(e=>e.type==='wall')){const w0=sel[0],L=sel.reduce((t,w)=>t+wallLen(w),0),fence=sel.every(w=>w.dash);
     return `<div class="sec"><h3 class="sec-h">${fence?'Fence line':'Walls'} · ${sel.length} sections</h3>${M.scale?`<p class="hint">Total length ${fmtLen(L)}</p>`:''}${F.num('el','w','Thickness (px)',w0.w,1,1)}${thickRow('el','w',w0.w)}${F.color('el','color','Colour',w0.color)}${F.sel('el','ls','Line style',wallLs(w0),WALL_LS)}
       <p class="hint">Drag to move the whole run; drag a round corner node to reshape it. <kbd>Alt</kbd>+click picks a single section.</p>${actions}</div>`;}
-  if(sel.length>1){const n=sel.filter(e=>e.type==='station').length;return `<div class="sec"><h3 class="sec-h">${sel.length} items selected</h3><p class="hint">${n?`${n} station${n===1?'':'s'}. `:''}Drag any of them to move the group.</p>${actions}</div>`;}
+  if(sel.length>1){const n=sel.filter(e=>e.type==='station').length,g0=sel[0].grp,grouped=!!g0&&sel.every(e=>e.grp===g0);
+    return `<div class="sec"><h3 class="sec-h">${grouped?'Group':''} ${sel.length} items${grouped?'':' selected'}</h3><p class="hint">${n?`${n} station${n===1?'':'s'}. `:''}Drag any of them to move them together.${grouped?' Alt+click picks a single item.':''}</p>${groupPanel()}
+      <div class="row" style="gap:4px">${grouped?'<button class="btn sm" data-act="ungroup" title="Ctrl+Shift+G">Ungroup</button>':'<button class="btn sm" data-act="group" title="Ctrl+G">Group</button>'}</div>${actions}</div>`;}
   const el=sel[0];let body='';
   switch(el.type){
     case 'station':{const c=catOf(el.code),dup=M.elements.filter(e=>e.type==='station'&&e.code===el.code&&e.num===el.num).length>1;
@@ -1681,10 +1748,10 @@ function propsTab(){
     case 'line':case 'arrow':body=`<h3 class="sec-h">${el.type==='arrow'?'Arrow':'Line'}</h3>${F.num('el','len',`Length (${unit()})`,toU(Math.hypot(el.x2-el.x1,el.y2-el.y1)),M.scale?.01:1,0)}${styleFields('el',el,el.type)}`;break;
     case 'dim':body=`<h3 class="sec-h">Dimension</h3><p class="idbig">${fmtLen(Math.hypot(el.x2-el.x1,el.y2-el.y1))}</p>${F.color('el','color','Colour',el.color)}${F.num('el','size','Text size',el.size||13,1,6)}${M.scale?'':'<p class="hint">Set the plan scale in the Plan tab to show metres.</p>'}`;break;
     case 'text':body=`<h3 class="sec-h">Text</h3>${F.area('el','text','Text',el.text)}${textFields('el',el,true)}`;break;
-    case 'svg':{const fl=fragStyle(el,'fill'),stc=fragStyle(el,'stroke');body=`<h3 class="sec-h">${el.isText?'Text from imported drawing':'Part of imported drawing'}</h3>
+    case 'svg':{const fl=fragStyle(el,'fill'),stc=fragStyle(el,'stroke');body=groupPanel()+`<h3 class="sec-h">${el.isText?'Text from imported drawing':'Part of imported drawing'}</h3>
       ${el.isText?F.area('el','ftext','Text',el.text||''):''}${fl||el.isText?F.color('el','ffill',el.isText?'Text colour':'Fill colour',fl||'#1a1f24'):''}${stc?F.color('el','fstroke','Line colour',stc):''}
       <p class="hint">Kept exactly as it was drawn in ${esc(el.src||'the SVG')}. Drag to move it, or press Delete to remove it.</p>`;break;}
-    case 'image':body=`<h3 class="sec-h">${el.bg?'Background image':'Image'}</h3>${imgControls(el)}<div class="row"><button class="btn sm" data-act="fit-board">Resize page to this image</button></div>`;break;
+    case 'image':body=`<h3 class="sec-h">${el.bg?'Background':'Image'}</h3>${imgControls(el)}${el.bg?'<div class="row"><button class="btn sm" data-act="import">Replace file</button></div>':''}<div class="row"><button class="btn sm" data-act="fit-board">Resize page to this image</button></div>`;break;
   }
   return `<div class="sec">${body}</div><div class="divider"></div>${actions}`;
 }
@@ -1790,6 +1857,8 @@ function setVal(sc,k,v){
   render();scheduleSave();
 }
 async function onPanelClick(e){
+  const gb=e.target.closest('[data-gx]');if(gb){const[t,v]=gb.dataset.gx.split(':');pushHist();const g=groupStart();groupXf(g.base,g.C,t==='s'?+v:1,t==='a'?+v:0);changed();return;}
+  if(e.target.closest('[data-bg-open]')){openBg();return;}
   const wh=e.target.closest('[data-wheel]');if(wh){const inp=wh.closest('.f').querySelector('input[type=color]');try{inp.showPicker();}catch(err){inp.click();}return;}
   const th=e.target.closest('[data-thick]');if(th){setVal(th.dataset.s,th.dataset.k,+th.dataset.thick);renderPanel();return;}
   const sw=e.target.closest('[data-sw]');if(sw){const inp=sw.closest('.f').querySelector('input[type=color]');inp.value=sw.dataset.sw;setVal(sw.dataset.s,sw.dataset.k,sw.dataset.sw);return;}
@@ -1810,6 +1879,8 @@ async function onPanelClick(e){
   const b=e.target.closest('[data-act]');if(!b)return;
   switch(b.dataset.act){
     case 'stop':setTool('select');break;
+    case 'group':{pushHist();const g='g'+uid();for(const id of E.sel){const x=getEl(id);if(x)x.grp=g;}changed();toast('Grouped. Click any of them to pick the whole group.');break;}
+    case 'ungroup':{pushHist();for(const id of E.sel){const x=getEl(id);if(x)delete x.grp;}changed();toast('Ungrouped');break;}
     case 'zonefill':pushHist();M.elements=M.elements.filter(x=>!(E.sel.has(x.id)&&x.type==='zone'));E.sel.clear();changed();break;
     case 'nextreset':if(M.nextFrom)delete M.nextFrom[E.cat];scheduleSave();renderPanel();renderOverlay();break;
     case 'new-type':addStationType();break;
@@ -1892,6 +1963,7 @@ async function fileToImg(file,page=1){
     src=file.type==='image/png'?c.toDataURL('image/png'):c.toDataURL('image/jpeg',.9);w=c.width;h=c.height;}
   return{src,w,h};
 }
+function openBg(){const bg=M?.elements.find(e=>e.bg);if(!bg)return;if(E.tool!=='select')setTool('select');E.sel=new Set([bg.id]);renderAll();showTab('props');$('#panel')?.classList.add('open');}
 function setBackground(img,{scale=null,meta=null}={}){
   pushHist();const aid=uid();E.assets[aid]=img.src;E.assetsDirty=true;
   M.elements=M.elements.filter(e=>!(e.type==='image'&&e.bg));
@@ -1899,7 +1971,7 @@ function setBackground(img,{scale=null,meta=null}={}){
   M.elements.unshift({id:uid(),type:'image',asset:aid,x:r2((M.width-w)/2),y:r2((M.height-h)/2),w,h,fitW:w,opacity:1,locked:true,bg:true,rot:0});
   M.scale=scale?r2(scale*k*1000)/1000:null;M.bgMeta=meta;
   if(M.scale){M.settings.grid=Math.max(2,Math.round(M.scale));}
-  changed();fitView();
+  changed();fitView();setTimeout(()=>{openBg();toast('Background added. The Background controls on the right let you fade, resize, turn or move it. Find them again with the Background button at the top, or double-click the background.');},150);
 }
 function placeImage(img,i=0){
   pushHist();const aid=uid();E.assets[aid]=img.src;E.assetsDirty=true;const s=Math.min(1,M.width*.6/img.w,M.height*.6/img.h);
@@ -1925,6 +1997,9 @@ async function svgToPieces(text,name){
     const leaves=[...svg.querySelectorAll('path,rect,circle,ellipse,line,polyline,polygon,text,image,use')].filter(n=>{const p=n.parentElement?.closest(NOPE);return !p||!svg.contains(p);});
     if(!leaves.length||leaves.length>SVG_MAX)return 0;
     const xf=(m,x,y)=>({x:m.a*x+m.c*y+m.e,y:m.b*x+m.d*y+m.f});
+    // things drawn together in a group stay together: the largest group holding 2-80 parts (whole layers are left ungrouped)
+    const gcount=new Map();for(const l of leaves)for(let g=l.parentElement;g&&g!==svg;g=g.parentElement)if(g.nodeName.toLowerCase()==='g'||g.nodeName.toLowerCase()==='a')gcount.set(g,(gcount.get(g)||0)+1);
+    const gid=new Map(),groupOf=l=>{let best=null;for(let g=l.parentElement;g&&g!==svg;g=g.parentElement){const c=gcount.get(g);if(c>=2&&c<=80)best=g;}if(!best)return null;if(!gid.has(best))gid.set(best,'g'+uid());return gid.get(best);};
     const parts=[];let n=0;
     const inline=(src,dst,op)=>{const cs=getComputedStyle(src);let st='';for(const k of FRAG_STYLE){let v=cs.getPropertyValue(k);if(!v)continue;if(/url\(/.test(v))v=fixUrl(v,dst);st+=`${k}:${v};`;}if(op!==undefined&&op<1)st+=`opacity:${r2(op)};`;dst.setAttribute('style',st);dst.removeAttribute('class');};
     let defs=null;const fixUrl=(v,dst)=>v.replace(/url\(["']?[^#"')]*#([^"')]+)["']?\)/g,(m,id)=>{const ref=svg.querySelector('#'+CSS.escape(id));if(!ref)return 'none';const c=ref.cloneNode(true),nid='g'+uid();c.id=nid;
@@ -1943,15 +2018,19 @@ async function svgToPieces(text,name){
       let asset=null;if(tag==='image'){const href=node.getAttribute('href')||node.getAttribute('xlink:href')||'';if(href.startsWith('data:')){asset=uid();E.assets[asset]=href;E.assetsDirty=true;node.setAttribute('href','{{asset}}');node.removeAttribute('xlink:href');}}
       const ser=x=>new XMLSerializer().serializeToString(x).replace(/ xmlns(:\w+)?="[^"]*"/g,'');
       const cs4=[xf(m,bb.x,bb.y),xf(m,bb.x+bb.width,bb.y),xf(m,bb.x,bb.y+bb.height),xf(m,bb.x+bb.width,bb.y+bb.height)];
-      parts.push({m:[m.a,m.b,m.c,m.d,m.e,m.f],markup:(defs?ser(defs):'')+ser(node),asset,isText:tag==='text',
+      parts.push({grp:groupOf(leaf),fs:parseFloat(cs.fontSize)*Math.sqrt(Math.abs(m.a*m.d-m.b*m.c)),fill:cs.fill,parent:leaf.parentElement,m:[m.a,m.b,m.c,m.d,m.e,m.f],markup:(defs?ser(defs):'')+ser(node),asset,isText:tag==='text',
         text:tag==='text'?(leaf.textContent||'').replace(/\s+/g,' ').trim():undefined,x0:Math.min(...cs4.map(p=>p.x)),y0:Math.min(...cs4.map(p=>p.y)),x1:Math.max(...cs4.map(p=>p.x)),y1:Math.max(...cs4.map(p=>p.y))});
       if(++n%400===0)await new Promise(r=>setTimeout(r));}
     if(!parts.length)return 0;
+    // lines of one text block drawn as separate texts: keep them together
+    for(let i=1;i<parts.length;i++){const a=parts[i-1],b=parts[i];if(!a.isText||!b.isText||b.grp&&a.grp!==b.grp)continue;
+      const fs=Math.max(a.fs||0,b.fs||0)||10,sameLook=Math.abs((a.fs||0)-(b.fs||0))<.5&&a.fill===b.fill;
+      if(sameLook&&a.parent===b.parent&&Math.abs(a.x0-b.x0)<fs*2&&b.y0-a.y1<fs*.9&&b.y0>a.y0){const g=a.grp||b.grp||('t'+uid());a.grp=g;b.grp=g;}}
     const X0=Math.min(...parts.map(p=>p.x0)),Y0=Math.min(...parts.map(p=>p.y0)),bw=Math.max(1,Math.max(...parts.map(p=>p.x1))-X0),bh=Math.max(1,Math.max(...parts.map(p=>p.y1))-Y0);
     const k=Math.min(M.width*.96/bw,M.height*.96/bh),ox=(M.width-bw*k)/2-X0*k,oy=(M.height-bh*k)/2-Y0*k,r4=v=>Math.round(v*1e4)/1e4;
     pushHist();const made=[];
     for(const p of parts){const[a,b,c,d,e,f]=p.m;
-      made.push(add({type:'svg',m:[r4(a*k),r4(b*k),r4(c*k),r4(d*k),r4(e*k+ox),r4(f*k+oy)],markup:p.markup,asset:p.asset||undefined,isText:p.isText||undefined,text:p.text,
+      made.push(add({type:'svg',grp:p.grp||undefined,m:[r4(a*k),r4(b*k),r4(c*k),r4(d*k),r4(e*k+ox),r4(f*k+oy)],markup:p.markup,asset:p.asset||undefined,isText:p.isText||undefined,text:p.text,
         bb:{x:r2(p.x0*k+ox),y:r2(p.y0*k+oy),w:r2((p.x1-p.x0)*k),h:r2((p.y1-p.y0)*k)},src:name}));}
     E.sel=new Set(made.map(m=>m.id));changed();return made.length;
   }finally{host.remove();}
@@ -1983,7 +2062,7 @@ async function importIntoEditor(files,forceMode){
   if(bad.length){toast(`Can't import ${bad.map(f=>f.name).join(', ')}. Use PNG, JPG, GIF, WEBP, BMP, SVG, PDF or a plan .json file.`,'warn');}
   const ok=imgs.filter(f=>!bad.includes(f));if(!ok.length)return;
   let mode=forceMode,page=1;const allSvg=ok.every(f=>/\.svg$/i.test(f.name)||f.type==='image/svg+xml');
-  if(mode==='bg'&&allSvg)mode='pieces';
+  if(mode==='bg'&&allSvg)mode='pieces';if(mode==='bgimg')mode='bg';
   if(!mode){const hasBg=M.elements.some(e=>e.type==='image'&&e.bg),hasPdf=ok.some(f=>/\.pdf$/i.test(f.name));
     const r=await modal({title:`Import ${ok.length} file${ok.length>1?'s':''}`,body:`<ul class="filelist">${ok.map(f=>`<li>${esc(f.name)}</li>`).join('')}</ul>
       <div class="seg">${allSvg?`<label><input type="radio" name="mode" value="pieces" checked><span>Editable pieces</span></label>`:''}<label><input type="radio" name="mode" value="bg" ${!allSvg&&(!M.elements.length||!hasBg)?'checked':''}><span>Use as background</span></label><label><input type="radio" name="mode" value="place" ${!allSvg&&M.elements.length&&hasBg?'checked':''}><span>Place as image</span></label></div>
@@ -2193,6 +2272,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
+  ['v15','24 Oct 2026',['Background button at the top (or double-click the background) for its settings','Groups from SVG drawings stay together; Group and Ungroup (Ctrl+G); resize and turn a group with handles or buttons','Much less data: plans kept on the device, sent at most once a minute when changed and when you leave, and only downloaded again if they changed','Save indicator moved to the left of undo']],
   ['v14','24 Oct 2026',['SVG drawings import looking exactly like the original, with every part still separate: move, recolour, edit text or delete any of it','Background file settings: see-through, size, turn, flip, move, lock, fit, replace','Retry button when the server can\'t be reached','Click the save indicator to see the data sent and received for each floor plan']],
   ['v13','24 Oct 2026',['Walls you drag take their joined walls with them, and the room colour follows the new shape','Wall thickness quick picks and line styles: solid, dashed, long dash, dotted, dash dot, double','Colour wheel next to every colour choice','SVG drawings import as separate pieces you can move, edit and delete','Standard and HD export quality','Ctrl+D puts the copy where your mouse is','Change log of app updates','Only one sign-in per account at a time','Coordinates box removed from the bottom of the plan','Toxic and non-toxic colours can be changed for each station type','W is now Vertebrate control, with toxic / non-toxic']],
   ['v12','24 Oct 2026',['Settings that follow your account (theme, colour, new-plan defaults)','Create new floor plan wording; name required when starting from a file','Plan cards show just the name; site page shows just the owner','Search, Edit site and Back up site fixed']],
