@@ -255,6 +255,11 @@ button,input,select,textarea{font:inherit;color:inherit}
 .login-card h1{font-family:var(--f-head);font-size:26px;margin:4px 0 0}
 .login-card p{margin:0;color:var(--ink-2)}
 .gbtn{min-height:44px;display:grid;place-items:center}
+.rq-top{margin-bottom:8px}.rq-top .search{width:100%}
+.rq-bar{display:flex;align-items:center;gap:10px;margin:6px 0}.rq-seg{flex:none;display:inline-flex;width:auto}.rq-seg label{flex:none}.rq-seg span{padding:5px 14px;white-space:nowrap;display:block}
+.rq-list{max-height:min(38vh,360px);overflow:auto;border:1px solid var(--line);border-radius:8px}.rq-list.small{max-height:min(24vh,220px)}
+.rq-list thead th{position:sticky;top:0;background:var(--panel);z-index:1}.rq-list table{margin:0}.rq-none{padding:10px 12px;margin:0}
+.rq-act{white-space:nowrap}.rq-act .btn{margin-left:4px}.nowrap{white-space:nowrap}
 .live-peers{display:inline-flex;align-items:center;margin-right:8px}.live-peers[hidden]{display:none}
 .peer{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--pc);border:2px solid var(--pc);box-shadow:0 0 0 2px var(--panel);margin-left:-6px;overflow:hidden}
 .peer:first-child{margin-left:0}.peer img{width:100%;height:100%;object-fit:cover}
@@ -955,17 +960,32 @@ async function askAccess(store,id,label){
     buttons:[{label:'Cancel',value:null},{label:'Send request',value:'ok',primary:true}]});
   if(r.value!=='ok')return;try{const j=await Store.req('POST','/requests',{store,id,note:r.data.note});toast(j?.already?"You've already asked. You'll see here when it's answered.":'Request sent. You can edit as soon as it is approved.');}catch(e){toast(e.message,'warn');}}
 async function openRequests(){let data;try{data=await Store.req('GET','/requests');}catch(e){toast(e.message,'warn');return;}
-  const who=r=>esc(r.req_name||r.requester),what=r=>`${r.store==='sites'?'Site':'Plan'} <b>${esc(r.name||'(no name)')}</b>`,when=t=>esc(fmtDate(t));
-  const inc=data.incoming||[],mine=data.mine||[];
-  const rowsIn=inc.length?inc.map(r=>`<tr><td>${who(r)}<br><span class="hint">${esc(r.requester)}</span></td><td>${what(r)}${r.note?`<br><span class="hint">“${esc(r.note)}”</span>`:''}</td><td class="hint">${when(r.created)}</td><td>${r.status==='pending'?`<button class="btn sm primary" data-rq="${r.id}" data-d="approve">Approve</button> <button class="btn sm ghost" data-rq="${r.id}" data-d="deny">Turn down</button>`:`<span class="hint">Can edit</span> <button class="btn sm ghost danger" data-rq="${r.id}" data-d="revoke">Remove access</button>`}</td></tr>`).join(''):'<tr><td colspan="4" class="hint">No requests waiting.</td></tr>';
-  const ST={pending:'Waiting',approved:'Approved',denied:'Turned down',revoked:'Access removed'};
-  const rowsMine=mine.length?mine.map(r=>`<tr><td>${what(r)}</td><td class="hint">${when(r.created)}</td><td><b>${ST[r.status]||r.status}</b></td></tr>`).join(''):'<tr><td colspan="3" class="hint">You haven\'t asked for access to anything.</td></tr>';
-  await modal({title:'Access requests',wide:true,body:`<h3 class="sec-h">${isAdmin()?'Requests to you and to admins':'Requests for your sites and plans'}</h3><div class="tbl-wrap"><table class="legend-ed"><thead><tr><th>Who</th><th>For</th><th>Asked</th><th></th></tr></thead><tbody>${rowsIn}</tbody></table></div>
-    <h3 class="sec-h" style="margin-top:10px">Your requests</h3><div class="tbl-wrap"><table class="legend-ed"><thead><tr><th>For</th><th>Asked</th><th>Answer</th></tr></thead><tbody>${rowsMine}</tbody></table></div>`,
+  const inc=data.incoming||[],mine=data.mine||[],ST={pending:'Waiting',approved:'Approved',denied:'Turned down',revoked:'Access removed'};
+  const who=r=>`<b>${esc(r.req_name||r.requester.split('@')[0])}</b><br><span class="hint">${esc(r.requester)}</span>`,what=r=>`${r.store==='sites'?'Site':'Plan'} <b>${esc(r.name||'(no name)')}</b>`;
+  const find=r=>esc([r.req_name,r.requester,r.name,r.note,r.store==='sites'?'site':'plan'].filter(Boolean).join(' ').toLowerCase());
+  const act=r=>r.status==='pending'?`<button class="btn sm primary" data-rq="${r.id}" data-d="approve">Approve</button><button class="btn sm ghost" data-rq="${r.id}" data-d="deny">Turn down</button>`:`<span class="hint">Can edit</span><button class="btn sm ghost danger" data-rq="${r.id}" data-d="revoke">Remove access</button>`;
+  const rowIn=r=>`<tr data-find="${find(r)}" data-st="${r.status}"><td>${who(r)}</td><td>${what(r)}${r.note?`<br><span class="hint">“${esc(r.note)}”</span>`:''}</td><td class="hint nowrap">${esc(fmtDate(r.created))}</td><td class="rq-act">${act(r)}</td></tr>`;
+  const rowMine=r=>`<tr data-find="${find(r)}" data-st="${r.status}"><td>${what(r)}${r.note?`<br><span class="hint">“${esc(r.note)}”</span>`:''}</td><td class="hint nowrap">${esc(fmtDate(r.created))}</td><td><b>${ST[r.status]||r.status}</b></td></tr>`;
+  const nP=inc.filter(r=>r.status==='pending').length,nA=inc.length-nP,seg=(name,opts,cur)=>`<div class="seg rq-seg" role="radiogroup">${opts.map(([v,l])=>`<label><input type="radio" name="${name}" value="${v}" ${v===cur?'checked':''}><span>${l}</span></label>`).join('')}</div>`;
+  await modal({title:'Access requests',wide:true,body:`<div class="rq-top"><input type="search" id="rqQ" class="search" placeholder="Search people, emails, sites, plans or messages" aria-label="Search access requests"></div>
+    <h3 class="sec-h">${isAdmin()?'Requests to you and to admins':'Requests for your sites and plans'}</h3>
+    <div class="rq-bar">${seg('rqIn',[['pending',`Waiting (${nP})`],['approved',`Can edit (${nA})`],['all',`All (${inc.length})`]],nP||!nA?'pending':'approved')}<span class="hint" id="rqInN"></span></div>
+    <div class="rq-list tbl-wrap"><table class="legend-ed"><thead><tr><th>Who</th><th>For</th><th>Asked</th><th></th></tr></thead><tbody id="rqIn">${inc.map(rowIn).join('')}</tbody></table><p class="hint rq-none" id="rqInNone" hidden>Nothing here.</p></div>
+    <h3 class="sec-h" style="margin-top:12px">Your requests</h3>
+    <div class="rq-bar">${seg('rqMine',[['all',`All (${mine.length})`],['pending','Waiting'],['done','Answered']],'all')}<span class="hint" id="rqMineN"></span></div>
+    <div class="rq-list small tbl-wrap"><table class="legend-ed"><thead><tr><th>For</th><th>Asked</th><th>Answer</th></tr></thead><tbody id="rqMine">${mine.map(rowMine).join('')}</tbody></table><p class="hint rq-none" id="rqMineNone" hidden>Nothing here.</p></div>`,
     buttons:[{label:'Close',value:'ok',primary:true}],
-    onOpen:w=>w.addEventListener('click',async e=>{const b=e.target.closest('[data-rq]');if(!b)return;b.disabled=true;
-      try{await Store.req('POST','/requests/'+encodeURIComponent(b.dataset.rq),{decision:b.dataset.d});const td=b.closest('td');td.innerHTML=`<b>${({approve:'Approved',deny:'Turned down',revoke:'Access removed'})[b.dataset.d]}</b>`;
-        Store.reqCount=Math.max(0,(Store.reqCount||0)-(b.dataset.d==='revoke'?0:1));updBadge();}catch(err){toast(err.message,'warn');b.disabled=false;}})});
+    onOpen:w=>{const filt=()=>{const q=($('#rqQ',w).value||'').toLowerCase().trim().split(/\s+/).filter(Boolean),fi=$('input[name=rqIn]:checked',w).value,fm=$('input[name=rqMine]:checked',w).value;
+        const run=(body,f,ok,none,cnt)=>{let n=0,t=0;$$('tr',$(body,w)).forEach(tr=>{t++;const show=ok(tr.dataset.st,f)&&q.every(x=>tr.dataset.find.includes(x));tr.hidden=!show;if(show)n++;});$(none,w).hidden=n>0;$(cnt,w).textContent=q.length?`${n} shown`:'';};
+        run('#rqIn',fi,(st,f)=>f==='all'||(f==='pending'?st==='pending':st==='approved'),'#rqInNone','#rqInN');
+        run('#rqMine',fm,(st,f)=>f==='all'||(f==='pending'?st==='pending':st!=='pending'),'#rqMineNone','#rqMineN');};
+      $('#rqQ',w).addEventListener('input',filt);w.addEventListener('change',e=>{if(/^rq/.test(e.target.name))filt();});filt();setTimeout(()=>$('#rqQ',w)?.focus(),60);
+      w.addEventListener('click',async e=>{const b=e.target.closest('[data-rq]');if(!b)return;const td=b.closest('td');td.querySelectorAll('button').forEach(x=>x.disabled=true);
+        try{await Store.req('POST','/requests/'+encodeURIComponent(b.dataset.rq),{decision:b.dataset.d});const tr=b.closest('tr');
+          if(b.dataset.d==='approve'){tr.dataset.st='approved';td.innerHTML=act({id:b.dataset.rq,status:'approved'});}
+          else{tr.dataset.st=b.dataset.d==='deny'?'denied':'revoked';td.innerHTML=`<b>${b.dataset.d==='deny'?'Turned down':'Access removed'}</b>`;}
+          if(b.dataset.d!=='revoke'){Store.reqCount=Math.max(0,(Store.reqCount||0)-1);updBadge();}}
+        catch(err){toast(err.message,'warn');td.querySelectorAll('button').forEach(x=>x.disabled=false);}});}});
   await loadGrants();if(route==='site'&&site)showSite(site.id);else if(route==='sites')showSites();}
 function ownerLabel(rec){if(!Store.auth)return'';const o=rec?.owner;if(!o)return'Admin';if(o===Store.user?.email)return'You';return Store.people?.get(o)||o.split('@')[0];}
 const NOT_YOURS='This belongs to someone else. You can open it and duplicate it, but only the owner or an admin can change it.';
@@ -1159,7 +1179,7 @@ async function openMap(id){
   $('#view').innerHTML=`<div class="editor${E.readOnly?' ro':''}">
     <nav class="tools" id="tools" aria-label="Drawing tools">${TOOLS.map(t=>t==='-'?'<div class="sep"></div>':typeof t==='string'?groupBtn(t.slice(2)):`<button type="button" class="tool" data-tool="${t[0]}" title="${t[1]} (${t[2]})" aria-label="${t[1]}">${toolSvg(t[3])}<span class="tl">${SHORT[t[0]]}</span></button>`).join('')}<div class="sep"></div><button type="button" class="tool" data-top="bg" title="Background: see-through, size, turn, move, lock" aria-label="Background"><svg viewBox="0 0 20 20" width="22" height="22" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 14l4-4.5 3 3 2-2 3 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="13.5" cy="7" r="1.4" fill="currentColor"/></svg><span class="tl">Background</span></button></nav>
     <section class="stage-wrap" id="stageWrap"><svg id="stage" xmlns="${NS}"><defs>${SPLIT_DEF}<pattern id="gridp" patternUnits="userSpaceOnUse" width="20" height="20"><path id="gridpath" d="M20 0H0V20" fill="none" stroke="#9aa5b1" stroke-opacity=".35" stroke-width="1"/></pattern></defs>
-      <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-ov"></g></g></svg>
+      <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-ov"></g><g id="L-peers" pointer-events="none"></g></g></svg>
       <div class="drawbar" id="drawbar" hidden><div class="seg" id="dbMode" role="radiogroup" aria-label="Drawing mode"><label><input type="radio" name="dbmode" value="click"><span>Click points</span></label><label><input type="radio" name="dbmode" value="free"><span>Freehand</span></label></div>
         <span class="dbinfo" id="dbInfo"></span><button type="button" class="btn sm primary" id="dbEnclose" hidden>Enclose space</button><button type="button" class="btn sm" id="dbFinish" hidden>Finish</button><button type="button" class="btn sm ghost" id="dbCancel">Cancel</button></div>
       ${E.readOnly?`<div class="ro-bar"><span><b>View only.</b> ${esc(ownerLabel(M)==='Admin'?'This plan belongs to an admin.':`This is ${ownerLabel(M)}'s plan.`)} Ask to edit it, or duplicate it to make your own copy.</span><button type="button" class="btn sm" data-ro-ask>Ask to edit</button><button type="button" class="btn sm primary" data-ro-copy>Duplicate to edit</button></div>`:''}
@@ -1365,7 +1385,7 @@ function renderOverlay(){
     if(E.tool==='objects'&&isDoorKind(E.objKind)){const nw=nearestWall(c,40/k);if(nw){const width=Math.min(defaultDoorWidth(E.objKind),wallLen(nw.wall)*.95);s+=doorMarkup({kind:E.objKind,width,t:clampT(nw.t,nw.wall,width),flip:0,hinge:0},nw.wall,true,true);}}
   }
   if(E.snapHit&&(d?.kind==='draw'||E.chain||isWallTool(E.tool)))s+=`<circle cx="${E.snapHit.x}" cy="${E.snapHit.y}" r="${r2(6/k)}" fill="none" stroke="#e8590c" stroke-width="${r2(2/k)}"/>`;
-  s+=Live.markup(k);$('#L-ov').innerHTML=s;
+  $('#L-ov').innerHTML=s;Live.draw();
 }
 function renderAll(){render();renderPanel();updUndo();}
 
@@ -2171,6 +2191,7 @@ async function importIntoEditor(files,forceMode){
 /* ================= LIVE EDITING =================
    When two or more people have the same plan open, each change is sent straight to the others
    (only while someone else is there), so everyone sees the same plan as it's being drawn. */
+const CURSOR_MS=60;   // pointer updates sent about 16 times a second while it moves (smooth, and nothing while it's still)
 const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(),props:'',sendT:null,curT:0,sent:new Set(),colour:null,
   propsStr(){return JSON.stringify({settings:M.settings,furn:M.furn,width:M.width,height:M.height,name:M.name,scale:M.scale,bgMeta:M.bgMeta,nextFrom:M.nextFrom||null});},
   baseline(){this.base=new Map(M.elements.map(e=>[e.id,JSON.stringify(e)]));this.props=this.propsStr();},
@@ -2186,12 +2207,20 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
     catch(e){}
     if(this.ctl===ctl&&route==='map'&&M?.id===id){this.peers=[];updPeers();setTimeout(()=>{if(this.ctl===ctl&&route==='map'&&M?.id===id)this.connect();},4000);}},
   onMsg(m){
-    if(m.type==='hello'){this.colour=m.colour;this.setPeers(m.peers);}
+    if(m.type==='hello'){this.colour=m.colour;this.setPeers(m.peers);this.draw();}
     else if(m.type==='peers')this.setPeers(m.peers);
     else if(m.type==='need-state')this.sendState(m.for);
     else if(m.type==='state')this.applyState(m.state);
     else if(m.type==='ops')this.applyOps(m.ops);
-    else if(m.type==='cursor'){if(m.on)this.cursors.set(m.from,{x:m.x,y:m.y,draft:m.draft||null});else{const c=this.cursors.get(m.from);if(c?.draft)this.cursors.set(m.from,{...c,hide:true});else this.cursors.delete(m.from);}renderOverlay();}},
+    else if(m.type==='cursor'){const c=this.cursors.get(m.from);
+      if(m.on){if(c&&!c.hide){c.tx=m.x;c.ty=m.y;c.draft=m.draft||null;}else this.cursors.set(m.from,{x:m.x,y:m.y,tx:m.x,ty:m.y,draft:m.draft||null});}
+      else if(c?.draft)c.hide=true;else this.cursors.delete(m.from);
+      this.animate();}},
+  /* glide each pointer smoothly toward the latest position it was sent */
+  animate(){if(this.raf)return;const step=()=>{this.raf=null;let moving=false;for(const c of this.cursors.values()){if(c.tx===undefined)continue;const dx=c.tx-c.x,dy=c.ty-c.y;
+        if(Math.abs(dx)+Math.abs(dy)>.3){c.x+=dx*.35;c.y+=dy*.35;moving=true;}else{c.x=c.tx;c.y=c.ty;}}
+      this.draw();if(moving)this.raf=requestAnimationFrame(step);};this.raf=requestAnimationFrame(step);},
+  draw(){const L=$('#L-peers');if(!L)return;L.innerHTML=route==='map'&&M?this.markup(E.view.k):'';},
   setPeers(list){const before=new Set(this.others().map(p=>p.id));this.peers=list||[];for(const k of [...this.cursors.keys()])if(!this.peers.some(p=>p.id===k))this.cursors.delete(k);
     const fresh=this.others().filter(p=>!before.has(p.id));if(fresh.length&&before.size+fresh.length>0&&this.greeted)toast(`${fresh.map(p=>p.name).join(', ')} opened this plan too. You'll both see changes as they happen.`);
     if(!this.greeted&&this.others().length)toast(`${this.others().map(p=>p.name).join(', ')} ${this.others().length===1?'is':'are'} on this plan too. You'll see each other's changes as they happen.`);
@@ -2219,7 +2248,7 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
   draft(){const d=E.drag;if(E.chain?.pts?.length){const wt=isWallTool(E.tool),cs=wt?chainStyle():null;return{k:'chain',tool:E.tool,pts:E.chain.pts.map(p=>[r2(p.x),r2(p.y)]),stroke:E.chain.stroke?.map(p=>[r2(p.x),r2(p.y)]),cur:E.chainCur?[r2(E.chainCur.x),r2(E.chainCur.y)]:null,w:wt?cs.w:2,color:wt?cs.color:null,dash:wt?!!cs.dash:false};}
     if(d?.kind==='draw')return{k:'box',tool:E.tool,a:[r2(d.a.x),r2(d.a.y)],b:[r2(d.b.x),r2(d.b.y)],w:E.tool==='room'?E.wallStyle.w:2};return null;},
   cursor(p,on,force){if(!this.others().length||!M)return;const now=Date.now();
-    if(on&&!force&&now-this.curT<140){if(!this.curLater)this.curLater=setTimeout(()=>{this.curLater=null;this.cursor(E.cursor,!!E.cursor,true);},140-(now-this.curT));return;}   // last position always gets sent
+    if(on&&!force&&now-this.curT<CURSOR_MS){if(!this.curLater)this.curLater=setTimeout(()=>{this.curLater=null;this.cursor(E.cursor,!!E.cursor,true);},CURSOR_MS-(now-this.curT));return;}   // last position always gets sent
     clearTimeout(this.curLater);this.curLater=null;this.curT=now;const draft=E.readOnly?null:this.draft();
     if(!on&&!draft&&!this.hadDraft&&p===null){this.post({type:'cursor',x:0,y:0,on:false});return;}this.hadDraft=!!draft;p=p||E.cursor||{x:0,y:0};this.post({type:'cursor',x:r2(p.x),y:r2(p.y),on:on||!!draft,draft});},
   markup(k){let s='';for(const[id,c]of this.cursors){const p=this.peers.find(x=>x.id===id);if(!p)continue;const col=p.colour||'#e8590c';
@@ -2445,7 +2474,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='requests')openRequests();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
-  ['v20','24 Oct 2026',['You stay signed in until you sign out (no more sign-out after 5 minutes)']],
+  ['v20','24 Oct 2026',['You stay signed in until you sign out (no more sign-out after 5 minutes)','Access requests: search, Waiting / Can edit / All filters, and lists that scroll inside the window','Other people\'s pointers move smoothly']],
   ['v19','24 Oct 2026',['Live editing: when two or more people have the same plan open, everyone sees changes and each other\'s pointers as they happen','Ask to edit someone else\'s site or plan; the owner or an admin approves it under Access requests','Walls stay visible while you draw them, with a dot on every corner','Others on the plan see walls, fences, lines and boxes while you are still drawing them','Shapes get room-style fill colours; text align removed; no dashed outline around selected items']],
   ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved)','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
   ['v17','24 Oct 2026',['Background button moved to the left toolbar','Print button next to Export prints the plan straight from the browser on one A4 page']],
