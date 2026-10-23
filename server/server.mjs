@@ -59,6 +59,10 @@ db.exec(`
     created    INTEGER NOT NULL,
     expires    INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS replaced_sessions (
+    token_hash TEXT PRIMARY KEY,       -- sessions ended because the same account signed in somewhere else
+    ended      INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS prefs (
     email   TEXT PRIMARY KEY,          -- each person's own settings (theme etc.), so they follow them to any device
     data    TEXT NOT NULL,
@@ -94,6 +98,9 @@ const q = {
   touch:    db.prepare('UPDATE sessions SET expires = ? WHERE token_hash = ?'),
   endSess:  db.prepare('DELETE FROM sessions WHERE token_hash = ?'),
   endUser:  db.prepare('DELETE FROM sessions WHERE email = ?'),
+  replace:  db.prepare('INSERT OR REPLACE INTO replaced_sessions (token_hash, ended) SELECT token_hash, ? FROM sessions WHERE email = ?'),
+  replaced: db.prepare('SELECT 1 FROM replaced_sessions WHERE token_hash = ?'),
+  tidyRepl: db.prepare('DELETE FROM replaced_sessions WHERE ended < ?'),
   oldSess:  db.prepare('DELETE FROM sessions WHERE expires < ?'),
 };
 
@@ -139,12 +146,15 @@ function sessionUser(req) {
   const m = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '');
   if (!m) return null;
   const h = sha(m[1]), s = q.sess.get(h);
+  if (!s && q.replaced.get(h)) { req.authWhy = 'elsewhere'; return null; }
   if (!s || s.expires < Date.now()) { if (s) q.endSess.run(h); return null; }
   const u = q.user.get(s.email);
   if (!u) { q.endSess.run(h); return null; }               // removed from the access list
   if (s.expires - Date.now() < SESSION_MS - Math.min(15000, SESSION_MS / 4)) q.touch.run(Date.now() + SESSION_MS, h);   // any request counts as activity
   return { email: u.email, role: u.role, name: u.name, picture: u.picture, tokenHash: h };
 }
+const ELSEWHERE = 'Your account was signed in on another browser or device, so it has been signed out here. Only one sign-in at a time is allowed.';
+const notSignedIn = (req, res) => json(res, 401, req.authWhy === 'elsewhere' ? { error: ELSEWHERE, code: 'elsewhere' } : { error: 'Please sign in' });
 function mayJoin(email) {
   if (q.user.get(email)) return true;
   const domain = email.split('@')[1] || '';
@@ -225,13 +235,16 @@ async function handleAuth(req, res, parts, ip) {
     if (!q.user.get(email)) q.addUser.run(email, 'user', Date.now(), 'domain');
     q.seenUser.run(claims.name || null, claims.picture || null, Date.now(), email);
     const token = crypto.randomBytes(32).toString('base64url');
+    // one sign-in at a time: signing in here ends this account's session in any other browser
+    q.tidyRepl.run(Date.now() - 2 * 86400000);
+    q.replace.run(Date.now(), email); q.endUser.run(email);
     q.newSess.run(sha(token), email, Date.now(), Date.now() + SESSION_MS);
     failedLogins.delete(ip);
     const u = q.user.get(email);
     return json(res, 200, { token, user: { email, role: u.role, name: u.name, picture: u.picture } });
   }
   const me = sessionUser(req);
-  if (parts[1] === 'me' && req.method === 'GET') return me ? json(res, 200, { user: me.open ? null : { email: me.email, role: me.role, name: me.name, picture: me.picture }, auth: AUTH_ON }) : json(res, 401, { error: 'Not signed in' });
+  if (parts[1] === 'me' && req.method === 'GET') return me ? json(res, 200, { user: me.open ? null : { email: me.email, role: me.role, name: me.name, picture: me.picture }, auth: AUTH_ON }) : notSignedIn(req, res);
   if (parts[1] === 'logout' && req.method === 'POST') { if (me?.tokenHash) q.endSess.run(me.tokenHash); return json(res, 200, { ok: true }); }
   return json(res, 404, { error: 'Unknown path' });
 }
@@ -300,7 +313,7 @@ const server = http.createServer(async (req, res) => {
     if (parts[0] === 'auth') return await handleAuth(req, res, parts, ip);
 
     const me = sessionUser(req);
-    if (!me) return json(res, 401, { error: 'Please sign in' });
+    if (!me) return notSignedIn(req, res);
     if (parts[0] === 'users') return await handleUsers(req, res, parts, me);
     if (parts[0] === 'people' && req.method === 'GET') return json(res, 200, AUTH_ON ? q.people.all() : []);
     if (parts[0] === 'prefs' && parts.length === 1) {

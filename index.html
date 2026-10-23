@@ -135,6 +135,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .divider{height:1px;background:var(--line);margin:2px 0}
 .swatches{display:flex;gap:5px;flex-wrap:wrap}
 .sw{width:20px;height:20px;border-radius:4px;border:1px solid var(--line);cursor:pointer;padding:0}
+.sw.wheel{border-radius:50%;background:conic-gradient(#ff0000,#ffff00,#00ff00,#00ffff,#0000ff,#ff00ff,#ff0000);box-shadow:inset 0 0 0 4px rgba(255,255,255,.55)}
 
 .cats{display:flex;flex-direction:column;gap:4px}
 .cat{display:grid;grid-template-columns:36px minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;text-align:left}
@@ -265,6 +266,19 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sv-add:hover{color:var(--accent);border-color:var(--accent)}
 .photo-prev{width:72px;height:48px;border-radius:6px;border:1px solid var(--line);background:var(--panel-2);display:grid;place-items:center;font-size:11px;color:var(--ink-3);overflow:hidden;flex:none}
 .photo-prev img{width:100%;height:100%;object-fit:cover}
+.lg-c{display:inline-flex;gap:8px;align-items:center}.lg-c label{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;color:var(--ink-2)}.lg-c em{font-style:normal}
+.save-pill{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:15px;border:1px solid var(--line);background:var(--panel);font:inherit;font-size:12px;cursor:pointer;max-width:300px;white-space:nowrap;flex:none}
+.save-pill span{overflow:hidden;text-overflow:ellipsis}
+.save-pill.saved{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 35%,var(--line))}
+.save-pill.saving{color:var(--ink-3)}
+.save-pill.local{color:#b35c00;background:color-mix(in srgb,#f59f00 12%,var(--panel));border-color:#f59f00}
+.save-pill .spin{width:11px;height:11px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (max-width:720px){.save-pill{max-width:40px;padding:0 9px}.save-pill span{display:none}}
+.log{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow:auto;margin-top:8px}
+.log-e{border:1px solid var(--line);border-radius:8px;padding:8px 12px}
+.log-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.log-e ul{margin:6px 0 0;padding-left:18px;font-size:13px;line-height:1.5}
 .acc-row{display:flex;flex-wrap:wrap;gap:8px}
 .acc-sw{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:11px;color:var(--ink-2)}
 .acc-sw input{position:absolute;opacity:0;pointer-events:none}
@@ -363,7 +377,7 @@ const DEFAULT_CATS=[
   {code:'V', name:'Insect monitoring',       shape:'circle', mode:'fixed', color:'#111111', type:'Insect monitor (glue board)'},
   {code:'U', name:'Flying insect monitoring',shape:'circle', mode:'fixed', color:'#1971c2', type:'Insect light trap (ILT)'},
   {code:'X', name:'Inspection point',        shape:'circle', mode:'fixed', color:'#111111', type:'Inspection point'},
-  {code:'W', name:'Vertebrate monitoring',   shape:'circle', mode:'fixed', color:'#9c5b16', type:'Vertebrate monitor'},
+  {code:'W', name:'Vertebrate control',      shape:'circle', mode:'tox',   color:'#9c5b16', type:'Toxic bait station'},
   {code:'CP',name:'Control panel',           shape:'circle', mode:'fixed', color:'#6741d9', type:'Control panel'}
 ];
 const STATION_TYPES=[['Toxic bait station',1],['Toxic wax block',1],['Toxic soft bait / paste',1],['Toxic pellet bait',1],['Toxic insect gel / bait',1],
@@ -509,7 +523,7 @@ const Store={
     finally{clearTimeout(t);}
     this.online=true;
     if(r.status===404&&method==='GET')return undefined;
-    if(r.status===401&&this.auth){this.setToken('');this.user=null;signedOut('Your sign-in has ended. Please sign in again.');throw new Error('Please sign in');}
+    if(r.status===401&&this.auth){const why=await r.json().catch(()=>({}));this.setToken('');this.user=null;signedOut(why.code==='elsewhere'?why.error:'Your sign-in has ended. Please sign in again.');throw new Error('Please sign in');}
     if(!r.ok){let m='';try{m=(await r.json()).error;}catch(e){}throw new Error(m||('Server error '+r.status));}
     return r.json();
   },
@@ -517,8 +531,8 @@ const Store={
   async open(){if(!this.base)return false;if(!this.token)this.loadToken();try{const h=await this.health();this.auth=h.auth||null;this.online=true;return true;}catch(e){this.online=false;return false;}},
   /* null = signed in (or sign-in is off); otherwise the reason the login screen should show */
   async whoAmI(){if(!this.auth)return null;if(!this.token)return '';
-    try{const r=await fetch(this.base+'/api/auth/me',{cache:'no-store',headers:this.hdr(false)});if(r.ok){this.user=(await r.json()).user;return null;}}catch(e){return 'Cannot reach the server';}
-    this.setToken('');return 'Your sign-in has ended. Please sign in again.';},
+    let why={};try{const r=await fetch(this.base+'/api/auth/me',{cache:'no-store',headers:this.hdr(false)});if(r.ok){this.user=(await r.json()).user;return null;}why=await r.json().catch(()=>({}));}catch(e){return 'Cannot reach the server';}
+    this.setToken('');return why.code==='elsewhere'?why.error:'Your sign-in has ended. Please sign in again.';},
   all(s){return this.req('GET','/'+s);},
   get(s,id){return this.req('GET',`/${s}/${encodeURIComponent(id)}`);},
   put(s,v){return this.req('PUT',`/${s}/${encodeURIComponent(v.id)}`,v);},
@@ -565,7 +579,7 @@ function applyAccent(k){const a=ACCENTS[k]||ACCENTS.orange;let st=document.getEl
 try{applyTheme(localStorage.getItem('psp-theme'));applyAccent(localStorage.getItem('psp-accent'));}catch(e){}
 function toggleTheme(){const cur=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');Prefs.set('theme',cur==='dark'?'light':'dark');}
 /* Each person's own settings. Saved on the server against their account, so they follow them to any device. */
-const PREF_DEF={theme:'system',accent:'orange',drawnBy:'',portrait:false,showGrid:true,snap:true,siteFilter:'all',siteSort:'updated'};
+const PREF_DEF={theme:'system',accent:'orange',drawnBy:'',portrait:false,showGrid:true,snap:true,siteFilter:'all',siteSort:'updated',exportQ:'std'};
 const Prefs={v:{...PREF_DEF},t:null,
   key(){return 'psp-prefs:'+(Store.base||'')+':'+(Store.user?.email||'')},
   apply(){applyTheme(this.v.theme);applyAccent(this.v.accent);try{localStorage.setItem('psp-theme',this.v.theme);localStorage.setItem('psp-accent',this.v.accent);}catch(e){}},
@@ -641,7 +655,8 @@ function paperOf(){const g=sheet(),r=g.H/g.W;return Math.abs(r-1/Math.SQRT2)<.01
 const pad=n=>String(n).padStart(3,'0');
 const stId=el=>el.code+pad(el.num);
 function catOf(code){return CATS.find(c=>c.code===code)||{code,name:code,shape:'circle',mode:'fixed',color:'#868e96',type:''};}
-function stColor(el,cat){cat=cat||catOf(el.code);return cat.mode==='tox'?(el.toxic?TOX:NONTOX):cat.color;}
+const toxCol=c=>c?.toxColor||TOX,nonCol=c=>c?.nonColor||NONTOX;
+function stColor(el,cat){cat=cat||catOf(el.code);return cat.mode==='tox'?(el.toxic?toxCol(cat):nonCol(cat)):cat.color;}
 /* Next station number = the first unused number at or above the starting point set for that type (default 1). */
 function usedNums(code){const u=new Set();if(M)for(const e of M.elements)if(e.type==='station'&&e.code===code)u.add(e.num);return u;}
 function nextNum(code,extra){const u=usedNums(code);if(extra)for(const n of extra)u.add(n);let n=Math.max(1,(M?.nextFrom||{})[code]||1);while(u.has(n))n++;return n;}
@@ -661,9 +676,10 @@ function geom(shape,r){
 function shapeSvg(shape,r,fill){const g=geom(shape,r),sw=Math.max(1.2,r*.22);
   return g.replace('ATTR',`fill="none" stroke="#000" stroke-opacity=".5" stroke-width="${r2(sw+1.6)}" stroke-linejoin="round"`)+g.replace('ATTR',`fill="${fill}" stroke="#fff" stroke-width="${r2(sw)}" stroke-linejoin="round"`);}
 const SPLIT_DEF=`<linearGradient id="toxsplit" x1="0" y1="0" x2="1" y2="1"><stop offset=".5" stop-color="${TOX}"/><stop offset=".5" stop-color="${NONTOX}"/></linearGradient>`;
-function splitSvg(shape,r){const d=r2(r*.68);return shapeSvg(shape,r,'url(#toxsplit)')+`<line x1="${d}" y1="${-d}" x2="${-d}" y2="${d}" stroke="#ffffff" stroke-width="${r2(Math.max(1,r*.16))}" stroke-linecap="round"/>`;}
+function splitSvg(shape,r,c){const d=r2(r*.68),a=toxCol(c),b=nonCol(c),id='ts'+a.slice(1)+b.slice(1);
+  return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset=".5" stop-color="${a}"/><stop offset=".5" stop-color="${b}"/></linearGradient></defs>`+shapeSvg(shape,r,`url(#${id})`)+`<line x1="${d}" y1="${-d}" x2="${-d}" y2="${d}" stroke="#ffffff" stroke-width="${r2(Math.max(1,r*.16))}" stroke-linecap="round"/>`;}
 function catIcon(c,size=26){
-  if(c.mode==='tox')return `<svg viewBox="-13 -13 26 26" width="${size}" height="${size}" aria-hidden="true"><defs>${SPLIT_DEF}</defs>${splitSvg(c.shape,8)}</svg>`;
+  if(c.mode==='tox')return `<svg viewBox="-13 -13 26 26" width="${size}" height="${size}" aria-hidden="true">${splitSvg(c.shape,8,c)}</svg>`;
   return `<svg viewBox="-13 -13 26 26" width="${size}" height="${size}" aria-hidden="true">${shapeSvg(c.shape,8,c.color)}</svg>`;
 }
 
@@ -694,13 +710,23 @@ function bboxOf(el){
 function moveEl(el,dx,dy){if('x1' in el){el.x1+=dx;el.y1+=dy;el.x2+=dx;el.y2+=dy;}else if(el.pts){el.pts=el.pts.map(p=>[p[0]+dx,p[1]+dy]);}else if('x' in el){el.x+=dx;el.y+=dy;}}
 
 /* ---------------- markup (shared by screen and export) ---------------- */
+const WALL_LS=[['solid','Solid'],['dashed','Dashed'],['long','Long dash'],['dotted','Dotted'],['dashdot','Dash dot'],['double','Double line']];
+const DASHY=['dashed','long','dotted','dashdot'];
+const wallLs=el=>el?.dash?(DASHY.includes(el.ls)?el.ls:'dashed'):(el?.ls==='double'?'double':'solid');
+const setLs=(o,v)=>{o.ls=v;o.dash=DASHY.includes(v);};
+const THICK=[[2,'Thin'],[4,'Light'],[8,'Standard'],[12,'Thick'],[18,'Heavy']];
+const thickRow=(sc,k,cur)=>`<div class="f"><span>Quick pick</span><div class="row" style="gap:4px">${THICK.map(([v,l])=>`<button type="button" class="chip${Math.abs((cur||0)-v)<.01?' on':''}" data-thick="${v}" data-s="${sc}" data-k="${k}">${l}</button>`).join('')}</div></div>`;
 function wallMarkup(el,ops,ex){
   const L=wallLen(el);if(L<.5)return'';const ux=(el.x2-el.x1)/L,uy=(el.y2-el.y1)/L;
   const gaps=ops.map(o=>[o.t*L-o.width/2,o.t*L+o.width/2]).sort((a,b)=>a[0]-b[0]);
   const segs=[];let cur=0;for(const[a,b]of gaps){if(a>cur)segs.push([cur,a]);cur=Math.max(cur,b);}if(cur<L)segs.push([cur,L]);
-  let s='';for(const[a,b]of segs){const A=a-(a<=.01?el.w/2:0),B=b+(b>=L-.01?el.w/2:0);
-    s+=`<line x1="${r2(el.x1+ux*A)}" y1="${r2(el.y1+uy*A)}" x2="${r2(el.x1+ux*B)}" y2="${r2(el.y1+uy*B)}" stroke="${el.color}" stroke-width="${el.w}" stroke-linecap="butt"${el.dash?` stroke-dasharray="${r2(Math.max(4,el.w*2.2))} ${r2(Math.max(3,el.w*1.6))}"`:''}/>`;}
-  if(!el.dash)s+=`<circle cx="${r2(el.x1)}" cy="${r2(el.y1)}" r="${r2(el.w/2)}" fill="${el.color}"/><circle cx="${r2(el.x2)}" cy="${r2(el.y2)}" r="${r2(el.w/2)}" fill="${el.color}"/>`;
+  const ls=wallLs(el),w=el.w,round=ls==='dotted'||ls==='dashdot';
+  const da={dashed:`${r2(Math.max(4,w*2.2))} ${r2(Math.max(3,w*1.6))}`,long:`${r2(Math.max(10,w*5))} ${r2(Math.max(3,w*1.6))}`,dotted:`0.01 ${r2(Math.max(3,w*2))}`,dashdot:`${r2(Math.max(8,w*3.2))} ${r2(Math.max(3,w*2))} 0.01 ${r2(Math.max(3,w*2))}`}[ls];
+  let s='';for(const[a,b]of segs){const A=a-(a<=.01?w/2:0),B=b+(b>=L-.01?w/2:0);
+    if(ls==='double'){const t=Math.max(1,w*.24),o=w/2-t/2,nx=-uy*o,ny=ux*o;
+      for(const sg of [1,-1])s+=`<line x1="${r2(el.x1+ux*A+nx*sg)}" y1="${r2(el.y1+uy*A+ny*sg)}" x2="${r2(el.x1+ux*B+nx*sg)}" y2="${r2(el.y1+uy*B+ny*sg)}" stroke="${el.color}" stroke-width="${r2(t)}" stroke-linecap="butt"/>`;continue;}
+    s+=`<line x1="${r2(el.x1+ux*A)}" y1="${r2(el.y1+uy*A)}" x2="${r2(el.x1+ux*B)}" y2="${r2(el.y1+uy*B)}" stroke="${el.color}" stroke-width="${w}" stroke-linecap="${round?'round':'butt'}"${da?` stroke-dasharray="${da}"`:''}/>`;}
+  if(ls==='solid')s+=`<circle cx="${r2(el.x1)}" cy="${r2(el.y1)}" r="${r2(el.w/2)}" fill="${el.color}"/><circle cx="${r2(el.x2)}" cy="${r2(el.y2)}" r="${r2(el.w/2)}" fill="${el.color}"/>`;
   if(!ex)s+=`<line x1="${el.x1}" y1="${el.y1}" x2="${el.x2}" y2="${el.y2}" stroke="transparent" stroke-width="${Math.max(el.w,12/E.view.k)}"/>`;
   return `<g data-id="${el.id}">${s}</g>`;
 }
@@ -726,7 +752,9 @@ function doorMarkup(o,w,ex,ghost){
   return `<g ${ghost?'opacity=".6"':`data-id="${o.id}"`} transform="translate(${r2(p.x)} ${r2(p.y)}) rotate(${r2(p.ang)})">${hit}<g transform="scale(${o.hinge?-1:1} ${o.flip?-1:1})">${jambs}${inner}</g>${label}</g>`;
 }
 const zoneWalls=z=>z.walls.map(getEl).filter(w=>w&&w.type==='wall');
-function zonePts(z){return zoneWalls(z).map(w=>({x:w.x1,y:w.y1}));}
+function zonePts(z){const ws=zoneWalls(z),n=ws.length;if(n<3)return ws.map(w=>({x:w.x1,y:w.y1}));
+  const ends=w=>[{x:w.x1,y:w.y1},{x:w.x2,y:w.y2}];
+  return ws.map((w,i)=>{const b=ends(ws[(i+1)%n]);let best=null,bd=Infinity;for(const p of ends(w))for(const q of b){const d=dist(p,q);if(d<bd){bd=d;best=p;}}return{x:best.x,y:best.y};});}
 function zoneCentre(pts){let a=0,cx=0,cy=0;for(let i=0;i<pts.length;i++){const p=pts[i],q=pts[(i+1)%pts.length],c=p.x*q.y-q.x*p.y;a+=c;cx+=(p.x+q.x)*c;cy+=(p.y+q.y)*c;}
   if(Math.abs(a)<1e-6){const n=pts.length||1;return{x:pts.reduce((t,p)=>t+p.x,0)/n,y:pts.reduce((t,p)=>t+p.y,0)/n};}a/=2;return{x:cx/(6*a),y:cy/(6*a)};}
 function zoneMarkup(z){const pts=zonePts(z);if(pts.length<3)return'';const c=zoneCentre(pts),fs=z.nameSize||18;
@@ -739,6 +767,7 @@ function shapeMarkup(el){
   let s='';
   if(el.type==='rect')s=`<rect x="${r2(el.x)}" y="${r2(el.y)}" width="${r2(el.w)}" height="${r2(el.h)}" rx="${el.rx||0}" ${st}/>`;
   else if(el.type==='ellipse')s=`<ellipse cx="${r2(el.x+el.w/2)}" cy="${r2(el.y+el.h/2)}" rx="${r2(el.w/2)}" ry="${r2(el.h/2)}" ${st}/>`;
+  else if(el.open)s=`<polyline points="${el.pts.map(p=>r2(p[0])+','+r2(p[1])).join(' ')}" ${st.replace(/fill="[^"]*"( fill-opacity="[^"]*")?/,'fill="none"')} stroke-linecap="round"/>`;
   else s=`<polygon points="${el.pts.map(p=>r2(p[0])+','+r2(p[1])).join(' ')}" ${st}/>`;
   return `<g data-id="${el.id}">${s}</g>`;
 }
@@ -827,10 +856,10 @@ function frameMarkup(ex){
   // key: two columns, readable size
   s+=T(kx+f(14),row(0),fs,'KEY:',bold)+hit('key',kx+f(4),y0+f(4),W-kx-f(8),fh-f(8),'Edit station types');
   const{used,tox}=usedCats(),cnt=used.length,cols=cnt<=4?1:cnt<=10?2:3,rows=Math.ceil(cnt/cols),ax=kx+f(64),aw=W-ax-f(10),top=y0+f(6),ah=fh-f(12),cw=aw/cols,rh=ah/Math.max(rows,1);
-  const labels=used.map(c=>{const t=tox[c.code];let suf='',col=c.color;if(c.mode==='tox'){if(t&&t.y&&!t.n){suf=' - Toxic';col=TOX;}else if(t&&t.n&&!t.y){suf=' - Non-toxic';col=NONTOX;}else col='#1a1f24';}if(col.toLowerCase()==='#ffffff')col='#111111';return{c,txt:`${c.code}000 - ${c.name}${suf}`,col,t};});
+  const labels=used.map(c=>{const t=tox[c.code];let suf='',col=c.color;if(c.mode==='tox'){if(t&&t.y&&!t.n){suf=' - Toxic';col=toxCol(c);}else if(t&&t.n&&!t.y){suf=' - Non-toxic';col=nonCol(c);}else col='#1a1f24';}if(col.toLowerCase()==='#ffffff')col='#111111';return{c,txt:`${c.code}000 - ${c.name}${suf}`,col,t};});
   const longest=Math.max(...used.map(c=>`${c.code}000 - ${c.name}${c.mode==='tox'?' - Non-toxic':''}`.length),10),kf=Math.max(f(10),Math.min(f(15),rh*.6,(cw-f(30))/(longest*.55)));
   labels.forEach((l,i)=>{const cx=ax+Math.floor(i/rows)*cw,cy=top+(i%rows)*rh+rh/2,r=kf*.6,c=l.c;
-    const mk=c.mode==='tox'?(l.t&&l.t.y&&!l.t.n?shapeSvg(c.shape,r,TOX):l.t&&l.t.n&&!l.t.y?shapeSvg(c.shape,r,NONTOX):splitSvg(c.shape,r)):shapeSvg(c.shape,r,c.color);
+    const mk=c.mode==='tox'?(l.t&&l.t.y&&!l.t.n?shapeSvg(c.shape,r,toxCol(c)):l.t&&l.t.n&&!l.t.y?shapeSvg(c.shape,r,nonCol(c)):splitSvg(c.shape,r,c)):shapeSvg(c.shape,r,c.color);
     s+=`<g transform="translate(${r2(cx+r+f(2))} ${r2(cy)})">${mk}</g>`+T(cx+r*2+f(10),cy+kf*.36,kf,clip(l.txt,Math.floor((cw-r*2-f(14))/(kf*.55))),`font-weight="700" fill="${l.col}"`);});
   return `<g ${ex?'':'pointer-events="none"'}>${s}</g>`;
 }
@@ -1049,19 +1078,26 @@ function pick(accept,cb,multi=false){const i=document.createElement('input');i.t
 /* ================= EDITOR ================= */
 async function openMap(id){
   if(route==='map'&&M?.id===id)return;
-  const m=await Store.get('maps',id);if(!m){toast('That plan no longer exists.','warn');location.hash='#/';return;}
-  site=await Store.get('sites',m.siteId);M=m;route='map';E.readOnly=!canEdit(m);
+  let m=null,offline=null;try{m=await Store.get('maps',id);}catch(e){offline=e;}
+  const pend=await LocalQ.get(id);let recovered=false;
+  if(pend?.map&&(!m||(pend.map.updated||0)>(m.updated||0))&&(m||offline)){m=pend.map;recovered=true;}
+  if(!m){toast(offline?`Can't open the plan: ${offline.message}.`:'That plan no longer exists.','warn');location.hash='#/';return;}
+  if(pend&&!recovered)LocalQ.del(id);
+  site=await Store.get('sites',m.siteId).catch(()=>site);M=m;route='map';E.readOnly=!canEdit(m);
   M.furn=M.furn||newMap().furn;M.settings={...newMap().settings,...M.settings};
   {const u=M.width/1600,old=M.height+Math.round(112*u)+Math.round(212*u);if(M.settings.showFrame!==false&&(Math.abs(old/M.width-1/Math.SQRT2)<.01||Math.abs(old/M.width-Math.SQRT2)<.01))setA4(old>M.width);}
-  E.assets=(await Store.get('assets',id))?.data||{};E.assetsDirty=false;
-  {const h=(await Store.get('meta','hist:'+id).catch(()=>null))?.value;E.hist=Array.isArray(h?.hist)?h.hist.slice(-HIST_MAX):[];E.fut=Array.isArray(h?.fut)?h.fut.slice(-HIST_MAX):[];}E.changedSinceOpen=false;E.manualRev=false;E.sel.clear();E.tool='select';E.chain=null;E.drag=null;
+  E.assets=(await Store.get('assets',id).catch(()=>null))?.data||{};E.assetsDirty=false;
+  if(recovered&&pend.assets){E.assets={...E.assets,...pend.assets};E.assetsDirty=true;}
+  {const h=(await Store.get('meta','hist:'+id).catch(()=>null))?.value;E.hist=Array.isArray(h?.hist)?h.hist.slice(-HIST_MAX):[];E.fut=Array.isArray(h?.fut)?h.fut.slice(-HIST_MAX):[];}E.changedSinceOpen=false;E.manualRev=false;E.openSnap={els:clone(M.elements),set:clone(M.settings),name:M.name};E.sel.clear();E.tool='select';E.chain=null;E.drag=null;
   crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[M.name,'#/map/'+id]]);
   $('#topActions').innerHTML=`<button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
     <span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button><button class="ib" data-top="fit" title="Fit to screen (0)" aria-label="Fit to screen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></button></span>
     <button class="btn" data-top="import" title="Import a plan image, PDF or satellite photo" aria-haspopup="menu">${ICON.upload}<span class="hide-narrow">Import</span></button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button>
-    <span class="status hide-narrow" id="saveSt">Saved</span><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
+    <button type="button" class="save-pill saved" id="saveSt" data-save></button><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
   if(E.readOnly)$('#topActions').innerHTML=`<span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button></span>
     <button class="btn" data-top="ro-copy">Duplicate to edit</button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
+  savedAt=recovered?0:(m.updated||0);setSave(recovered?'local':'saved',recovered?'Changes from this browser not yet sent':'');
+  if(recovered)setTimeout(()=>{toast('This browser had changes that hadn\'t reached the server yet. They\'ve been restored and are being saved now.');saveNow(true);},600);
   $('#view').innerHTML=`<div class="editor${E.readOnly?' ro':''}">
     <nav class="tools" id="tools" aria-label="Drawing tools">${TOOLS.map(t=>t==='-'?'<div class="sep"></div>':typeof t==='string'?groupBtn(t.slice(2)):`<button type="button" class="tool" data-tool="${t[0]}" title="${t[1]} (${t[2]})" aria-label="${t[1]}">${toolSvg(t[3])}<span class="tl">${SHORT[t[0]]}</span></button>`).join('')}</nav>
     <section class="stage-wrap" id="stageWrap"><svg id="stage" xmlns="${NS}"><defs>${SPLIT_DEF}<pattern id="gridp" patternUnits="userSpaceOnUse" width="20" height="20"><path id="gridpath" d="M20 0H0V20" fill="none" stroke="#9aa5b1" stroke-opacity=".35" stroke-width="1"/></pattern></defs>
@@ -1069,7 +1105,7 @@ async function openMap(id){
       <div class="drawbar" id="drawbar" hidden><div class="seg" id="dbMode" role="radiogroup" aria-label="Drawing mode"><label><input type="radio" name="dbmode" value="click"><span>Click points</span></label><label><input type="radio" name="dbmode" value="free"><span>Freehand</span></label></div>
         <span class="dbinfo" id="dbInfo"></span><button type="button" class="btn sm primary" id="dbEnclose" hidden>Enclose space</button><button type="button" class="btn sm" id="dbFinish" hidden>Finish</button><button type="button" class="btn sm ghost" id="dbCancel">Cancel</button></div>
       ${E.readOnly?`<div class="ro-bar"><span><b>View only.</b> ${esc(ownerLabel(M)==='Admin'?'This plan belongs to an admin.':`This is ${ownerLabel(M)}'s plan.`)} Duplicate it to make changes.</span><button type="button" class="btn sm primary" data-ro-copy>Duplicate to edit</button></div>`:''}
-      <div class="hud"><div class="hint-box" id="hint"></div><div class="coords" id="coords"></div></div></section>
+      <div class="hud"><div class="hint-box" id="hint"></div></div></section>
     <aside class="panel" id="panel"><div class="tabs" role="tablist">${[['stations','Stations'],['props','Properties'],['register','Register'],['map','Settings']].map(t=>`<button data-tab="${t[0]}" role="tab">${t[1]}</button>`).join('')}</div><div class="tab-body" id="tabBody"></div></aside></div>`;
   bindEditor();
   if(!M.thumb&&M.elements.length)setTimeout(makeThumb,800);
@@ -1082,7 +1118,32 @@ function bumpVersion(v){v=String(v||'').trim();let m=v.match(/^(.*?)(\d+)$/);if(
   m=v.match(/^(.*?)([A-Ya-y])$/);if(m)return m[1]+String.fromCharCode(m[2].charCodeAt(0)+1);return v?v+'.1':'01';}
 async function roCopy(){try{const n=await copyPlan(M,M.siteId,M.name+' (my copy)');toast(`Made ${n.name}. It's yours to edit.`);location.hash='#/map/'+n.id;}catch(e){toast(e.message,'warn');}}
 /* A plan that was changed gets the next version number (and today's date) when it is closed. */
-function bumpIfChanged(){if(!M||!E.changedSinceOpen)return;E.changedSinceOpen=false;if(E.manualRev){E.manualRev=false;return;}M.settings.revision=bumpVersion(M.settings.revision);M.settings.planDate=isoDate(Date.now());}
+function bumpIfChanged(){if(!M||!E.changedSinceOpen)return;E.changedSinceOpen=false;const from=E.openSnap?.set?.revision||'';
+  if(E.manualRev)E.manualRev=false;else{M.settings.revision=bumpVersion(M.settings.revision);M.settings.planDate=isoDate(Date.now());}
+  try{const changes=E.openSnap?describeChanges(E.openSnap):[];M.revLog=(M.revLog||[]).concat([{rev:M.settings.revision,from,date:Date.now(),by:Store.user?.email||'',byName:Store.user?.name||'',changes:changes.length?changes:['Small changes']}]).slice(-300);}catch(e){console.error(e);}
+  E.openSnap={els:clone(M.elements),set:clone(M.settings),name:M.name};}
+/* A plain-English list of what changed in a plan since it was opened. */
+const KINDS={wall:['wall','walls'],door:['door or window','doors and windows'],zone:['room','rooms'],rect:['rectangle','rectangles'],ellipse:['ellipse','ellipses'],polygon:['area or line','areas and lines'],line:['line','lines'],arrow:['arrow','arrows'],dim:['dimension','dimensions'],text:['text','texts'],obj:['object','objects'],image:['picture','pictures']};
+function describeChanges(snap){
+  const out=[],A=new Map(snap.els.map(e=>[e.id,e])),B=new Map(M.elements.map(e=>[e.id,e])),sid=e=>(e.code||'')+pad(e.num||0);
+  const list=a=>a.length>15?a.slice(0,15).join(', ')+` and ${a.length-15} more`:a.join(', ');
+  const stNew=M.elements.filter(e=>e.type==='station'),stOld=snap.els.filter(e=>e.type==='station');
+  const added=stNew.filter(e=>!A.has(e.id)),removed=stOld.filter(e=>!B.has(e.id)),moved=[],renum=[],det=[];
+  for(const e of stNew){const o=A.get(e.id);if(!o)continue;if(sid(o)!==sid(e))renum.push(`${sid(o)} → ${sid(e)}`);if(Math.hypot(o.x-e.x,o.y-e.y)>1)moved.push(sid(e));if((o.stype||'')!==(e.stype||'')||!!o.toxic!==!!e.toxic||(o.notes||'')!==(e.notes||''))det.push(sid(e));}
+  if(added.length)out.push(`Stations added: ${list(added.map(sid))}`);
+  if(removed.length)out.push(`Stations removed: ${list(removed.map(sid))}`);
+  if(renum.length)out.push(`Stations renumbered: ${list(renum)}`);
+  if(moved.length)out.push(`Stations moved: ${list(moved)}`);
+  if(det.length)out.push(`Station type, bait or notes changed: ${list(det)}`);
+  const count=arr=>{const m=new Map();for(const e of arr){if(e.type==='station')continue;const k=KINDS[e.type]||[e.type,e.type+'s'];const c=(m.get(k)||0)+1;m.set(k,c);}return[...m].map(([k,c])=>`${c} ${c>1?k[1]:k[0]}`).join(', ');};
+  const others=x=>x.type!=='station';
+  const ad=count(M.elements.filter(e=>others(e)&&!A.has(e.id))),rm=count(snap.els.filter(e=>others(e)&&!B.has(e.id))),ch=count(M.elements.filter(e=>others(e)&&A.has(e.id)&&JSON.stringify(A.get(e.id))!==JSON.stringify(e)));
+  if(ad)out.push(`Added ${ad}`);if(rm)out.push(`Removed ${rm}`);if(ch)out.push(`Changed ${ch}`);
+  const rooms=M.elements.filter(e=>e.type==='zone'&&e.name&&(!A.has(e.id)||A.get(e.id).name!==e.name)).map(e=>e.name);if(rooms.length)out.push(`Rooms named: ${list(rooms)}`);
+  if(snap.name!==M.name)out.push(`Plan renamed from “${snap.name}” to “${M.name}”`);
+  const LAB={department:'Department',preparedBy:'Drawn by',showGrid:'Grid',grid:'Grid size',marker:'Marker size',label:'Label size',showFrame:'Heading and bottom bar'};
+  const sc=Object.keys(LAB).filter(k=>JSON.stringify(snap.set?.[k])!==JSON.stringify(M.settings[k])).map(k=>LAB[k]);if(sc.length)out.push(`Plan details changed: ${sc.join(', ')}`);
+  return out;}
 async function leaveEditor(){
   if(route!=='map'||!M)return;
   if(E.readOnly){route='';return;}
@@ -1094,17 +1155,45 @@ async function leaveEditor(){
   try{await makeThumb();}catch(e){}
   route='';
 }
-window.addEventListener('beforeunload',e=>{if(route==='map'){bumpIfChanged();saveNow(true);if($('#saveSt')?.textContent!=='Saved'){e.preventDefault();e.returnValue='';}}});
+window.addEventListener('beforeunload',e=>{if(route==='map'){bumpIfChanged();saveNow(true);if(saveState!=='saved'){e.preventDefault();e.returnValue='';}}});
+window.addEventListener('online',()=>{if(route==='map'&&saveState!=='saved')saveNow(true);flushPending();});
+document.addEventListener('click',e=>{if(e.target.closest('[data-save]')){if(saveState==='saved')toast(`The server confirmed it has this version${savedAt?' (saved at '+new Date(savedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})+')':''}.`);else{toast(saveState==='local'?'Trying the server again…':'Saving…');saveNow(true);}}});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&route==='map')saveNow(true);});
 
 /* ----- saving ----- */
 let saveT=null,thumbT=null;
-function setStatus(t){const s=$('#saveSt');if(s)s.textContent=t;}
-function scheduleSave(){setStatus('Saving…');clearTimeout(saveT);saveT=setTimeout(saveNow,450);clearTimeout(thumbT);thumbT=setTimeout(makeThumb,4000);}
+/* Copies kept in this browser until the server confirms it has them, so nothing is lost while offline. */
+const LocalQ={db:null,
+  async open(){if(!this.db)this.db=await new Promise((res,rej)=>{const r=indexedDB.open('psp-local',1);r.onupgradeneeded=()=>r.result.createObjectStore('pending');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});return this.db;},
+  async run(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('pending',mode),r=fn(t.objectStore('pending'));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});},
+  key(id){return (Store.base||'')+'|'+id;},
+  put(id,v){return this.run('readwrite',st=>st.put(v,this.key(id)));},
+  get(id){return this.run('readonly',st=>st.get(this.key(id))).catch(()=>null);},
+  del(id){return this.run('readwrite',st=>st.delete(this.key(id))).catch(()=>{});},
+  async keys(){const all=await this.run('readonly',st=>st.getAllKeys()).catch(()=>[]);const pre=(Store.base||'')+'|';return(all||[]).filter(k=>String(k).startsWith(pre)).map(k=>String(k).slice(pre.length));}};
+let saveState='saved',saveErr='',savedAt=0,saveSeq=0;
+const SAVE_ICON={saving:'<span class="spin" aria-hidden="true"></span>',saved:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',local:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.5L15 14H1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 6v3.6M8 11.6v.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'};
+function setSave(state,err){saveState=state;saveErr=err||'';const s=$('#saveSt');if(!s)return;const tm=savedAt?new Date(savedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+  const txt=state==='saving'?'Saving…':state==='saved'?`Saved to server${tm?' '+tm:''}`:`Not on server: ${String(err||'error').replace(/\.+$/,'')}`;
+  s.className='save-pill '+state;s.innerHTML=SAVE_ICON[state]+`<span>${esc(txt)}</span>`;
+  s.title=state==='saved'?'The server has confirmed it saved this version of the plan.':state==='local'?`${err||''} Your changes are kept safely in this browser and will be sent as soon as the server answers. Click to try now.`:'Sending your changes to the server…';}
+function setStatus(t){setSave(t==='Saved'?'saved':t==='Saving…'?'saving':'local',t);}
+function scheduleSave(){setSave('saving');clearTimeout(saveT);saveT=setTimeout(saveNow,450);clearTimeout(thumbT);thumbT=setTimeout(makeThumb,4000);}
 let lastHistSave=0,saveFailNote=0;
-async function saveNow(force){clearTimeout(saveT);if(!M||E.readOnly)return;const m=M;m.updated=Date.now();
-  try{await Store.put('maps',m);if(M===m&&(force||Date.now()-lastHistSave>15000)){await Store.put('meta',{id:'hist:'+m.id,value:{hist:E.hist.slice(-HIST_MAX),fut:E.fut.slice(-HIST_MAX)}});lastHistSave=Date.now();}if(E.assetsDirty){await Store.put('assets',{id:m.id,data:E.assets});E.assetsDirty=false;}if(site&&canEdit(site)){site.updated=Date.now();await Store.put('sites',site).catch(()=>{});}if(M===m)setStatus('Saved');}
-  catch(e){console.error(e);setStatus('Not saved');if(Date.now()-saveFailNote>20000){saveFailNote=Date.now();toast(`Not saved: ${e.message.replace(/\.+$/,'')}. Trying again…`,'warn');}clearTimeout(saveT);saveT=setTimeout(saveNow,8000);}}
+async function saveNow(force){clearTimeout(saveT);if(!M||E.readOnly)return;const m=M;m.updated=Date.now();const seq=++saveSeq;
+  if(saveState!=='local')setSave('saving');
+  try{await LocalQ.put(m.id,{map:JSON.parse(JSON.stringify(m)),assets:E.assetsDirty?{...E.assets}:null,at:Date.now()});}catch(e){console.warn('local copy failed',e);}
+  try{await Store.put('maps',m);if(M===m&&(force||Date.now()-lastHistSave>15000)){await Store.put('meta',{id:'hist:'+m.id,value:{hist:E.hist.slice(-HIST_MAX),fut:E.fut.slice(-HIST_MAX)}});lastHistSave=Date.now();}if(E.assetsDirty){await Store.put('assets',{id:m.id,data:E.assets});E.assetsDirty=false;}if(site&&canEdit(site)){site.updated=Date.now();await Store.put('sites',site).catch(()=>{});}
+    if(seq===saveSeq){await LocalQ.del(m.id);savedAt=Date.now();if(M===m)setSave('saved');}}
+  catch(e){console.error(e);if(seq!==saveSeq)return;setSave('local',e.message);if(Date.now()-saveFailNote>20000){saveFailNote=Date.now();toast(`Not saved to the server: ${e.message.replace(/\.+$/,'')}. Your changes are kept in this browser and will be sent when it answers.`,'warn');}clearTimeout(saveT);saveT=setTimeout(saveNow,8000);}}
+/* Send any plans this browser kept while the server couldn't be reached. */
+let flushing=false;
+async function flushPending(){if(flushing||!Store.base)return;flushing=true;let n=0;
+  try{for(const id of await LocalQ.keys()){if(route==='map'&&M?.id===id)continue;const p=await LocalQ.get(id);if(!p?.map)continue;
+    try{const cur=await Store.get('maps',id);if(cur&&(cur.updated||0)>(p.map.updated||0)){await LocalQ.del(id);continue;}
+      await Store.put('maps',p.map);if(p.assets)await Store.put('assets',{id,data:p.assets});await LocalQ.del(id);n++;}
+    catch(e){if(/belongs to|only the owner|403/i.test(e.message))await LocalQ.del(id);}}}
+  finally{flushing=false;}if(n)toast(`${n} plan${n===1?'':'s'} saved on this browser while offline ${n===1?'has':'have'} now been saved to the server.`);}
 async function makeThumb(){if(!M||E.readOnly)return;const m=M;try{const c=await rasterize(Math.min(1,420/m.width));m.thumb=c.toDataURL('image/jpeg',.72);await Store.put('maps',m);}catch(e){}}
 
 /* ----- history ----- */
@@ -1188,6 +1277,14 @@ function renderAll(){render();renderPanel();updUndo();}
 
 /* ----- snapping ----- */
 const clampPt=q=>({x:clamp(q.x,0,M.width),y:clamp(q.y,0,M.height)});
+/* Wall ends outside the moving set that touch a moving wall's end: they stretch to follow it. */
+function attachedEnds(ids){const out=[];for(const id of ids){const o=getEl(id);if(o?.type!=='wall')continue;
+  for(const end of ['1','2']){const P={x:o['x'+end],y:o['y'+end]};for(const w of walls()){if(ids.has(w.id))continue;
+    for(const e2 of ['1','2'])if(dist({x:w['x'+e2],y:w['y'+e2]},P)<.6&&!out.some(a=>a[0]===w.id&&a[1]===e2))out.push([w.id,e2,w['x'+e2],w['y'+e2]]);}}}return out;}
+function wallChain(id){const inRoom=new Set(M.elements.filter(z=>z.type==='zone').flatMap(z=>z.walls)),all=walls().filter(w=>!inRoom.has(w.id)),seen=new Set([id]),q=[getEl(id)];
+  while(q.length){const w=q.pop();const ends=[{x:w.x1,y:w.y1},{x:w.x2,y:w.y2}];for(const o of all){if(seen.has(o.id))continue;
+    if(ends.some(P=>dist(P,{x:o.x1,y:o.y1})<.6||dist(P,{x:o.x2,y:o.y2})<.6)){seen.add(o.id);q.push(o);}}}return[...seen];}
+function withZoneWalls(sel){const ids=new Set(sel);for(const i of sel){const z=getEl(i);if(z?.type==='zone')z.walls.forEach(w=>ids.add(w));}return ids;}
 function groupBox(list){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;for(const o of list){if(o.type==='door'||(o.type==='image'&&o.bg))continue;const b=bboxOf(o);x0=Math.min(x0,b.x);y0=Math.min(y0,b.y);x1=Math.max(x1,b.x+b.w);y1=Math.max(y1,b.y+b.h);}return isFinite(x0)?{x:x0,y:y0,w:x1-x0,h:y1-y0}:null;}
 function snapP(p,e,anchor,skip){return clampPt(snapRaw(p,e,anchor,skip));}
 function snapRaw(p,e,anchor,skip){
@@ -1231,7 +1328,7 @@ function setTool(t,cat){
 }
 function defaultDoorWidth(kind){const d=DOORS.find(x=>x[0]===kind);return r2((d?d[2]:.9)*S());}
 function add(el){el.id=el.id||uid();M.elements.push(el);return el;}
-function addRoom(x,y,w,h){const ws=E.wallStyle,mk=(a,b,c,d)=>add({type:'wall',x1:a,y1:b,x2:c,y2:d,w:ws.w,color:ws.color,dash:ws.dash});return[mk(x,y,x+w,y),mk(x+w,y,x+w,y+h),mk(x+w,y+h,x,y+h),mk(x,y+h,x,y)];}
+function addRoom(x,y,w,h){const ws=E.wallStyle,mk=(a,b,c,d)=>add({type:'wall',x1:a,y1:b,x2:c,y2:d,w:ws.w,color:ws.color,dash:ws.dash,ls:ws.ls});return[mk(x,y,x+w,y),mk(x+w,y,x+w,y+h),mk(x+w,y+h,x,y+h),mk(x,y+h,x,y)];}
 function finishDraw(d){
   const{a,b}=d,w=b.x-a.x,h=b.y-a.y,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);if(Math.hypot(w,h)<3)return;
   let el=null;const st=E.style;
@@ -1258,7 +1355,7 @@ function freeUp(){const ch=E.chain;if(!ch)return;const k=E.view.k,raw=[ch.pts[ch
   ch.pts.push(...simp);updDrawbar();renderOverlay();}
 function encloseChain(){const ch=E.chain;if(!ch||distinctCount(ch.pts)<3)return;const f=ch.pts[0],l=ch.pts[ch.pts.length-1];if(dist(f,l)>.5)ch.pts.push({...f});finishChain(true);}
 const distinctCount=pts=>pts.filter((p,i)=>i===0||dist(p,pts[i-1])>.5).length-(pts.length>1&&dist(pts[0],pts[pts.length-1])<=.5?1:0);
-function updDrawbar(){const bar=$('#drawbar');if(!bar)return;const show=freehandOK(E.tool)||E.tool==='polygon';bar.hidden=!show;if(!show)return;
+function updDrawbar(){const bar=$('#drawbar');if(!bar)return;const show=route==='map'&&!E.readOnly&&(freehandOK(E.tool)||E.tool==='polygon');bar.hidden=!show;if(!show)return;
   const n=E.chain?distinctCount(E.chain.pts):0;
   $('#dbMode').hidden=!freehandOK(E.tool);$$('#dbMode input').forEach(i=>i.checked=(i.value==='free')===!!E.freehand);
   $('#dbEnclose').hidden=!(E.chain&&n>=3);$('#dbFinish').hidden=false;$('#dbFinish').disabled=!(E.chain&&n>=2);$('#dbCancel').hidden=false;
@@ -1274,7 +1371,7 @@ function chainClick(e,p){
 function finishChain(closed){
   const ch=E.chain;E.chain=null;E.chainCur=null;setTimeout(updDrawbar);if(!ch)return;const pts=ch.pts;
   if(E.tool==='line'&&pts.length>=2){pushHist();const st=E.style,made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'line',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,stroke:st.stroke,sw:st.sw,dash:st.dash}));E.sel=new Set(made.map(m=>m.id));changed();return;}
-  if(isWallTool(E.tool)&&pts.length>=2){pushHist();const ws=chainStyle(),made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'wall',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,w:ws.w,color:ws.color,dash:ws.dash}));changed();
+  if(isWallTool(E.tool)&&pts.length>=2){pushHist();const ws=chainStyle(),made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'wall',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,w:ws.w,color:ws.color,dash:ws.dash,ls:ws.ls}));changed();
     if(closed&&pts.length>=4){const u=pts.slice(0,-1),xs=u.map(p=>p.x),ys=u.map(p=>p.y),bx=Math.min(...xs),by=Math.min(...ys);nameRoom({x:bx,y:by,w:Math.max(...xs)-bx,h:Math.max(...ys)-by},u,made,ws.dash);}}
   else if(E.tool==='polygon'){const u=closed?pts.slice(0,-1):pts;if(u.length>=3){pushHist();const st=E.style;const el=add({type:'polygon',pts:u.map(p=>[p.x,p.y]),stroke:st.stroke,fill:st.fill,noFill:st.noFill,fillOp:st.fillOp,sw:st.sw,dash:st.dash});E.sel=new Set([el.id]);changed();}else renderOverlay();}
   else renderOverlay();
@@ -1289,7 +1386,7 @@ async function nameRoom(box,poly,wallsMade,dashDefault=E.wallStyle.dash){
       w.addEventListener('change',e=>{if(e.target.name==='fill')delete $('input[name=custom]',w).dataset.used;});}});
   if(r.value!=='ok')return;
   const w=$('input[name=custom]');const fill=r.data.fill||(r.data.custom||'none');E.roomFill=fill;
-  const dashed=r.data.line==='dashed';for(const wl of wallsMade)wl.dash=dashed;
+  const dashed=r.data.line==='dashed';for(const wl of wallsMade)setLs(wl,dashed?(DASHY.includes(wl.ls)?wl.ls:'dashed'):(wl.ls==='double'?'double':'solid'));
   const name=r.data.name.trim(),u=M.width/1600,size=Math.round(clamp(Math.min(box.w,box.h)*.11,12*u,30*u));
   if(fill!=='none'||name)add({type:'zone',walls:wallsMade.map(w=>w.id),fill,fillOp:.55,name,nameSize:size,nameColor:'#343a40'});
   changed();
@@ -1330,11 +1427,16 @@ function focusField(sel){const el=$('#tabBody '+sel);if(!el)return;el.scrollInto
 function deleteSel(){if(!E.sel.size)return;pushHist();const ids=new Set(E.sel);for(const i of E.sel){const z=getEl(i);if(z?.type==='zone')z.walls.forEach(w=>ids.add(w));}
   M.elements=M.elements.filter(e=>!ids.has(e.id)&&!(e.type==='door'&&ids.has(e.wall)));
   M.elements=M.elements.filter(e=>e.type!=='zone'||zoneWalls(e).length>=3);E.sel=new Set();changed();}
-function duplicateSel(){
-  if(!E.sel.size)return;pushHist();const map=new Map(),out=[],off=M.settings.grid||20;
+function duplicateSel(atMouse){
+  if(!E.sel.size)return;pushHist();const map=new Map(),out=[];
   const want=new Set(E.sel);for(const i of E.sel){const z=getEl(i);if(z?.type==='zone')z.walls.forEach(w=>want.add(w));}
   const src=M.elements.filter(e=>want.has(e.id));
-  for(const e of src){if(e.type==='door')continue;const n=clone(e);n.id=uid();map.set(e.id,n.id);moveEl(n,off,off);if(n.type==='station')n.num=nextNum(n.code,out.filter(o=>o.type==='station'&&o.code===n.code).map(o=>o.num));out.push(n);}
+  let offX=M.settings.grid||20,offY=offX;const c=E.cursor,bb=groupBox(src);
+  if(atMouse&&c&&bb&&c.x>=0&&c.y>=0&&c.x<=M.width&&c.y<=M.height){offX=c.x-(bb.x+bb.w/2);offY=c.y-(bb.y+bb.h/2);
+    if(M.settings.snap&&!src.every(o=>['station','text','obj','door'].includes(o.type))){const g=M.settings.grid||20;offX=Math.round(offX/g)*g;offY=Math.round(offY/g)*g;}
+    if(bb.w<=M.width)offX=clamp(offX,-bb.x,M.width-(bb.x+bb.w));if(bb.h<=M.height)offY=clamp(offY,-bb.y,M.height-(bb.y+bb.h));}
+  const off=null;
+  for(const e of src){if(e.type==='door')continue;const n=clone(e);n.id=uid();map.set(e.id,n.id);moveEl(n,offX,offY);if(n.type==='station')n.num=nextNum(n.code,out.filter(o=>o.type==='station'&&o.code===n.code).map(o=>o.num));out.push(n);}
   for(const e of src)if(e.type==='door'){const n=clone(e);n.id=uid();if(map.has(e.wall))n.wall=map.get(e.wall);else{const w=getEl(e.wall);n.t=clampT(e.t+e.width/(wallLen(w)||1)*1.2,w,e.width);}out.push(n);}
   for(const e of M.elements)if(e.type==='door'&&map.has(e.wall)&&!E.sel.has(e.id)){const n=clone(e);n.id=uid();n.wall=map.get(e.wall);out.push(n);}
   for(const n of out)if(n.type==='zone')n.walls=n.walls.map(w=>map.get(w)).filter(Boolean);
@@ -1409,17 +1511,19 @@ function downSelect(e,p){
   const fld=tg.closest('[data-field]');if(fld){goField(fld.dataset.field);return;}
   const f=tg.closest('[data-furn]');if(f){const part=f.dataset.furn,F=M.furn[part];E.sel.clear();E.drag={kind:'furn',part,start:p,ox:F.x,oy:F.y,pushed:false};renderAll();return;}
   const g=tg.closest('[data-id]');
-  if(g&&g.closest('#vp')){const id=g.getAttribute('data-id');
-    if(e.shiftKey){E.sel.has(id)?E.sel.delete(id):E.sel.add(id);}else if(!E.sel.has(id))E.sel=new Set([id]);
+  if(g&&g.closest('#vp')){let id=g.getAttribute('data-id');const el0=getEl(id);let pick=[id];
+    /* walls behave like an area outline: a click takes the whole room, or the whole joined run of walls. Alt+click takes one wall. */
+    if(el0?.type==='wall'&&!e.altKey){const z=M.elements.find(z=>z.type==='zone'&&z.walls.includes(id));if(z){id=z.id;pick=[id];}else pick=wallChain(id);}
+    if(e.shiftKey){const on=E.sel.has(id);for(const i of pick)on?E.sel.delete(i):E.sel.add(i);}else if(!E.sel.has(id))E.sel=new Set(pick);
     const ids=new Set(E.sel);for(const i of E.sel){const z=getEl(i);if(z?.type==='zone')z.walls.forEach(w=>ids.add(w));}
     const orig=new Map([...ids].map(i=>[i,clone(getEl(i))]).filter(x=>x[1]));
-    E.drag={kind:'move',start:p,orig,bb:groupBox([...orig.values()]),pushed:false};showTab('props');renderOverlay();return;}
+    E.drag={kind:'move',start:p,orig,att:attachedEnds(new Set(orig.keys())),bb:groupBox([...orig.values()]),pushed:false};showTab('props');renderOverlay();return;}
   if(!e.shiftKey&&E.sel.size){E.sel.clear();renderPanel();}
   E.drag={kind:'marquee',a:p,b:p,add:e.shiftKey};renderOverlay();
 }
 function onMove(e){
   let p=toWorld(e);E.cursor=p;const d=E.drag;
-  $('#coords').textContent=M.scale?`${(p.x/M.scale).toFixed(1)}, ${(p.y/M.scale).toFixed(1)} m · ${Math.round(E.view.k*100)}%`:`${Math.round(p.x)}, ${Math.round(p.y)} px · ${Math.round(E.view.k*100)}%`;
+  if(0)$('#coords').textContent=M.scale?`${(p.x/M.scale).toFixed(1)}, ${(p.y/M.scale).toFixed(1)} m · ${Math.round(E.view.k*100)}%`:`${Math.round(p.x)}, ${Math.round(p.y)} px · ${Math.round(E.view.k*100)}%`;
   if(!d){if(E.chain){const l=E.chain.pts[E.chain.pts.length-1];E.chainCur=snapP(p,e,l);}else if(isWallTool(E.tool))snapP(p,e);renderOverlay();return;}
   const k=E.view.k;
   switch(d.kind){
@@ -1431,6 +1535,7 @@ function onMove(e){
       for(const[id,o]of d.orig){const el=getEl(id);if(!el)continue;
         if(el.type==='door'){if(d.orig.size===1){const nw=nearestWall(p);if(nw){el.wall=nw.wall.id;el.t=clampT(nw.t,nw.wall,el.width);}}continue;}
         Object.assign(el,clone(o));moveEl(el,dx,dy);}
+      for(const[wid,end,ox,oy]of d.att||[]){const w=getEl(wid);if(w){w['x'+end]=ox+dx;w['y'+end]=oy+dy;}}
       render();break;}
     case 'handle':{const el=getEl(d.id);if(!d.pushed){pushHist();d.pushed=true;}const o=d.orig;
       if(d.h==='p1'||d.h==='p2'){const anchor=d.h==='p1'?{x:o.x2,y:o.y2}:{x:o.x1,y:o.y1};const q=snapP(p,e,anchor,d.skip);el['x'+d.h[1]]=q.x;el['y'+d.h[1]]=q.y;
@@ -1466,7 +1571,7 @@ document.addEventListener('keydown',e=>{
   const mod=e.ctrlKey||e.metaKey,key=e.key.toLowerCase();
   if(mod&&key==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
   if(mod&&key==='y'){e.preventDefault();redo();return;}
-  if(mod&&key==='d'){e.preventDefault();duplicateSel();return;}
+  if(mod&&key==='d'){e.preventDefault();duplicateSel(true);return;}
   if(mod&&key==='a'){e.preventDefault();selectAll();return;}
   if(mod&&key==='s'){e.preventDefault();saveNow();toast('Saved');return;}
   if(mod||e.altKey)return;
@@ -1477,8 +1582,10 @@ document.addEventListener('keydown',e=>{
     case ' ':e.preventDefault();E.space=true;$('#stage').classList.add('space');return;
     case '+':case '=':zoomBy(1.25);return;case '-':case '_':zoomBy(.8);return;case '0':fitView();return;
     case 'ArrowLeft':case 'ArrowRight':case 'ArrowUp':case 'ArrowDown':{if(!E.sel.size)return;e.preventDefault();softPush();const s=e.shiftKey?10:1;const dx=e.key==='ArrowLeft'?-s:e.key==='ArrowRight'?s:0,dy=e.key==='ArrowUp'?-s:e.key==='ArrowDown'?s:0;
-      const nb=groupBox([...E.sel].map(getEl).filter(Boolean));let ndx=dx,ndy=dy;if(nb){ndx=clamp(dx,-nb.x,M.width-(nb.x+nb.w));ndy=clamp(dy,-nb.y,M.height-(nb.y+nb.h));}
-      for(const id of E.sel){const el=getEl(id);if(el&&el.type!=='door')moveEl(el,ndx,ndy);}changed();return;}
+      const ids=withZoneWalls(E.sel),att=attachedEnds(ids);
+      const nb=groupBox([...ids].map(getEl).filter(Boolean));let ndx=dx,ndy=dy;if(nb){ndx=clamp(dx,-nb.x,M.width-(nb.x+nb.w));ndy=clamp(dy,-nb.y,M.height-(nb.y+nb.h));}
+      for(const id of ids){const el=getEl(id);if(el&&el.type!=='door')moveEl(el,ndx,ndy);}
+      for(const[wid,end,ox,oy]of att){const w=getEl(wid);if(w){w['x'+end]=ox+ndx;w['y'+end]=oy+ndy;}}changed();return;}
   }
   if(/^[1-9]$/.test(e.key)){const c=CATS[+e.key-1];if(c){setTool('station',c.code);showTab('stations');}return;}
   const map={v:'select',h:'pan',w:'wall',f:'fence',r:'room',o:'objects',d:'objects',b:'rect',e:'ellipse',p:'polygon',l:'line',a:'arrow',t:'text'};
@@ -1501,7 +1608,7 @@ const F={
   num:(sc,k,l,v,step=1,min=0)=>`<label class="f"><span>${l}</span><input type="number" data-s="${sc}" data-k="${k}" value="${r2(v)}" step="${step}" min="${min}"></label>`,
   text:(sc,k,l,v,ph='',list='')=>`<label class="f"><span>${l}</span><input type="text" data-s="${sc}" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph)}" ${list?`list="${list}"`:''}></label>`,
   area:(sc,k,l,v)=>`<label class="f stack"><span>${l}</span><textarea data-s="${sc}" data-k="${k}" rows="3">${esc(v)}</textarea></label>`,
-  color:(sc,k,l,v)=>`<div class="f"><span>${l}</span><div class="row" style="flex-wrap:nowrap"><input type="color" data-s="${sc}" data-k="${k}" value="${v}" style="width:46px;flex:none"><div class="swatches">${COLORS.slice(0,8).map(c=>`<button class="sw" data-sw="${c}" data-s="${sc}" data-k="${k}" style="background:${c}" title="${c}"></button>`).join('')}</div></div></div>`,
+  color:(sc,k,l,v)=>`<div class="f"><span>${l}</span><div class="row" style="flex-wrap:nowrap"><input type="color" data-s="${sc}" data-k="${k}" value="${v}" style="width:46px;flex:none"><div class="swatches">${COLORS.slice(0,8).map(c=>`<button class="sw" data-sw="${c}" data-s="${sc}" data-k="${k}" style="background:${c}" title="${c}"></button>`).join('')}<button type="button" class="sw wheel" data-wheel title="Colour wheel: pick any colour" aria-label="Pick any colour"></button></div></div></div>`,
   check:(sc,k,l,v)=>`<label class="chk"><input type="checkbox" data-s="${sc}" data-k="${k}" ${v?'checked':''}> ${l}</label>`,
   sel:(sc,k,l,v,opts)=>`<label class="f"><span>${l}</span><select data-s="${sc}" data-k="${k}">${opts.map(o=>`<option value="${esc(o[0])}" ${String(o[0])===String(v)?'selected':''}>${esc(o[1])}</option>`).join('')}</select></label>`,
   range:(sc,k,l,v,min,max,step)=>`<label class="f"><span>${l}</span><input type="range" data-s="${sc}" data-k="${k}" value="${v}" min="${min}" max="${max}" step="${step}"></label>`
@@ -1515,7 +1622,7 @@ function stationsTab(){
     armed=`<div class="armed"><div class="row" style="justify-content:space-between"><span class="sec-h" style="color:var(--accent)">Placing</span><button class="btn sm" data-act="stop">Stop</button></div><div class="big">${esc(c.code)}${pad(nextNum(c.code))}</div>
       <label class="f"><span>Next number</span><input type="number" id="nextFrom" min="1" step="1" value="${nextNum(c.code)}" aria-describedby="nextHint"></label>
       <p class="hint" id="nextHint">Type a number to jump ahead, e.g. 40. New stations use the first free number from there, so you can come back and fill 11, 12… later.${(M.nextFrom||{})[c.code]>1?' <button class="btn sm ghost" data-act="nextreset">Back to first free</button>':''}</p>
-      ${F.text('arm','type','New stations',type,'Station type','stypes')}${c.mode==='tox'?F.check('arm','toxic','Toxic (shows red)',tox):''}</div>`;}
+      ${F.text('arm','type','New stations',type,'Station type','stypes')}${c.mode==='tox'?F.check('arm','toxic','Toxic bait (shows the toxic colour)',tox):''}</div>`;}
   return `<div class="sec"><p class="hint">Pick a station type, then click the plan. Each click adds the next number, so T001, T002, T003. Drag stations in Select mode to move them.</p></div>${armed}
     <div class="cats">${CATS.map((c,i)=>`<button class="cat ${E.tool==='station'&&E.cat===c.code?'on':''}" data-cat="${esc(c.code)}">${catIcon(c,24)}<span class="cat-main"><span class="cat-code">${esc(c.code)}${pad(nextNum(c.code))}</span><span class="cat-name">${esc(c.name)}</span></span><span class="cat-count" title="On this plan">${counts[c.code]||0}</span>${i<9?`<kbd>${i+1}</kbd>`:'<span></span>'}</button>`).join('')}</div>
     <div class="key"><span><i style="background:${TOX}"></i>Toxic</span><span><i style="background:${NONTOX}"></i>Non-toxic</span></div>
@@ -1528,20 +1635,23 @@ function propsTab(){
     const t=E.tool;
     if(t==='objects')return objLibrary();
     if(t==='text')return `<div class="sec"><h3 class="sec-h">New text style</h3>${textFields('text',E.textStyle,false)}</div>`;
-    if(t==='fence')return `<div class="sec"><h3 class="sec-h">New fence line style</h3>${F.num('fence','w','Thickness (px)',E.fenceStyle.w,1,1)}${F.color('fence','color','Colour',E.fenceStyle.color)}${F.check('fence','dash','Dashed',E.fenceStyle.dash)}</div>`;
-    if(t==='wall'||t==='room')return `<div class="sec"><h3 class="sec-h">New wall style</h3>${F.num('wall','w','Thickness (px)',E.wallStyle.w,1,1)}${F.color('wall','color','Colour',E.wallStyle.color)}${F.check('wall','dash','Dashed line (fence line)',E.wallStyle.dash)}<p class="hint">${t==='room'?'Drag a box. When you let go you can name the room and pick a fill colour.':'After three nodes, use Enclose space (top of the plan) to close the shape and name it as a room. Freehand lets you draw by dragging.'}</p></div>`;
+    if(t==='fence')return `<div class="sec"><h3 class="sec-h">New fence line style</h3>${F.num('fence','w','Thickness (px)',E.fenceStyle.w,1,1)}${thickRow('fence','w',E.fenceStyle.w)}${F.color('fence','color','Colour',E.fenceStyle.color)}${F.sel('fence','ls','Line style',wallLs(E.fenceStyle),WALL_LS)}</div>`;
+    if(t==='wall'||t==='room')return `<div class="sec"><h3 class="sec-h">New wall style</h3>${F.num('wall','w','Thickness (px)',E.wallStyle.w,1,1)}${thickRow('wall','w',E.wallStyle.w)}${F.color('wall','color','Colour',E.wallStyle.color)}${F.sel('wall','ls','Line style',wallLs(E.wallStyle),WALL_LS)}<p class="hint">${t==='room'?'Drag a box. When you let go you can name the room and pick a fill colour.':'After three nodes, use Enclose space (top of the plan) to close the shape and name it as a room. Freehand lets you draw by dragging.'}</p></div>`;
     if(['rect','ellipse','polygon','line','arrow'].includes(t))return `<div class="sec"><h3 class="sec-h">New shape style</h3>${styleFields('style',E.style,t)}</div>`;
     return `<div class="sec"><p class="hint">Nothing selected. Click something on the plan to edit it, or drag across an area to select several things.</p><p class="hint">Shortcuts: <kbd>Ctrl+D</kbd> duplicate, <kbd>Delete</kbd> remove, arrow keys nudge, <kbd>Ctrl+Z</kbd> undo.</p></div>`;
   }
   const actions=`<div class="row"><button class="btn sm" data-act="dup">Duplicate</button><button class="btn sm danger" data-act="del">Delete</button></div>`;
+  if(sel.length>1&&sel.every(e=>e.type==='wall')){const w0=sel[0],L=sel.reduce((t,w)=>t+wallLen(w),0),fence=sel.every(w=>w.dash);
+    return `<div class="sec"><h3 class="sec-h">${fence?'Fence line':'Walls'} · ${sel.length} sections</h3>${M.scale?`<p class="hint">Total length ${fmtLen(L)}</p>`:''}${F.num('el','w','Thickness (px)',w0.w,1,1)}${thickRow('el','w',w0.w)}${F.color('el','color','Colour',w0.color)}${F.sel('el','ls','Line style',wallLs(w0),WALL_LS)}
+      <p class="hint">Drag to move the whole run; drag a round corner node to reshape it. <kbd>Alt</kbd>+click picks a single section.</p>${actions}</div>`;}
   if(sel.length>1){const n=sel.filter(e=>e.type==='station').length;return `<div class="sec"><h3 class="sec-h">${sel.length} items selected</h3><p class="hint">${n?`${n} station${n===1?'':'s'}. `:''}Drag any of them to move the group.</p>${actions}</div>`;}
   const el=sel[0];let body='';
   switch(el.type){
     case 'station':{const c=catOf(el.code),dup=M.elements.filter(e=>e.type==='station'&&e.code===el.code&&e.num===el.num).length>1;
       body=`<div class="row" style="gap:10px">${catIcon({...c,mode:'fixed',color:stColor(el,c)},30)}<span class="idbig">${stId(el)}</span></div>${dup?`<p class="warn">Another station already uses ${stId(el)}.</p>`:''}
         ${F.sel('el','code','Category',el.code,CATS.map(x=>[x.code,`${x.code} · ${x.name}`]))}${F.num('el','num','Number',el.num,1,1)}${F.text('el','stype','Station type',el.stype,'e.g. Snap trap','stypes')}
-        ${c.mode==='tox'?F.check('el','toxic','Toxic (shows red)',el.toxic):''}${F.sel('el','labelSide','Label side',el.labelSide||'auto',[['auto','Automatic (keeps it clear)'],['right','Always right'],['left','Always left']])}${F.area('el','notes','Notes',el.notes||'')}${F.range('el','size','Marker size',el.size||1,.5,3,.1)}`;break;}
-    case 'wall':body=`<h3 class="sec-h">Wall</h3>${F.num('el','len',`Length (${unit()})`,toU(wallLen(el)),M.scale?.01:1,0)}${F.num('el','w','Thickness (px)',el.w,1,1)}${F.color('el','color','Colour',el.color)}${F.check('el','dash','Dashed line (fence line)',el.dash)}<p class="hint">Drag the end handles to reshape. Joined walls move together.</p>`;break;
+        ${c.mode==='tox'?F.check('el','toxic','Toxic bait (shows the toxic colour)',el.toxic):''}${F.sel('el','labelSide','Label side',el.labelSide||'auto',[['auto','Automatic (keeps it clear)'],['right','Always right'],['left','Always left']])}${F.area('el','notes','Notes',el.notes||'')}${F.range('el','size','Marker size',el.size||1,.5,3,.1)}`;break;}
+    case 'wall':body=`<h3 class="sec-h">Wall</h3>${F.num('el','len',`Length (${unit()})`,toU(wallLen(el)),M.scale?.01:1,0)}${F.num('el','w','Thickness (px)',el.w,1,1)}${thickRow('el','w',el.w)}${F.color('el','color','Colour',el.color)}${F.sel('el','ls','Line style',wallLs(el),WALL_LS)}<p class="hint">Drag the wall to move it; the walls joined to it stretch to follow, and the room colour follows the new shape. Drag a round corner node to reshape.</p>`;break;
     case 'obj':{const d=OBJMAP[el.kind];body=`<div class="row" style="gap:10px"><span style="width:44px;height:34px;background:#fff;border:1px solid var(--line);border-radius:5px;display:grid;place-items:center">${objPreview(el.kind).replace('<svg ','<svg width="36" height="28" ')}</span><h3 class="sec-h" style="margin:0">${esc(d?d[1]:'Object')}</h3></div>
       ${F.text('el','label','Label',el.label||'','Optional, shown under it')}${F.num('el','wU',`Width (${unit()})`,toU(el.w),M.scale?.01:1,0)}${F.num('el','hU',`Depth (${unit()})`,toU(el.h),M.scale?.01:1,0)}
       ${F.range('el','rot','Rotation',el.rot||0,-180,180,1)}<div class="row"><button class="btn sm" data-act="rotl">↺ 15°</button><button class="btn sm" data-act="rotr">15° ↻</button><button class="btn sm" data-act="rot90">90°</button><span class="hint">${el.rot||0}°</span></div>${F.color('el','color','Line colour',el.color||'#1a1f24')}${F.color('el','fill','Fill colour',el.fill||'#ffffff')}<p class="hint">Drag the corner square to resize, or the round handle to rotate.</p>`;break;}
@@ -1551,9 +1661,9 @@ function propsTab(){
     case 'zone':{const pts=zonePts(el);body=`<h3 class="sec-h">Room</h3>${F.text('el','name','Room name',el.name||'','e.g. Dry store')}
       <div class="f"><span>Fill colour</span><div class="room-sw">${ROOM_COLORS.map(c=>`<label title="${c==='none'?'No fill':c}"><input type="radio" name="zfill" data-zfill="${c}" ${c===el.fill?'checked':''}><span style="background:${c==='none'?'transparent':c}">${c==='none'?'✕':''}</span></label>`).join('')}</div></div>
       ${F.color('el','fill','Custom colour',el.fill&&el.fill!=='none'?el.fill:'#d0ebff')}${F.range('el','fillOp','Fill strength',el.fillOp??.55,.1,1,.05)}${F.num('el','nameSize','Name size',el.nameSize||18,1,6)}
-      ${F.check('el','zdash','Dashed walls (fence line)',zoneWalls(el).every(w=>w.dash))}${M.scale&&pts.length>2?`<p class="hint">Area: ${polyArea(pts.map(p=>[p.x,p.y])).toFixed(1)} m²</p>`:''}
+      <h3 class="sec-h">Walls of this room</h3>${F.num('el','zw','Thickness (px)',zoneWalls(el)[0]?.w||8,1,1)}${thickRow('el','zw',zoneWalls(el)[0]?.w)}${F.color('el','zcolor','Colour',zoneWalls(el)[0]?.color||'#2a2f36')}${F.sel('el','zls','Line style',wallLs(zoneWalls(el)[0]),WALL_LS)}${M.scale&&pts.length>2?`<p class="hint">Area: ${polyArea(pts.map(p=>[p.x,p.y])).toFixed(1)} m²</p>`:''}
       <p class="hint">Click the room name to select it, then drag to move it with its walls. Drag the round nodes at the corners to reshape it; the colour follows.</p><div class="row"><button class="btn sm ghost" data-act="zonefill">Remove colour and name only</button></div>`;break;}
-    case 'polygon':body=`<h3 class="sec-h">Area</h3>${styleFields('el',el,'polygon')}${M.scale?`<p class="hint">Area: ${polyArea(el.pts).toFixed(1)} m²</p>`:''}`;break;
+    case 'polygon':body=`<h3 class="sec-h">${el.open?'Line':'Area'}</h3>${styleFields('el',el,el.open?'line':'polygon')}${M.scale?`<p class="hint">Area: ${polyArea(el.pts).toFixed(1)} m²</p>`:''}`;break;
     case 'line':case 'arrow':body=`<h3 class="sec-h">${el.type==='arrow'?'Arrow':'Line'}</h3>${F.num('el','len',`Length (${unit()})`,toU(Math.hypot(el.x2-el.x1,el.y2-el.y1)),M.scale?.01:1,0)}${styleFields('el',el,el.type)}`;break;
     case 'dim':body=`<h3 class="sec-h">Dimension</h3><p class="idbig">${fmtLen(Math.hypot(el.x2-el.x1,el.y2-el.y1))}</p>${F.color('el','color','Colour',el.color)}${F.num('el','size','Text size',el.size||13,1,6)}${M.scale?'':'<p class="hint">Set the plan scale in the Plan tab to show metres.</p>'}`;break;
     case 'text':body=`<h3 class="sec-h">Text</h3>${F.area('el','text','Text',el.text)}${textFields('el',el,true)}`;break;
@@ -1621,8 +1731,8 @@ function setVal(sc,k,v){
   if(sc==='arm'){const c=E.cat;E.catType[c]=E.catType[c]||{};E.catType[c][k]=v;if(k==='type'){const kt=knownTox(v);if(kt!==null)E.catType[c].toxic=kt;}renderOverlay();return;}
   if(sc==='style'){E.style[k]=v;return;}
   if(sc==='text'){E.textStyle[k]=v;return;}
-  if(sc==='wall'){E.wallStyle[k]=v;return;}
-  if(sc==='fence'){E.fenceStyle[k]=v;return;}
+  if(sc==='wall'){if(k==='ls')setLs(E.wallStyle,v);else E.wallStyle[k]=v;return;}
+  if(sc==='fence'){if(k==='ls')setLs(E.fenceStyle,v);else E.fenceStyle[k]=v;return;}
   if(sc==='brand'){BRAND[k]=k==='logoRight'?-v:v;saveBrand();render();return;}
   softPush();
   if(sc==='map'){if(k==='name'){M.name=v;crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[v,'#/map/'+M.id]]);}else if(v>=50)M[k]=Math.round(v);changed();return;}
@@ -1638,12 +1748,18 @@ function setVal(sc,k,v){
       case 'stype':el.stype=v;{const kt=knownTox(v);if(kt!==null)el.toxic=kt;}break;
       case 'num':el.num=Math.max(1,Math.round(v));break;
       case 'zdash':for(const w of zoneWalls(el))w.dash=v;break;
+      case 'zls':for(const w of zoneWalls(el))setLs(w,v);break;
+      case 'zw':for(const w of zoneWalls(el))w.w=Math.max(1,v);break;
+      case 'zcolor':for(const w of zoneWalls(el))w.color=v;break;
+      case 'ls':if(el.type==='wall')setLs(el,v);break;
       case 'code':el.code=v;el.num=nextNum(v);{const c=catOf(v);if(c.mode!=='tox'&&!el.stype)el.stype=c.type;}break;
       default:el[k]=v;
     }}
   render();scheduleSave();
 }
 async function onPanelClick(e){
+  const wh=e.target.closest('[data-wheel]');if(wh){const inp=wh.closest('.f').querySelector('input[type=color]');try{inp.showPicker();}catch(err){inp.click();}return;}
+  const th=e.target.closest('[data-thick]');if(th){setVal(th.dataset.s,th.dataset.k,+th.dataset.thick);renderPanel();return;}
   const sw=e.target.closest('[data-sw]');if(sw){const inp=sw.closest('.f').querySelector('input[type=color]');inp.value=sw.dataset.sw;setVal(sw.dataset.s,sw.dataset.k,sw.dataset.sw);return;}
   const cat=e.target.closest('[data-cat]');if(cat){const c=cat.dataset.cat;if(E.tool==='station'&&E.cat===c)setTool('select');else{E.sel.clear();setTool('station',c);}renderPanel();return;}
   const ob=e.target.closest('[data-obj]');if(ob){E.objKind=ob.dataset.obj;if(E.tool!=='objects')setTool('objects');renderPanel();renderOverlay();$('#panel').classList.remove('open');return;}
@@ -1702,15 +1818,17 @@ async function addStationType(){
 async function editLegend(){
   const row=(c,i)=>`<tr data-i="${i}"><td><input class="code" name="code" value="${esc(c.code)}" maxlength="4" aria-label="Prefix"></td><td><input name="name" value="${esc(c.name)}" aria-label="Name"></td>
     <td><select name="shape" aria-label="Shape">${SHAPES.map(s=>`<option value="${s[0]}" ${c.shape===s[0]?'selected':''}>${s[1]}</option>`).join('')}</select></td>
-    <td><select name="mode" aria-label="Colour rule"><option value="tox" ${c.mode==='tox'?'selected':''}>Red toxic / green non-toxic</option><option value="fixed" ${c.mode!=='tox'?'selected':''}>Fixed colour</option></select></td>
-    <td><input type="color" name="color" value="${c.color}" aria-label="Colour"></td><td><input name="type" value="${esc(c.type)}" list="stypes" aria-label="Default type"></td><td><button type="button" class="btn sm ghost danger" data-rm aria-label="Remove">✕</button></td></tr>`;
+    <td><select name="mode" aria-label="Colour rule"><option value="tox" ${c.mode==='tox'?'selected':''}>Toxic / non-toxic</option><option value="fixed" ${c.mode!=='tox'?'selected':''}>One colour</option></select></td>
+    <td><span class="lg-c" data-for="fixed" ${c.mode==='tox'?'hidden':''}><input type="color" name="color" value="${c.color||'#495057'}" aria-label="Colour" title="Colour"></span><span class="lg-c" data-for="tox" ${c.mode==='tox'?'':'hidden'}><label title="Toxic colour"><input type="color" name="toxColor" value="${toxCol(c)}" aria-label="Toxic colour"><em>Toxic</em></label><label title="Non-toxic colour"><input type="color" name="nonColor" value="${nonCol(c)}" aria-label="Non-toxic colour"><em>Non-toxic</em></label></span></td><td><input name="type" value="${esc(c.type)}" list="stypes" aria-label="Default type"></td><td><button type="button" class="btn sm ghost danger" data-rm aria-label="Remove">✕</button></td></tr>`;
   const r=await modal({title:'Station types',wide:true,body:`<p>Prefixes set the ID on the plan, so T gives T001. Stations already placed keep their prefix if you rename it here.</p>
-    <div class="tbl-wrap"><table class="legend-ed"><thead><tr><th>Prefix</th><th>Name</th><th>Shape</th><th>Colour rule</th><th>Colour</th><th>Default type</th><th></th></tr></thead><tbody id="lgRows">${CATS.map(row).join('')}</tbody></table></div>
+    <div class="tbl-wrap"><table class="legend-ed"><thead><tr><th>Prefix</th><th>Name</th><th>Shape</th><th>Colour rule</th><th>Colours</th><th>Default type</th><th></th></tr></thead><tbody id="lgRows">${CATS.map(row).join('')}</tbody></table></div>
     <div class="row"><button type="button" class="btn sm" id="lgAdd">${ICON.plus}Add a type</button><button type="button" class="btn sm ghost" id="lgReset">Reset to defaults</button></div>`,
     buttons:[{label:'Cancel',value:null},{label:'Save',value:'ok',primary:true}],
     onOpen:w=>{const tb=$('#lgRows',w);$('#lgAdd',w).onclick=()=>{tb.insertAdjacentHTML('beforeend',row({code:'',name:'',shape:'circle',mode:'fixed',color:'#495057',type:''},tb.children.length));};
-      $('#lgReset',w).onclick=()=>{tb.innerHTML=DEFAULT_CATS.map(row).join('');};w.addEventListener('click',e=>{const x=e.target.closest('[data-rm]');if(x)x.closest('tr').remove();});},
-    before:(v,d,w)=>{const rows=$$('#lgRows tr',w).map(tr=>{const g=n=>$(`[name=${n}]`,tr).value.trim();return{code:g('code').toUpperCase(),name:g('name'),shape:g('shape'),mode:g('mode'),color:$('[name=color]',tr).value,type:g('type')};}).filter(c=>c.code||c.name);
+      $('#lgReset',w).onclick=()=>{tb.innerHTML=DEFAULT_CATS.map(row).join('');};
+      w.addEventListener('change',e=>{if(e.target.name!=='mode')return;const tr=e.target.closest('tr');$$('.lg-c',tr).forEach(x=>x.hidden=x.dataset.for!==e.target.value);});w.addEventListener('click',e=>{const x=e.target.closest('[data-rm]');if(x)x.closest('tr').remove();});},
+    before:(v,d,w)=>{const rows=$$('#lgRows tr',w).map(tr=>{const g=n=>$(`[name=${n}]`,tr).value.trim();const o={code:g('code').toUpperCase(),name:g('name'),shape:g('shape'),mode:g('mode'),color:$('[name=color]',tr).value,type:g('type')};
+        const tc=$('[name=toxColor]',tr).value,nc=$('[name=nonColor]',tr).value;if(tc.toLowerCase()!==TOX)o.toxColor=tc;if(nc.toLowerCase()!==NONTOX)o.nonColor=nc;return o;}).filter(c=>c.code||c.name);
       if(rows.some(c=>!/^[A-Z0-9]{1,4}$/.test(c.code))){toast('Each prefix needs 1–4 letters or numbers.','warn');return false;}
       if(new Set(rows.map(c=>c.code)).size!==rows.length){toast('Two types share the same prefix.','warn');return false;}
       legendRows=rows;}});
@@ -1750,6 +1868,74 @@ function placeImage(img,i=0){
   pushHist();const aid=uid();E.assets[aid]=img.src;E.assetsDirty=true;const s=Math.min(1,M.width*.6/img.w,M.height*.6/img.h);
   const el=add({type:'image',asset:aid,x:Math.round(M.width*.2+i*30),y:Math.round(M.height*.2+i*30),w:img.w*s,h:img.h*s,opacity:1,locked:false});E.sel=new Set([el.id]);changed();
 }
+/* Break an SVG drawing into separate, editable plan items: shapes, lines, text and pictures.
+   Curves become lines through many points. Returns the number of items added, or 0 if it couldn't. */
+const SVG_MAX=4000;
+function cssHex(c){if(!c||c==='none'||c==='transparent'||/^url/.test(c))return null;const m=c.match(/rgba?\(([^)]+)\)/);if(!m)return /^#/.test(c)?c:null;
+  const v=m[1].split(/[ ,\/]+/).filter(Boolean).map(Number);if(v.length>3&&v[3]===0)return null;return '#'+v.slice(0,3).map(n=>Math.round(n).toString(16).padStart(2,'0')).join('');}
+async function svgToPieces(text,name){
+  const doc=new DOMParser().parseFromString(text,'image/svg+xml'),root=doc.documentElement;if(!root||root.nodeName.toLowerCase()!=='svg'||doc.querySelector('parsererror'))throw new Error('this SVG could not be read');
+  const host=document.createElement('div');host.style.cssText='position:fixed;left:-30000px;top:0;opacity:0;pointer-events:none;';
+  const svg=document.importNode(root,true);const vb=svg.viewBox?.baseVal;
+  if(!svg.getAttribute('width')||/%/.test(svg.getAttribute('width')))svg.setAttribute('width',vb&&vb.width?vb.width:1000);
+  if(!svg.getAttribute('height')||/%/.test(svg.getAttribute('height')))svg.setAttribute('height',vb&&vb.height?vb.height:1000);
+  host.appendChild(svg);document.body.appendChild(host);
+  try{
+    const items=[],SKIP='defs,clipPath,mask,symbol,marker,pattern,linearGradient,radialGradient,filter,metadata,title,desc,style,script';
+    const leaves=[...svg.querySelectorAll('rect,circle,ellipse,line,polyline,polygon,path,text,image')].filter(n=>!n.closest(SKIP.split(',').map(x=>x).join(',')));
+    if(leaves.length>SVG_MAX)return 0;
+    const pt=(m,x,y)=>({x:m.a*x+m.c*y+m.e,y:m.b*x+m.d*y+m.f});
+    for(const n of leaves){const cs=getComputedStyle(n);if(cs.display==='none'||cs.visibility==='hidden')continue;
+      let op=1;for(let a=n;a&&a!==svg;a=a.parentElement)op*=+(getComputedStyle(a).opacity||1);if(op<=0.01)continue;
+      const m=n.getScreenCTM();if(!m)continue;const sc=Math.sqrt(Math.abs(m.a*m.d-m.b*m.c))||1,rot=Math.abs(m.b)>1e-6||Math.abs(m.c)>1e-6;
+      const tag=n.nodeName.toLowerCase(),fill=cssHex(cs.fill),stroke=cssHex(cs.stroke),swRaw=parseFloat(cs.strokeWidth)||0;
+      const fillOp=(+cs.fillOpacity||1)*op,sw=stroke?swRaw*sc:0,dash=!!(cs.strokeDasharray&&cs.strokeDasharray!=='none');
+      const style={stroke:stroke||'#1a1f24',sw,fill:fill||'#ffffff',noFill:!fill,fillOp:r2(Math.min(1,fillOp)),dash};
+      if(tag==='text'){const lines=[...n.querySelectorAll('tspan')].length?[]:null;let txt;
+        if(lines){let lastY=null,cur='';for(const t of n.querySelectorAll('tspan')){const y=t.getAttribute('y')||t.getAttribute('dy');if(cur&&y!==null&&y!==lastY){lines.push(cur);cur='';}cur+=t.textContent;lastY=y;}if(cur)lines.push(cur);txt=lines.join('\n');}else txt=n.textContent;
+        txt=(txt||'').replace(/[ \t]+/g,' ').trim();if(!txt)continue;
+        let bx=0,by=0;try{const b=n.getBBox();bx=b.x;by=b.y;}catch(e){}
+        const p0=pt(m,bx,by),size=(parseFloat(cs.fontSize)||16)*sc;
+        items.push({type:'text',x:p0.x,y:p0.y,text:txt,size,color:fill||'#1a1f24',font:/serif/i.test(cs.fontFamily)&&!/sans/i.test(cs.fontFamily)?'Georgia':'Arial',bold:+cs.fontWeight>=600||cs.fontWeight==='bold',italic:cs.fontStyle==='italic',haloW:0,align:'start'});continue;}
+      if(tag==='image'){const href=n.getAttribute('href')||n.getAttribute('xlink:href')||'';if(!href.startsWith('data:image'))continue;
+        const x=+n.getAttribute('x')||0,y=+n.getAttribute('y')||0,w=+n.getAttribute('width')||0,h=+n.getAttribute('height')||0;if(!w||!h)continue;
+        const a=pt(m,x,y);items.push({type:'image',href,x:a.x,y:a.y,w:w*sc,h:h*sc,opacity:op});continue;}
+      if(!fill&&!stroke)continue;
+      if(tag==='rect'&&!rot){const x=n.x.baseVal.value,y=n.y.baseVal.value,w=n.width.baseVal.value,h=n.height.baseVal.value;if(!w||!h)continue;const a=pt(m,x,y);
+        items.push({type:'rect',x:a.x,y:a.y,w:w*Math.abs(m.a),h:h*Math.abs(m.d),rx:(n.rx?.baseVal?.value||0)*sc,...style});continue;}
+      if((tag==='circle'||tag==='ellipse')&&!rot){const cx=n.cx.baseVal.value,cy=n.cy.baseVal.value,rx=tag==='circle'?n.r.baseVal.value:n.rx.baseVal.value,ry=tag==='circle'?rx:n.ry.baseVal.value;const c=pt(m,cx,cy),RX=rx*Math.abs(m.a),RY=ry*Math.abs(m.d);
+        items.push({type:'ellipse',x:c.x-RX,y:c.y-RY,w:RX*2,h:RY*2,...style});continue;}
+      if(tag==='line'){const a=pt(m,n.x1.baseVal.value,n.y1.baseVal.value),b=pt(m,n.x2.baseVal.value,n.y2.baseVal.value);if(!stroke)continue;
+        items.push({type:'line',x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke,sw:Math.max(.5,sw),dash});continue;}
+      // anything else (paths, polylines, rotated shapes): follow the outline, splitting where the pen lifts
+      let len=0;try{len=n.getTotalLength();}catch(e){}if(!len)continue;
+      const steps=Math.min(1500,Math.max(12,Math.ceil(len*sc/2))),stepL=len/steps,subs=[];let cur=[];
+      for(let i=0;i<=steps;i++){const q=n.getPointAtLength(Math.min(len,i*stepL)),P=pt(m,q.x,q.y);
+        if(cur.length&&dist(P,cur[cur.length-1])>stepL*sc*3+1){subs.push(cur);cur=[];}cur.push(P);}if(cur.length)subs.push(cur);
+      const closedTag=tag==='polygon'||tag==='rect'||tag==='circle'||tag==='ellipse'||/z\s*$/i.test(n.getAttribute('d')||'')||/z/i.test(n.getAttribute('d')||'');
+      for(const sp of subs){if(sp.length<2)continue;const closed=closedTag&&dist(sp[0],sp[sp.length-1])<Math.max(1,stepL*sc*2);
+        items.push({type:'poly',pts:sp,closed,...style});}
+    }
+    if(!items.length)return 0;
+    // fit everything inside the page
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;const grow=(x,y)=>{x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);};
+    for(const it of items){if(it.type==='poly')it.pts.forEach(p=>grow(p.x,p.y));else if(it.type==='line'){grow(it.x1,it.y1);grow(it.x2,it.y2);}else if(it.type==='text'){grow(it.x,it.y);grow(it.x+it.size*it.text.length*.5,it.y+it.size*1.2);}else{grow(it.x,it.y);grow(it.x+it.w,it.y+it.h);}}
+    const bw=Math.max(1,x1-x0),bh=Math.max(1,y1-y0),k=Math.min(M.width*.94/bw,M.height*.94/bh),ox=(M.width-bw*k)/2-x0*k,oy=(M.height-bh*k)/2-y0*k;
+    const X=v=>r2(v*k+ox),Y=v=>r2(v*k+oy),Z=v=>r2(v*k);
+    pushHist();const made=[];
+    for(const it of items){let el;const st={stroke:it.stroke,sw:Math.max(it.sw?.3:0,Z(it.sw||0)),fill:it.fill,noFill:it.noFill,fillOp:it.fillOp,dash:it.dash};
+      if(it.type==='rect')el={type:'rect',x:X(it.x),y:Y(it.y),w:Z(it.w),h:Z(it.h),rx:Z(it.rx||0),...st};
+      else if(it.type==='ellipse')el={type:'ellipse',x:X(it.x),y:Y(it.y),w:Z(it.w),h:Z(it.h),...st};
+      else if(it.type==='line')el={type:'line',x1:X(it.x1),y1:Y(it.y1),x2:X(it.x2),y2:Y(it.y2),stroke:it.stroke,sw:Math.max(.5,Z(it.sw)),dash:it.dash};
+      else if(it.type==='text')el={type:'text',x:X(it.x),y:Y(it.y),text:it.text,size:Math.max(4,r2(it.size*k)),color:it.color,font:it.font,bold:it.bold,italic:it.italic,haloW:0,align:'start'};
+      else if(it.type==='image'){const aid=uid();E.assets[aid]=it.href;E.assetsDirty=true;el={type:'image',asset:aid,x:X(it.x),y:Y(it.y),w:Z(it.w),h:Z(it.h),opacity:it.opacity,locked:false};}
+      else{let pts=simplify(it.pts.map(p=>({x:p.x*k+ox,y:p.y*k+oy})),.5);if(it.closed&&pts.length>2&&dist(pts[0],pts[pts.length-1])<1)pts=pts.slice(0,-1);
+        if(pts.length<2)continue;if(!it.closed&&pts.length===2){el={type:'line',x1:r2(pts[0].x),y1:r2(pts[0].y),x2:r2(pts[1].x),y2:r2(pts[1].y),stroke:it.stroke,sw:Math.max(.5,st.sw),dash:it.dash};}
+        else el={type:'polygon',pts:pts.map(p=>[r2(p.x),r2(p.y)]),...st,open:!it.closed||undefined,...(it.closed?{}:{noFill:true})};}
+      made.push(add(el));}
+    E.sel=new Set(made.map(m=>m.id));changed();return made.length;
+  }finally{host.remove();}
+}
 async function importIntoEditor(files,forceMode){
   const plans=[];for(const f of files)if(/\.(json|svg)$/i.test(f.name)&&await readPlanFile(f).catch(()=>null))plans.push(f);
   const json=files.filter(f=>/\.json$/i.test(f.name)&&!plans.includes(f)),imgs=files.filter(f=>!/\.json$/i.test(f.name)&&!plans.includes(f));
@@ -1760,15 +1946,21 @@ async function importIntoEditor(files,forceMode){
   const bad=imgs.filter(f=>!/\.(png|jpe?g|gif|webp|bmp|svg|pdf)$/i.test(f.name)&&!f.type.startsWith('image/')&&f.type!=='application/pdf');
   if(bad.length){toast(`Can't import ${bad.map(f=>f.name).join(', ')}. Use PNG, JPG, GIF, WEBP, BMP, SVG, PDF or a plan .json file.`,'warn');}
   const ok=imgs.filter(f=>!bad.includes(f));if(!ok.length)return;
-  let mode=forceMode,page=1;
+  let mode=forceMode,page=1;const allSvg=ok.every(f=>/\.svg$/i.test(f.name)||f.type==='image/svg+xml');
+  if(mode==='bg'&&allSvg)mode='pieces';
   if(!mode){const hasBg=M.elements.some(e=>e.type==='image'&&e.bg),hasPdf=ok.some(f=>/\.pdf$/i.test(f.name));
     const r=await modal({title:`Import ${ok.length} file${ok.length>1?'s':''}`,body:`<ul class="filelist">${ok.map(f=>`<li>${esc(f.name)}</li>`).join('')}</ul>
-      <div class="seg"><label><input type="radio" name="mode" value="bg" ${!M.elements.length||!hasBg?'checked':''}><span>Use as background</span></label><label><input type="radio" name="mode" value="place" ${M.elements.length&&hasBg?'checked':''}><span>Place as image</span></label></div>
+      <div class="seg">${allSvg?`<label><input type="radio" name="mode" value="pieces" checked><span>Editable pieces</span></label>`:''}<label><input type="radio" name="mode" value="bg" ${!allSvg&&(!M.elements.length||!hasBg)?'checked':''}><span>Use as background</span></label><label><input type="radio" name="mode" value="place" ${!allSvg&&M.elements.length&&hasBg?'checked':''}><span>Place as image</span></label></div>
+      ${allSvg?'<p class="hint"><b>Editable pieces</b> breaks the drawing into separate shapes, lines and text, so you can move, recolour, edit or delete any part of it.</p>':''}
       <p class="hint">Background fits the image inside the page and locks it so you can draw over it${hasBg?'. It replaces the current background':''}. ${ok.length>1?'Only the first file becomes the background; the rest are placed as images.':''}</p>
       ${hasPdf?`<label class="f"><span>PDF page</span><input type="number" name="page" value="1" min="1" step="1"></label>`:''}`,
       buttons:[{label:'Cancel',value:null},{label:'Import',value:'ok',primary:true}]});
     if(r.value!=='ok')return;mode=r.data.mode;page=parseInt(r.data.page||'1',10)||1;}
   toast('Importing…');
+  if(mode==='pieces'){for(const f of ok){try{const n=await svgToPieces(await readAs(f,'readAsText'),f.name);
+      if(n)toast(`${f.name}: ${n} separate piece${n===1?'':'s'} added and selected. Click any one to change or delete it.`);
+      else{toast(`${f.name} has too many parts (or none that can be separated), so it was added as one picture.`,'warn');placeImage(await fileToImg(f));}}
+    catch(e){console.error(e);toast(`${f.name} could not be imported: ${e.message}`,'warn');}}return;}
   for(let i=0;i<ok.length;i++){try{const im=await fileToImg(ok[i],page);if(i===0&&mode==='bg'){setBackground(im);if(!M.scale)toast('Background set. Use Settings › Calibrate to set the scale from a known length.');}else placeImage(im,i);}
     catch(e){console.error(e);toast(`${ok[i].name} could not be imported: ${e.message}`,'warn');}}
 }
@@ -1843,17 +2035,22 @@ async function captureTiles(lm,hi,rot,fw,fh){
 }
 
 /* ================= EXPORT ================= */
+const EXPORT_STD=3,EXPORT_HD=4.8;   // HD is 60% more resolution than standard
 async function openExport(){
   const base=safeName(`${site?.name||'Site'} - ${M.name}${M.settings.revision?' v'+M.settings.revision:''}`);
   const r=await modal({title:'Export plan',body:`<div class="seg" role="radiogroup" aria-label="Format">${['png','jpg','pdf','svg'].map((f,i)=>`<label><input type="radio" name="fmt" value="${f}" ${i===0?'checked':''}><span>${f.toUpperCase()}</span></label>`).join('')}</div>
     <label class="f"><span>File name</span><input name="fname" value="${esc(base)}"></label>
-    <p class="hint">Exported at print resolution (3×) with background images included.</p>`,
+    <div class="f"><span>Quality</span><div class="seg" role="radiogroup" aria-label="Quality"><label><input type="radio" name="q" value="std" ${Prefs.v.exportQ!=='hd'?'checked':''}><span>Standard</span></label><label><input type="radio" name="q" value="hd" ${Prefs.v.exportQ==='hd'?'checked':''}><span>HD</span></label></div></div>
+    <p class="hint" id="exQ"></p>`,
+    onOpen:w=>{const upd=()=>{const d=$('input[name=fmt]:checked',w).value,hd=$('input[name=q]:checked',w).value==='hd',g=sheet(),k=hd?EXPORT_HD:EXPORT_STD;
+      $('#exQ',w).textContent=d==='svg'?'SVG is a drawing, so it stays sharp at any size; quality doesn\'t change it.':`${hd?'HD':'Standard'}: ${Math.round(g.W*k)} × ${Math.round(g.H*k)} pixels, background images included.${hd?' Larger file, slower to make.':''}`;};w.addEventListener('change',upd);upd();},
     buttons:[{label:'Cancel',value:null},{label:'Export',value:'go',primary:true}],
     before:async(v,d,w)=>{const btn=$('footer .primary',w);btn.disabled=true;btn.textContent='Exporting…';
       try{await doExport(d);}catch(e){console.error(e);toast('Export failed: '+e.message,'warn');btn.disabled=false;btn.textContent='Export';return false;}}});
 }
 async function doExport(d){
-  const name=safeName(d.fname||'plan'),bg=true,res=3;await saveNow();
+  const name=safeName(d.fname||'plan'),bg=true,res=d.q==='hd'?EXPORT_HD:EXPORT_STD;await saveNow();
+  if(d.q&&d.q!==Prefs.v.exportQ)Prefs.set('exportQ',d.q);
   if(d.fmt==='svg'){download(new Blob([buildSVG({bg})],{type:'image/svg+xml'}),name+'.svg');return;}
   const c=await rasterize(res,bg);
   if(d.fmt==='png'||d.fmt==='jpg'){const blob=await new Promise(r=>c.toBlob(r,d.fmt==='png'?'image/png':'image/jpeg',.92));if(!blob)throw new Error('the browser could not create the image');download(blob,name+'.'+d.fmt);return;}
@@ -1952,13 +2149,41 @@ async function showLogin(msg){
 let lastActive=Date.now();
 for(const ev of ['pointerdown','keydown','wheel','touchstart'])addEventListener(ev,()=>{lastActive=Date.now();},{passive:true,capture:true});
 setInterval(async()=>{if(!Store.auth||!Store.token||route==='login'||route==='connect')return;
-  if(Date.now()-lastActive<60000){try{const r=await fetch(Store.base+'/api/auth/me',{cache:'no-store',headers:Store.hdr(false)});if(r.status===401){Store.setToken('');Store.user=null;signedOut('You were signed out after 5 minutes without activity.');}}catch(e){}}
+  if(Date.now()-lastActive<60000){try{const r=await fetch(Store.base+'/api/auth/me',{cache:'no-store',headers:Store.hdr(false)});if(r.status===401){const why=await r.json().catch(()=>({}));Store.setToken('');Store.user=null;signedOut(why.code==='elsewhere'?why.error:'You were signed out after 5 minutes without activity.');}}catch(e){}}
   else if(Date.now()-lastActive>5*60000+5000){Store.setToken('');Store.user=null;signedOut('You were signed out after 5 minutes without activity.');}},30000);
 function accountBtn(){const u=Store.user;if(!u)return'';const ini=esc((u.name||u.email).trim().slice(0,1).toUpperCase());
   return `<button class="acct" data-top="account" title="${esc(u.email)}" aria-haspopup="menu">${u.picture?`<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">`:`<span>${ini}</span>`}</button>`;}
 function openAccountMenu(btn){const u=Store.user;if(!u)return;
-  const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
-  popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
+  const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:'What changed in each version'},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
+  popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
+const APP_LOG=[
+  ['v13','24 Oct 2026',['Walls you drag take their joined walls with them, and the room colour follows the new shape','Wall thickness quick picks and line styles: solid, dashed, long dash, dotted, dash dot, double','Colour wheel next to every colour choice','SVG drawings import as separate pieces you can move, edit and delete','Standard and HD export quality','Ctrl+D puts the copy where your mouse is','Change log of every plan version','Only one sign-in per account at a time','Coordinates box removed from the bottom of the plan','Toxic and non-toxic colours can be changed for each station type','W is now Vertebrate control, with toxic / non-toxic']],
+  ['v12','24 Oct 2026',['Settings that follow your account (theme, colour, new-plan defaults)','Create new floor plan wording; name required when starting from a file','Plan cards show just the name; site page shows just the owner','Search, Edit site and Back up site fixed']],
+  ['v11','23 Oct 2026',['Your own sites and plans; anyone else\'s open view-only and can be duplicated','Site photos, site and plan search','One selection box; drawing bar fixes','Several named servers shown as cards']],
+  ['v10','23 Oct 2026',['Google sign-in with an access list','Signed out after 5 minutes without activity']],
+  ['v9','22 Oct 2026',['Plans saved on your own Station Planner server']],
+  ['v8','',['Freehand walls, fences and lines; Enclose space','Text outline control']],
+  ['v7','',['Labelled sidebar','100-step undo kept after closing a plan']],
+  ['v6','',['Simpler export, always print resolution with backgrounds']],
+  ['v5','',['Rooms reshape with their walls','Smart station labels','Nothing can go into the heading or bottom bar']],
+  ['v4','',['U prefix for flying insect monitoring','Fixed heading with logo controls','Jump-ahead numbering','Automatic version numbers']],
+  ['v3','',['A4 pages','Objects library','Click the bottom bar to edit details','SVG import']],
+  ['v2','',['Printed sheet layout with black heading and KEY','Named rooms','Satellite rotation and address search']],
+  ['v1','',['Sites, drawing, doors, auto-numbered stations, satellite photos, import and export']]];
+async function openChangeLog(){
+  let maps=[];try{maps=await Store.all('maps');}catch(e){}const sites=new Map(((await Store.all('sites').catch(()=>[]))||[]).map(s=>[s.id,s.name]));
+  maps.sort((a,b)=>(sites.get(a.siteId)||'').localeCompare(sites.get(b.siteId)||'')||a.name.localeCompare(b.name));
+  const cur=route==='map'&&M?M.id:([...maps].sort((a,b)=>(b.updated||0)-(a.updated||0))[0]?.id||'');
+  const who=e=>e.byName||(e.by?(Store.people?.get(e.by)||e.by.split('@')[0]):'');
+  const planLog=id=>{const m=id===M?.id?M:maps.find(x=>x.id===id);if(!m)return'<p class="hint">No floor plans yet.</p>';const log=(m.revLog||[]).slice().reverse();
+    return log.length?log.map(e=>`<div class="log-e"><div class="log-h"><b>Version ${esc(e.rev)}</b>${e.from&&e.from!==e.rev?` <span class="hint">from ${esc(e.from)}</span>`:''}<span class="hint">${esc(fmtDate(e.date))} ${esc(new Date(e.date).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}))}${who(e)?' · '+esc(who(e)):''}</span></div><ul>${e.changes.map(c=>`<li>${esc(c)}</li>`).join('')}</ul></div>`).join('')
+      :`<p class="hint">No changes recorded for this plan yet. From now on, each time it's changed and closed, the new version and what changed are listed here.</p>`;};
+  await modal({title:'Change log',wide:true,body:`<div class="seg" role="radiogroup" aria-label="Show"><label><input type="radio" name="lg" value="plans" checked><span>Floor plan versions</span></label><label><input type="radio" name="lg" value="app"><span>App updates</span></label></div>
+    <div id="lgPlans"><label class="f"><span>Floor plan</span><select id="lgPick">${maps.map(m=>`<option value="${m.id}" ${m.id===cur?'selected':''}>${esc((sites.get(m.siteId)||'Site')+' › '+m.name)}</option>`).join('')}</select></label><div id="lgList" class="log">${planLog(cur)}</div></div>
+    <div id="lgApp" class="log" hidden>${APP_LOG.map(([v,d,l])=>`<div class="log-e"><div class="log-h"><b>${v}</b><span class="hint">${d}</span></div><ul>${l.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('')}</div>`,
+    buttons:[{label:'Close',value:'ok',primary:true}],
+    onOpen:w=>{w.addEventListener('change',e=>{if(e.target.name==='lg'){$('#lgPlans',w).hidden=e.target.value!=='plans';$('#lgApp',w).hidden=e.target.value!=='app';}if(e.target.id==='lgPick')$('#lgList',w).innerHTML=planLog(e.target.value);});}});
+}
 async function openPrefs(){
   const was={...Prefs.v},v=Prefs.v,seg=(name,opts,cur)=>`<div class="seg" role="radiogroup">${opts.map(([val,lab])=>`<label><input type="radio" name="${name}" value="${val}" ${String(cur)===String(val)?'checked':''}><span>${lab}</span></label>`).join('')}</div>`;
   const r=await modal({title:'Settings',body:`<p>These are your own settings. They're saved to your account, so they follow you to any device you sign in on.</p>
@@ -2059,6 +2284,10 @@ async function boot(){
   try{if(!(await Store.get('meta','mig-fi-u'))){const fi=CATS.find(c=>c.code==='FI');if(fi&&!CATS.find(c=>c.code==='U')){fi.code='U';await Store.put('meta',{id:'cats',value:CATS});}
     if(CATS.find(c=>c.code==='U'))for(const m of await Store.all('maps')){let ch=false;for(const e of m.elements)if(e.type==='station'&&e.code==='FI'){e.code='U';ch=true;}if(ch)await Store.put('maps',m);}
     await Store.put('meta',{id:'mig-fi-u',value:true});}}catch(e){console.error(e);}
+  /* one-off: W vertebrate monitoring becomes vertebrate control, with toxic / non-toxic */
+  try{if(!(await Store.get('meta','mig-w-tox'))){const w=CATS.find(c=>c.code==='W');if(w&&w.mode!=='tox'&&/vertebrate/i.test(w.name)){w.name='Vertebrate control';w.mode='tox';if(/monitor/i.test(w.type))w.type='Toxic bait station';await Store.put('meta',{id:'cats',value:CATS});
+      for(const m of await Store.all('maps')){let ch=false;for(const e of m.elements)if(e.type==='station'&&e.code==='W'&&e.toxic===undefined){e.toxic=knownTox(e.stype)??true;ch=true;}if(ch)await Store.put('maps',m);}}
+    await Store.put('meta',{id:'mig-w-tox',value:true});}}catch(e){console.error(e);}
   /* one-off: the default types become circles, and third line defaults to non-toxic */
   try{if(!(await Store.get('meta','mig-v5'))){const codes=new Set(DEFAULT_CATS.map(c=>c.code));for(const c of CATS){if(codes.has(c.code))c.shape='circle';if(c.code==='T'&&/toxic bait/i.test(c.type)&&!/non/i.test(c.type))c.type='Non-toxic bait station';}
     await Store.put('meta',{id:'cats',value:CATS});await Store.put('meta',{id:'mig-v5',value:true});}}catch(e){console.error(e);}
@@ -2070,6 +2299,7 @@ async function boot(){
     await Store.put('sites',s);const m=sampleMap(s.id);await Store.put('maps',m);await Store.put('assets',{id:m.id,data:{}});}
     await Store.put('meta',{id:'seeded',value:true});}catch(e){console.error(e);}
     }
+  flushPending();
   go();
 }
 boot();

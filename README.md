@@ -16,6 +16,8 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Drawing.** A Draw drawer (wall, fence line, line, arrow), rooms (drag a box), and a Shapes drawer (rectangle/zone, ellipse, area outline). Text has colour, size, font, bold/italic and an adjustable white outline (thicker, thinner or none) for readability on photos.
 - **Walls, fences and lines.** Place nodes by clicking, or switch to **Freehand** in the bar at the top of the plan and drag to draw; the stroke is turned into clean nodes. After the third node, **Enclose space** joins the last node to the first and asks for a room name. Fences show dashed while you draw.
 - **Objects library** with a picture of every item, grouped and searchable: 12 door, window and opening types that snap into walls, plus storage, building services, safety and outdoor objects. Every object can be resized (corner square), rotated (round handle, ±15° buttons, or `[` `]`), recoloured (line and fill) and labelled. Doors and windows can be recoloured and resized too.
+- **Walls work like area outlines.** Click a wall and you get the whole room, or the whole joined run of walls; drag to move it as one, drag a round corner node to reshape it, and the room colour stays inside the new shape. <kbd>Alt</kbd>+click picks a single wall section; moving it stretches the walls joined to it. Walls and fences have quick thickness picks (thin to heavy) and line styles: solid, dashed, long dash, dotted, dash dot and double line.
+- **Colour wheel** next to every colour choice, for any colour you like.
 - **Rooms.** When you finish a room (or close a wall or fence outline), name it, pick a fill colour, and choose solid or dashed walls. The colour and name follow the walls: drag the round nodes at the corners to reshape a building or fence line and the fill reshapes with it. Click the room name to select the room and drag it, walls and all.
 - **Stations with auto-numbering.** Pick a type in the Stations tab (or press 1–8), then click the plan: T001, T002, T003… Drag to move. Each station records its type (e.g. *Snap trap*) and notes, shown in Properties and the Register. The ID sits to the right of the marker and moves to the left automatically when something is in the way (or set it to always left/right). Switching away from the Stations tab stops placing.
   - **Jumping ahead:** while placing, type a *Next number* (e.g. 40). New stations take the first free number from there, so 1–10, then 40, 41…, then set it back to 11 to carry on 11, 12… (numbers already used are skipped).
@@ -26,22 +28,26 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
   | T | Third line control | Green by default (non-toxic); red if set to toxic |
   | S | Second line control | Red by default (toxic bait); green if set to non-toxic |
   | F | Fence line station | Red by default (toxic bait); green if set to non-toxic |
+  | W | Vertebrate control | Red by default (toxic bait); green if set to non-toxic |
 
-  Types that can be either are shown in the legend as one shape split diagonally, half red and half green.
+  Types that can be either are shown in the legend as one shape split diagonally, half red and half green. The toxic and non-toxic colours can be changed for each type under **Edit types**.
 
   | Prefix | Meaning | Colour |
   |---|---|---|
   | V | Insect monitoring | Black |
   | U | Flying insect monitoring | Blue |
   | X | Inspection point | Black |
-  | W | Vertebrate monitoring | Brown |
+
   | CP | Control panel | Purple |
 
   All types are circles by default. Prefixes, names, shapes and colours can be changed under **Edit types**.
 - **Satellite background** (Import › Satellite photo). Start typing an address and pick it from the drop-down, frame the property, and rotate it with the slider or ±15° buttons. The photo becomes the plan background with the scale and north arrow set automatically (Esri World Imagery).
+- **SVG drawings come in as editable pieces**: every shape, line and text becomes its own item you can move, recolour, edit or delete (or choose to use it as a background or one picture).
 - **Import** PNG, JPG, GIF, WEBP, BMP, SVG and PDF (any page) as a background or a movable image. On a site page, Import plan accepts `.json` and `.svg` plan files; SVGs exported from Station Planner come back fully editable, and any other drawing becomes a new plan with it as the background.
-- **Export** PNG, JPG, PDF and SVG with no margins (an A4 plan exports as an exact A4 page), always at print resolution (3×) with backgrounds included. The Register tab exports a station register as CSV, and sites back up as JSON.
+- **Export** PNG, JPG, PDF and SVG with no margins (an A4 plan exports as an exact A4 page), with backgrounds included, in **Standard** (3×, print resolution) or **HD** quality (60% more resolution). The Register tab exports a station register as CSV, and sites back up as JSON.
 - **Register tab:** every station in one list, search and filter, duplicate-number warnings, and *Close gaps* renumbering.
+- **Change log.** Each time a plan's version goes up, what changed is recorded (stations added, removed, moved or renumbered, walls, rooms, text and other items, plan details) with who and when. Open it from your picture → **Change log**, which also lists the app's own updates.
+- **Ctrl+D** puts the copy where your mouse is.
 - **Undo history** of 100 steps per plan, saved with the plan so you can still undo after closing and reopening it.
 - Scale calibration from any known length, grid with snapping, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
 
@@ -52,8 +58,9 @@ Plans are saved on your own **Station Planner server** (Node.js + SQLite, behind
 - The server also serves the app, so its address is all you need.
 - To use the GitHub Pages copy, open it once with `?api=https://your-server-address`, or set the address with the **Server** button on the Sites page.
 - Plans made before the server existed can be copied up with **Server → Copy them to the server**.
+- **Save indicator.** The top bar shows *Saved to server* with the time only once the server has confirmed it has the latest version. If it can't be reached, it says why, keeps your changes in the browser, and sends them as soon as the server answers (click it to try straight away). Changes still waiting are sent the next time you open the app.
 - **Several servers.** **Server** on the Sites page (or your picture → Servers) shows each saved server as a card with its own name and picture. Click one to switch; each keeps its own sites, plans and sign-in.
-- **Google sign-in:** your Google picture sits at the top right of every page. Only approved Google accounts (or a whole company domain) can get in, admins manage the list under **Users and access**, and people are signed out after 5 minutes without activity. Setup steps are in [`server/README.md`](server/README.md#google-sign-in).
+- **Google sign-in:** your Google picture sits at the top right of every page. Only approved Google accounts (or a whole company domain) can get in, admins manage the list under **Users and access**, and people are signed out after 5 minutes without activity. Each account can be signed in in one browser at a time: signing in somewhere else signs the first browser out, so a login can't be shared. Setup steps are in [`server/README.md`](server/README.md#google-sign-in).
 
 ## Keyboard shortcuts
 
