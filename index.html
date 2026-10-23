@@ -1653,19 +1653,15 @@ async function openExport(){
   const base=safeName(`${site?.name||'Site'} - ${M.name}${M.settings.revision?' v'+M.settings.revision:''}`);
   const r=await modal({title:'Export plan',body:`<div class="seg" role="radiogroup" aria-label="Format">${['png','jpg','pdf','svg'].map((f,i)=>`<label><input type="radio" name="fmt" value="${f}" ${i===0?'checked':''}><span>${f.toUpperCase()}</span></label>`).join('')}</div>
     <label class="f"><span>File name</span><input name="fname" value="${esc(base)}"></label>
-    <label class="f" id="exRes"><span>Resolution</span><select name="res"><option value="1">Standard (1×)</option><option value="2" selected>High (2×)</option><option value="3">Print (3×)</option></select></label>
-    <label class="chk"><input type="checkbox" name="bg" checked> Include background images</label>
-    <div class="divider"></div><div class="row"><span class="hint">Also:</span><button type="button" class="btn sm" id="exCsv">Station register (CSV)</button><button type="button" class="btn sm" id="exJson">Plan file (.json)</button></div>`,
+    <p class="hint">Exported at print resolution (3×) with background images included.</p>`,
     buttons:[{label:'Cancel',value:null},{label:'Export',value:'go',primary:true}],
-    onOpen:w=>{w.addEventListener('change',()=>{const f=$('input[name=fmt]:checked',w).value;$('#exRes',w).hidden=f==='svg';});
-      $('#exCsv',w).onclick=exportCSV;$('#exJson',w).onclick=()=>download(new Blob([JSON.stringify({format:'pest-station-planner-map',version:1,map:M,assets:E.assets})],{type:'application/json'}),base+'.json');},
     before:async(v,d,w)=>{const btn=$('footer .primary',w);btn.disabled=true;btn.textContent='Exporting…';
       try{await doExport(d);}catch(e){console.error(e);toast('Export failed: '+e.message,'warn');btn.disabled=false;btn.textContent='Export';return false;}}});
 }
 async function doExport(d){
-  const name=safeName(d.fname||'plan'),bg=d.bg,res=parseFloat(d.res||'2');await saveNow();
+  const name=safeName(d.fname||'plan'),bg=true,res=3;await saveNow();
   if(d.fmt==='svg'){download(new Blob([buildSVG({bg})],{type:'image/svg+xml'}),name+'.svg');return;}
-  const c=await rasterize(d.fmt==='pdf'?Math.max(2,res):res,bg);
+  const c=await rasterize(res,bg);
   if(d.fmt==='png'||d.fmt==='jpg'){const blob=await new Promise(r=>c.toBlob(r,d.fmt==='png'?'image/png':'image/jpeg',.92));if(!blob)throw new Error('the browser could not create the image');download(blob,name+'.'+d.fmt);return;}
   const jpg=new Uint8Array(await (await new Promise(r=>c.toBlob(r,'image/jpeg',.92))).arrayBuffer());
   /* page is the sheet itself, edge to edge: exactly A4 for A4 plans, otherwise the plan's own shape at A4 width */

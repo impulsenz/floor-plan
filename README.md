@@ -37,7 +37,7 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
   All types are circles by default. Prefixes, names, shapes and colours can be changed under **Edit types**.
 - **Satellite background** (Import › Satellite photo). Start typing an address and pick it from the drop-down, frame the property, and rotate it with the slider or ±15° buttons. The photo becomes the plan background with the scale and north arrow set automatically (Esri World Imagery).
 - **Import** PNG, JPG, GIF, WEBP, BMP, SVG and PDF (any page) as a background or a movable image. On a site page, Import plan accepts `.json` and `.svg` plan files; SVGs exported from Station Planner come back fully editable, and any other drawing becomes a new plan with it as the background.
-- **Export** PNG, JPG, PDF and SVG with no margins (an A4 plan exports as an exact A4 page), a station register as CSV, and plan or whole-site backups as JSON.
+- **Export** PNG, JPG, PDF and SVG with no margins (an A4 plan exports as an exact A4 page), always at print resolution (3×) with backgrounds included. The Register tab exports a station register as CSV, and sites back up as JSON.
 - **Register tab:** every station in one list, search and filter, duplicate-number warnings, and *Close gaps* renumbering.
 - Scale calibration from any known length, grid with snapping, undo/redo, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
 
