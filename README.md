@@ -42,11 +42,12 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 
   All types are circles by default. Prefixes, names, shapes and colours can be changed under **Edit types**.
 - **Satellite background** (Import › Satellite photo). Start typing an address and pick it from the drop-down, frame the property, and rotate it with the slider or ±15° buttons. The photo becomes the plan background with the scale and north arrow set automatically (Esri World Imagery).
-- **SVG drawings come in as editable pieces**: every shape, line and text becomes its own item you can move, recolour, edit or delete (or choose to use it as a background or one picture).
+- **SVG drawings come in as editable pieces** that look exactly like the original (same fonts, letter spacing, positions, line styles and colours): every shape, line and text is its own item you can move, recolour, edit or delete. You can also use the SVG as a background or one picture instead.
+- **Background settings** (Settings tab → Background): make the background see-through, resize, turn (slider or 90° steps), flip, move with arrows or unlock and drag it, centre, fit to page, reset, or replace the file.
 - **Import** PNG, JPG, GIF, WEBP, BMP, SVG and PDF (any page) as a background or a movable image. On a site page, Import plan accepts `.json` and `.svg` plan files; SVGs exported from Station Planner come back fully editable, and any other drawing becomes a new plan with it as the background.
 - **Export** PNG, JPG, PDF and SVG with no margins (an A4 plan exports as an exact A4 page), with backgrounds included, in **Standard** (3×, print resolution) or **HD** quality (60% more resolution). The Register tab exports a station register as CSV, and sites back up as JSON.
 - **Register tab:** every station in one list, search and filter, duplicate-number warnings, and *Close gaps* renumbering.
-- **Change log.** Each time a plan's version goes up, what changed is recorded (stations added, removed, moved or renumbered, walls, rooms, text and other items, plan details) with who and when. Open it from your picture → **Change log**, which also lists the app's own updates.
+- **Change log** (your picture → Change log) lists what's new in each app version.
 - **Ctrl+D** puts the copy where your mouse is.
 - **Undo history** of 100 steps per plan, saved with the plan so you can still undo after closing and reopening it.
 - Scale calibration from any known length, grid with snapping, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
@@ -58,7 +59,7 @@ Plans are saved on your own **Station Planner server** (Node.js + SQLite, behind
 - The server also serves the app, so its address is all you need.
 - To use the GitHub Pages copy, open it once with `?api=https://your-server-address`, or set the address with the **Server** button on the Sites page.
 - Plans made before the server existed can be copied up with **Server → Copy them to the server**.
-- **Save indicator.** The top bar shows *Saved to server* with the time only once the server has confirmed it has the latest version. If it can't be reached, it says why, keeps your changes in the browser, and sends them as soon as the server answers (click it to try straight away). Changes still waiting are sent the next time you open the app.
+- **Save indicator.** The top bar shows *Saved to server* with the time only once the server has confirmed it has the latest version. If it can't be reached, it says why, keeps your changes in the browser, and sends them as soon as the server answers (press **Retry** to reconnect straight away). Click it to see how much data each floor plan has sent and received, this session and on this device. Changes still waiting are sent the next time you open the app.
 - **Several servers.** **Server** on the Sites page (or your picture → Servers) shows each saved server as a card with its own name and picture. Click one to switch; each keeps its own sites, plans and sign-in.
 - **Google sign-in:** your Google picture sits at the top right of every page. Only approved Google accounts (or a whole company domain) can get in, admins manage the list under **Users and access**, and people are signed out after 5 minutes without activity. Each account can be signed in in one browser at a time: signing in somewhere else signs the first browser out, so a login can't be shared. Setup steps are in [`server/README.md`](server/README.md#google-sign-in).
 
