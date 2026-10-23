@@ -1,0 +1,1334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pest Station Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: top bar · slim tool rail · plan canvas · inspector panel (sheet on phones) */
+:root{
+  --bg:#e8ebee; --panel:#fbfcfc; --panel-2:#f0f2f4; --line:#d3d9de; --ink:#1a1f24; --ink-2:#56616b; --ink-3:#88929b;
+  --accent:#d9480f; --accent-soft:#fde6d9; --accent-ink:#ffffff; --stage:#d5dbe0; --sel:#1c7ed6; --danger:#c92a2a; --ok:#2b8a3e;
+  --f-ui:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-head:'Barlow Semi Condensed','Barlow',system-ui,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+  --r:6px; --shadow:0 10px 32px rgba(20,28,36,.2);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121519; --panel:#1a1e23; --panel-2:#22272d; --line:#30373f; --ink:#e6eaee; --ink-2:#9ca6b0; --ink-3:#6c7680;
+  --accent:#f76b2b; --accent-soft:#3b2418; --accent-ink:#1a1209; --stage:#0c0f12; --sel:#4dabf7; --danger:#ff6b6b; --ok:#51cf66;
+  --shadow:0 10px 32px rgba(0,0,0,.55); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121519; --panel:#1a1e23; --panel-2:#22272d; --line:#30373f; --ink:#e6eaee; --ink-2:#9ca6b0; --ink-3:#6c7680;
+  --accent:#f76b2b; --accent-soft:#3b2418; --accent-ink:#1a1209; --stage:#0c0f12; --sel:#4dabf7; --danger:#ff6b6b; --ok:#51cf66;
+  --shadow:0 10px 32px rgba(0,0,0,.55); color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--f-ui);font-size:14px;line-height:1.4;background:var(--bg);color:var(--ink);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+#app{display:grid;grid-template-rows:auto 1fr;height:100%}
+
+/* top bar */
+.top{display:flex;align-items:center;gap:10px;min-height:50px;padding:6px max(12px,env(safe-area-inset-right,0px)) 6px max(12px,env(safe-area-inset-left,0px));padding-top:max(6px,env(safe-area-inset-top,0px));background:var(--panel);border-bottom:1px solid var(--line);position:relative;z-index:5}
+.brand{display:flex;align-items:center;gap:8px;font-family:var(--f-head);font-weight:700;font-size:16px;letter-spacing:.2px;white-space:nowrap;cursor:pointer;background:none;border:0;padding:0}
+.brand svg{flex:none}
+.crumbs{display:flex;align-items:center;gap:4px;min-width:0;flex:1 1 0;overflow:hidden;font-family:var(--f-head);font-size:15px;font-weight:600}
+.crumbs a{color:var(--ink-2);text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:22ch}
+.crumbs a:hover{color:var(--ink)}
+.crumbs .sep{color:var(--ink-3)}
+.crumbs .cur{color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top-actions{margin-left:auto;display:flex;align-items:center;gap:6px;flex:none}
+.status{font-size:12px;color:var(--ink-3);min-width:52px;text-align:right;font-variant-numeric:tabular-nums}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--r);border:1px solid var(--line);background:var(--panel);color:var(--ink);font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--panel-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.danger{color:var(--danger)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.ghost:hover{background:var(--panel-2)}
+.btn.sm{height:26px;padding:0 8px;font-size:12.5px}
+.btn:disabled{opacity:.45;cursor:default}
+.ib{width:32px;height:32px;padding:0;display:inline-grid;place-items:center;border-radius:var(--r);border:1px solid transparent;background:transparent;cursor:pointer;color:var(--ink-2)}
+.ib:hover{background:var(--panel-2);color:var(--ink)}
+.ib:disabled{opacity:.35;cursor:default}
+.zoom{font-family:var(--f-mono);font-size:12px;min-width:50px;height:28px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);cursor:pointer;font-variant-numeric:tabular-nums}
+.only-narrow{display:none}
+
+/* pages */
+#view{min-height:0;position:relative}
+.page{height:100%;overflow:auto;padding-block:28px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.page-in{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.page-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:14px}
+.page-head h1{font-family:var(--f-head);font-size:30px;font-weight:700;margin:0;letter-spacing:-.2px;text-wrap:balance}
+.page-head p{margin:4px 0 0;color:var(--ink-2);max-width:62ch}
+.head-actions{display:flex;flex-wrap:wrap;gap:8px}
+.search{height:34px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:0 10px;min-width:0;width:240px;max-width:100%}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;transition:border-color .12s, transform .12s}
+.card:hover{border-color:var(--ink-3)}
+.thumb{aspect-ratio:16/10;background:var(--panel-2);display:grid;place-items:center;border-bottom:1px solid var(--line);overflow:hidden;max-width:100%}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.mono-tile{font-family:var(--f-head);font-weight:700;font-size:40px;color:var(--ink-3);letter-spacing:1px}
+.card .meta{padding:12px 14px 6px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.card h3{margin:0;font-family:var(--f-head);font-size:18px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card p{margin:0;color:var(--ink-2);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .small{color:var(--ink-3);font-size:12px;font-variant-numeric:tabular-nums}
+.card-actions{display:flex;gap:2px;padding:6px 8px 10px;margin-top:auto}
+.card-actions .btn{height:26px;font-size:12.5px;padding:0 8px}
+.tag{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+.empty{border:1px dashed var(--line);border-radius:10px;padding:40px 20px;text-align:center;color:var(--ink-2)}
+.empty h3{font-family:var(--f-head);margin:0 0 6px;color:var(--ink);font-size:20px}
+.site-info{display:flex;flex-wrap:wrap;gap:6px 22px;color:var(--ink-2);font-size:13.5px}
+.site-info b{color:var(--ink);font-weight:600}
+
+/* editor */
+.editor{display:grid;grid-template-columns:52px minmax(0,1fr) 330px;height:100%;min-height:0}
+.tools{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0;overflow-y:auto}
+.tools .sep{width:26px;height:1px;background:var(--line);margin:5px 0;flex:none}
+.tool{width:38px;height:38px;flex:none;border:0;border-radius:8px;background:transparent;color:var(--ink-2);display:grid;place-items:center;cursor:pointer;position:relative}
+.tool:hover{background:var(--panel-2);color:var(--ink)}
+.tool.on{background:var(--accent-soft);color:var(--accent)}
+.tool svg{width:20px;height:20px}
+.stage-wrap{position:relative;background:var(--stage);overflow:hidden;min-width:0;touch-action:none}
+#stage{display:block;width:100%;height:100%;user-select:none;-webkit-user-select:none;cursor:default}
+#stage.draw{cursor:crosshair}
+#stage.pan,#stage.space{cursor:grab}
+#stage.panning{cursor:grabbing}
+.hud{position:absolute;left:10px;right:10px;bottom:10px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
+.hud>div{background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:var(--r);padding:5px 9px;font-size:12.5px;color:var(--ink-2);max-width:70%;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.hud .coords{font-family:var(--f-mono);font-size:11.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.hud kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-bottom-width:2px;border-radius:3px;padding:0 4px;background:var(--panel)}
+.dropzone{position:absolute;inset:0;border:3px dashed var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);display:grid;place-items:center;font-family:var(--f-head);font-size:22px;font-weight:700;color:var(--accent);pointer-events:none}
+
+.panel{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line);flex:none}
+.tabs button{flex:1;height:40px;border:0;background:none;font-family:var(--f-head);font-weight:600;font-size:14px;color:var(--ink-2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.tab-body{overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;min-height:0;flex:1}
+.sec{display:flex;flex-direction:column;gap:8px}
+.sec-h{font-family:var(--f-head);font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);margin:0}
+.hint{color:var(--ink-2);font-size:13px;margin:0}
+.f{display:grid;grid-template-columns:104px minmax(0,1fr);align-items:center;gap:8px;font-size:13px}
+.f>span{color:var(--ink-2)}
+.f input:not([type=color]):not([type=range]),.f select,.f textarea{width:100%;min-width:0;height:30px;border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:0 8px}
+.f textarea{height:auto;min-height:64px;padding:6px 8px;resize:vertical;font-family:inherit}
+.f input[type=color]{width:100%;height:30px;padding:2px;border:1px solid var(--line);border-radius:5px;background:var(--panel);cursor:pointer}
+.f input[type=range]{width:100%}
+.f.stack{grid-template-columns:1fr}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chk{display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer}
+.chk input{width:16px;height:16px;accent-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{height:30px;border:1px solid var(--line);border-radius:15px;padding:0 11px;background:var(--panel);cursor:pointer;font-size:13px;display:inline-flex;align-items:center;gap:6px}
+.chip.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
+.chip svg{width:16px;height:16px}
+.divider{height:1px;background:var(--line);margin:2px 0}
+.swatches{display:flex;gap:5px;flex-wrap:wrap}
+.sw{width:20px;height:20px;border-radius:4px;border:1px solid var(--line);cursor:pointer;padding:0}
+
+.cats{display:flex;flex-direction:column;gap:4px}
+.cat{display:grid;grid-template-columns:36px minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;text-align:left}
+.cat:hover{border-color:var(--ink-3)}
+.cat.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.cat-main{display:flex;flex-direction:column;min-width:0}
+.cat-code{font-family:var(--f-mono);font-weight:600;font-size:13px}
+.cat-name{font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-count{font-family:var(--f-mono);font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.cat kbd{font-family:var(--f-mono);font-size:10.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+.armed{border:1px solid var(--accent);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px;background:color-mix(in srgb,var(--accent-soft) 60%,var(--panel))}
+.armed .big{font-family:var(--f-mono);font-size:20px;font-weight:600;color:var(--accent)}
+.key{display:flex;gap:14px;font-size:12.5px;color:var(--ink-2)}
+.key i{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.idbig{font-family:var(--f-mono);font-size:22px;font-weight:600}
+.warn{color:var(--danger);font-size:12.5px}
+
+.reg-tools{display:flex;gap:6px;flex-wrap:wrap}
+.reg-tools select,.reg-tools input{height:30px;border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:0 8px;min-width:0}
+.reg-tools input{flex:1}
+.reg{width:100%;border-collapse:collapse;font-size:12.5px}
+.reg th{text-align:left;font-weight:600;color:var(--ink-3);font-size:11px;letter-spacing:.8px;text-transform:uppercase;padding:4px 6px;border-bottom:1px solid var(--line);position:sticky;top:-14px;background:var(--panel)}
+.reg td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.reg tr{cursor:pointer}
+.reg tr:hover td{background:var(--panel-2)}
+.reg tr.on td{background:var(--accent-soft)}
+.reg .id{font-family:var(--f-mono);font-weight:600;white-space:nowrap}
+.reg .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.reg .notes{color:var(--ink-3)}
+.imglist{display:flex;flex-direction:column;gap:6px}
+.imgrow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:5px}
+.imgrow img{width:44px;height:32px;object-fit:cover;border-radius:3px;background:var(--panel-2)}
+.imgrow .nm{font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* modal */
+.modal-wrap{position:fixed;inset:0;background:rgba(10,14,18,.45);display:grid;place-items:center;z-index:50;padding:16px}
+.modal{background:var(--panel);color:var(--ink);border-radius:12px;box-shadow:var(--shadow);width:min(460px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;border:1px solid var(--line)}
+.modal.wide{width:min(980px,100%)}
+.modal header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px}
+.modal h2{margin:0;font-family:var(--f-head);font-size:20px;font-weight:700}
+.modal .x{width:30px;height:30px;border:0;background:none;font-size:22px;color:var(--ink-3);cursor:pointer;border-radius:6px}
+.modal .x:hover{background:var(--panel-2)}
+.modal-body{padding:8px 16px 14px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.modal-body p{margin:0;color:var(--ink-2)}
+.modal footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+.modal .f{grid-template-columns:120px minmax(0,1fr)}
+.seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg label{flex:1;position:relative;cursor:pointer}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{display:block;text-align:center;padding:7px 0;font-weight:600;font-size:13px;color:var(--ink-2)}
+.seg input:checked+span{background:var(--accent);color:var(--accent-ink)}
+.seg input:focus-visible+span{outline:2px solid var(--sel);outline-offset:-2px}
+.sat{display:flex;flex-direction:column;gap:10px}
+.sat-search{display:flex;gap:6px}
+.sat-search input{flex:1;min-width:0;height:34px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:0 10px}
+.sat-res{display:flex;flex-wrap:wrap;gap:6px}
+.sat-res button{border:1px solid var(--line);background:var(--panel-2);border-radius:14px;padding:3px 10px;font-size:12.5px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sat-map{height:min(58vh,560px);border-radius:8px;border:1px solid var(--line);background:#222;overflow:hidden}
+.sat-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--ink-2)}
+.legend-ed{width:100%;border-collapse:collapse;font-size:13px}
+.legend-ed th{text-align:left;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink-3);padding:4px}
+.legend-ed td{padding:3px 4px}
+.legend-ed input,.legend-ed select{width:100%;height:30px;border:1px solid var(--line);border-radius:5px;background:var(--panel);padding:0 6px;min-width:0}
+.legend-ed input[type=color]{padding:2px;width:42px}
+.legend-ed .code{width:62px;font-family:var(--f-mono);text-transform:uppercase}
+.tbl-wrap{overflow-x:auto}
+.filelist{margin:0;padding-left:18px;color:var(--ink-2);font-size:13px}
+
+#toasts{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center;z-index:60;pointer-events:none}
+.toast{background:var(--ink);color:var(--panel);padding:8px 14px;border-radius:7px;font-size:13.5px;box-shadow:var(--shadow);max-width:min(520px,90vw)}
+.toast.warn{background:var(--danger);color:#fff}
+
+@media (max-width:820px){
+  .editor{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+  .tools{flex-direction:row;border-right:0;border-top:1px solid var(--line);overflow-x:auto;overflow-y:hidden;padding:4px max(8px,env(safe-area-inset-left,0px));padding-bottom:max(4px,env(safe-area-inset-bottom,0px));grid-row:2}
+  .tools .sep{width:1px;height:26px;margin:0 4px}
+  .stage-wrap{grid-row:1}
+  .panel{position:fixed;right:0;top:50px;bottom:0;width:min(360px,100%);z-index:20;transform:translateX(102%);transition:transform .18s;box-shadow:var(--shadow)}
+  .panel.open{transform:none}
+  .only-narrow{display:inline-grid}
+  .hide-narrow{display:none!important}
+  .crumbs a,.crumbs .sep{display:none}
+  .crumbs .cur{font-size:14px}
+  .top{gap:6px}
+  .top-actions{gap:2px}
+  .brand .word{display:none}
+  .hud{bottom:8px}
+  .hud .hint-box{display:none}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <button class="brand" id="brand" title="All sites">
+      <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="3" fill="var(--accent)"/><rect x="6" y="9" width="5" height="6" rx="1" fill="var(--panel)"/><circle cx="16" cy="12" r="2.2" fill="var(--panel)"/></svg>
+      <span class="word">Station Planner</span>
+    </button>
+    <nav class="crumbs" id="crumbs"></nav>
+    <div class="top-actions" id="topActions"></div>
+  </header>
+  <main id="view"></main>
+</div>
+<div id="toasts" aria-live="polite"></div>
+<input type="file" id="fileIn" multiple hidden accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.pdf,.json,image/*,application/pdf">
+<datalist id="stypes"></datalist>
+
+<script>
+'use strict';
+/* ================================================================
+   Pest Station Planner — local-first floor plan editor.
+   Storage lives behind the `Store` object so a cloud database
+   (e.g. Supabase + Google login) can replace it later.
+   ================================================================ */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const NS='http://www.w3.org/2000/svg';
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-5);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const r2=v=>Math.round(v*100)/100;
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const clone=o=>structuredClone(o);
+const fmtDate=t=>new Date(t).toLocaleDateString('en-NZ',{day:'numeric',month:'short',year:'numeric'});
+
+const TOX='#d62828', NONTOX='#2b9348', MAPFONT='Arial, Helvetica, sans-serif';
+const ESRI='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const CDN={
+  pdfjs:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',
+  pdfworker:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js',
+  leaflet:'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js',
+  leafletCss:'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css'
+};
+const DEFAULT_CATS=[
+  {code:'T', name:'Third line control',      shape:'circle',   mode:'tox',   color:'#d62828', type:'Toxic bait station'},
+  {code:'S', name:'Second line control',     shape:'square',   mode:'tox',   color:'#d62828', type:'Toxic bait station'},
+  {code:'F', name:'Fence line station',      shape:'triangle', mode:'tox',   color:'#d62828', type:'Toxic bait station'},
+  {code:'V', name:'Insect monitoring',       shape:'circle',   mode:'fixed', color:'#111111', type:'Insect monitor (glue board)'},
+  {code:'FI',name:'Flying insect monitoring',shape:'hexagon',  mode:'fixed', color:'#1971c2', type:'Insect light trap (ILT)'},
+  {code:'X', name:'Inspection point',        shape:'diamond',  mode:'fixed', color:'#111111', type:'Inspection point'},
+  {code:'W', name:'Vertebrate monitoring',   shape:'pentagon', mode:'fixed', color:'#9c5b16', type:'Vertebrate monitor'},
+  {code:'CP',name:'Control panel',           shape:'panel',    mode:'fixed', color:'#6741d9', type:'Control panel'}
+];
+const STATION_TYPES=[['Toxic bait station',1],['Toxic wax block',1],['Toxic soft bait / paste',1],['Toxic pellet bait',1],['Toxic insect gel / bait',1],
+  ['Non-toxic monitoring block',0],['Non-toxic bait station',0],['Snap trap',0],['Multi-catch trap',0],['Glue board',0],['Tracking plate',0],
+  ['Insect monitor (glue board)',0],['Pheromone trap',0],['Stored product pheromone trap',0],['Insect light trap (ILT)',0],['Electric fly killer (EFK)',0],
+  ['Vertebrate monitor',0],['Live capture trap',0],['Bird deterrent',0],['Inspection point',0],['Control panel',0]];
+const SHAPES=[['circle','Circle'],['square','Square'],['triangle','Triangle'],['diamond','Diamond'],['hexagon','Hexagon'],['pentagon','Pentagon'],['panel','Panel']];
+const DOORS=[['single','Single door',.9],['double','Double door',1.8],['sliding','Sliding door',1.8],['roller','Roller door',3.5],['exit','Fire exit',.9],['window','Window',1.2],['opening','Opening',1.0]];
+const COLORS=['#1a1f24','#495057','#868e96','#ffffff','#d62828','#e8590c','#f59f00','#2b9348','#1971c2','#6741d9','#c2255c','#9c5b16'];
+let CATS=clone(DEFAULT_CATS);
+
+/* ---------------- storage (IndexedDB, swap-ready) ---------------- */
+const Store={
+  db:null, mem:{sites:new Map(),maps:new Map(),assets:new Map(),meta:new Map()},
+  async open(){
+    try{
+      this.db=await new Promise((res,rej)=>{const q=indexedDB.open('pest-station-planner',1);
+        q.onupgradeneeded=()=>{const d=q.result;d.createObjectStore('sites',{keyPath:'id'});const m=d.createObjectStore('maps',{keyPath:'id'});m.createIndex('siteId','siteId');d.createObjectStore('assets',{keyPath:'id'});d.createObjectStore('meta',{keyPath:'id'});};
+        q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);});
+    }catch(e){ this.db=null; setTimeout(()=>toast('This browser is blocking storage, so plans will be lost when the tab closes.','warn'),300); }
+  },
+  run(store,mode,fn){return new Promise((res,rej)=>{const t=this.db.transaction(store,mode);const r=fn(t.objectStore(store));t.oncomplete=()=>res(r?r.result:undefined);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});},
+  async all(s){return this.db?this.run(s,'readonly',o=>o.getAll()):[...this.mem[s].values()].map(clone);},
+  async get(s,id){return this.db?this.run(s,'readonly',o=>o.get(id)):clone(this.mem[s].get(id));},
+  async put(s,v){if(!this.db){this.mem[s].set(v.id,clone(v));return;}return this.run(s,'readwrite',o=>o.put(v));},
+  async del(s,id){if(!this.db){this.mem[s].delete(id);return;}return this.run(s,'readwrite',o=>o.delete(id));},
+  async mapsOf(siteId){return this.db?this.run('maps','readonly',o=>o.index('siteId').getAll(siteId)):[...this.mem.maps.values()].filter(m=>m.siteId===siteId).map(clone);}
+};
+
+/* ---------------- small UI helpers ---------------- */
+function toast(msg,kind=''){const t=document.createElement('div');t.className='toast '+kind;t.textContent=msg;$('#toasts').appendChild(t);setTimeout(()=>t.remove(),kind==='warn'?5200:3000);}
+function loadScript(src){return new Promise((res,rej)=>{if($(`script[src="${src}"]`)){res();return;}const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('Could not load '+src));document.head.appendChild(s);});}
+function loadCss(href){if(!$(`link[href="${href}"]`)){const l=document.createElement('link');l.rel='stylesheet';l.href=href;document.head.appendChild(l);}}
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);}
+const safeName=s=>String(s).replace(/[\\/:*?"<>|]+/g,'-').trim()||'plan';
+function readAs(file,how){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(r.error);r[how](file);});}
+function loadImg(src){return new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=()=>rej(new Error('Image could not be read'));i.src=src;});}
+
+function modal({title,body,buttons=[{label:'Cancel',value:null},{label:'OK',value:'ok',primary:true}],wide=false,onOpen,before}){
+  return new Promise(res=>{
+    const wrap=document.createElement('div');wrap.className='modal-wrap';
+    wrap.innerHTML=`<form class="modal ${wide?'wide':''}" novalidate><header><h2>${esc(title)}</h2><button type="button" class="x" data-x="1" aria-label="Close">×</button></header><div class="modal-body">${body}</div><footer>${buttons.map((b,i)=>`<button type="${b.primary?'submit':'button'}" class="btn ${b.primary?'primary':''} ${b.danger?'danger':''}" data-i="${i}">${esc(b.label)}</button>`).join('')}</footer></form>`;
+    document.body.appendChild(wrap);const form=$('form',wrap);
+    const read=()=>{const o={};for(const el of form.elements){if(!el.name)continue;if(el.type==='checkbox')o[el.name]=el.checked;else if(el.type==='radio'){if(el.checked)o[el.name]=el.value;}else if(el.type==='file')o[el.name]=el.files;else o[el.name]=el.value;}return o;};
+    let busy=false;
+    const finish=async v=>{if(busy)return;const data=read();if(before&&v!==null){busy=true;let ok;try{ok=await before(v,data,wrap);}catch(e){toast(e.message||String(e),'warn');ok=false;}busy=false;if(ok===false)return;}
+      wrap.remove();document.removeEventListener('keydown',onKey,true);res({value:v,data});};
+    const onKey=e=>{if(e.key==='Escape'){e.stopPropagation();e.preventDefault();finish(null);}};
+    document.addEventListener('keydown',onKey,true);
+    form.addEventListener('submit',e=>{e.preventDefault();const p=buttons.find(b=>b.primary);finish(p?p.value:'ok');});
+    form.addEventListener('click',e=>{const b=e.target.closest('footer button,header .x');if(!b||b.type==='submit')return;e.preventDefault();if(b.dataset.x)return finish(null);finish(buttons[+b.dataset.i].value);});
+    wrap.addEventListener('pointerdown',e=>{if(e.target===wrap)finish(null);});
+    onOpen&&onOpen(wrap,form);
+    const f=$('.modal-body input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]), .modal-body textarea',wrap);f&&setTimeout(()=>{f.focus();f.select&&f.select();},40);
+  });
+}
+async function confirmBox(title,msg,label='Delete'){const r=await modal({title,body:`<p>${msg}</p>`,buttons:[{label:'Cancel',value:null},{label,value:'ok',primary:true}]});return r.value==='ok';}
+
+/* ---------------- theme ---------------- */
+function applyTheme(t){if(t)document.documentElement.dataset.theme=t;else delete document.documentElement.dataset.theme;}
+try{applyTheme(localStorage.getItem('psp-theme'));}catch(e){}
+function toggleTheme(){const cur=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');const n=cur==='dark'?'light':'dark';applyTheme(n);try{localStorage.setItem('psp-theme',n);}catch(e){}}
+const ICON={
+  sun:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  undo:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  redo:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>',
+  panel:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>',
+  plus:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  globe:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>',
+  upload:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>',
+  download:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>'
+};
+const TOOLS=[
+  ['select','Select & move','V','<path d="M5 3l14 8-6 2-3 6z"/>'],
+  ['pan','Pan the view','H','<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>'],
+  '-',
+  ['wall','Wall (click corners)','W','<path d="M3 19 L21 5" stroke-width="4"/>'],
+  ['room','Room (drag)','R','<rect x="4" y="5" width="16" height="14" stroke-width="3"/>'],
+  ['door','Door or window on a wall','D','<path d="M5 20V4h0"/><path d="M5 4a16 16 0 0 1 14 16" stroke-dasharray="3 2"/><path d="M3 20h18"/>'],
+  '-',
+  ['rect','Rectangle / zone','B','<rect x="4" y="6" width="16" height="12" rx="1"/>'],
+  ['ellipse','Ellipse','E','<ellipse cx="12" cy="12" rx="8" ry="6"/>'],
+  ['polygon','Area outline (click points)','P','<path d="M4 18 7 5l9 2 4 9-8 3z"/>'],
+  ['line','Line','L','<path d="M4 20 20 4"/>'],
+  ['arrow','Arrow','A','<path d="M4 20 19 5M11 5h8v8"/>'],
+  ['dim','Dimension','M','<path d="M3 12h18M3 8v8M21 8v8M7 12l-3 0M17 12h3"/>'],
+  ['text','Text','T','<path d="M5 6V4h14v2M12 4v16M9 20h6"/>']
+];
+
+/* ---------------- app state ---------------- */
+let route='', site=null, M=null;
+const E={view:{x:40,y:40,k:1},tool:'select',cat:null,doorKind:'single',sel:new Set(),hist:[],fut:[],drag:null,chain:null,cursor:null,snapHit:null,space:false,assets:{},assetsDirty:false,tab:'stations',catType:{},lastPush:0,pendingSat:false,regFilter:'',regQ:''};
+E.style={stroke:'#1a1f24',fill:'#1971c2',noFill:true,fillOp:.15,sw:2,dash:false,rx:0};
+E.textStyle={size:20,color:'#1a1f24',font:'Arial',bold:false,italic:false,halo:true,align:'start'};
+E.wallStyle={w:8,color:'#2a2f36'};
+
+const FONTS={'Arial':'Arial, Helvetica, sans-serif','Arial Narrow':'"Arial Narrow", "Roboto Condensed", Arial, sans-serif','Georgia':'Georgia, "Times New Roman", serif','Verdana':'Verdana, Geneva, sans-serif','Courier New':'"Courier New", Courier, monospace','Impact':'Impact, "Arial Black", sans-serif'};
+
+function newMap(siteId,name){return{id:uid(),siteId,name,created:Date.now(),updated:Date.now(),width:1600,height:1100,elements:[],scale:null,bgMeta:null,
+  furn:{legend:{show:true,x:1320,y:20,s:1},title:{show:true,x:1200,y:950,s:1},north:{show:true,x:60,y:60,rot:0,s:1},scalebar:{show:true,x:40,y:1060,s:1}},
+  settings:{grid:20,snap:true,showGrid:true,marker:10,label:12,showTypes:true,preparedBy:'',revision:'A'},thumb:null};}
+function layoutFurn(){const W=M.width,H=M.height,f=M.furn;const s=clamp(Math.min(W,H)/1100,.5,2.2);for(const k in f)f[k].s=r2(s);
+  f.legend.x=Math.round(W-280*s-16);f.legend.y=Math.round(16);f.title.x=Math.round(W-384*s-16);f.title.y=Math.round(H-136*s-16);f.north.x=Math.round(46*s);f.north.y=Math.round(46*s);f.scalebar.x=Math.round(24*s);f.scalebar.y=Math.round(H-28*s);}
+
+/* ---------------- station helpers ---------------- */
+const pad=n=>String(n).padStart(3,'0');
+const stId=el=>el.code+pad(el.num);
+function catOf(code){return CATS.find(c=>c.code===code)||{code,name:code,shape:'circle',mode:'fixed',color:'#868e96',type:''};}
+function stColor(el,cat){cat=cat||catOf(el.code);return cat.mode==='tox'?(el.toxic?TOX:NONTOX):cat.color;}
+function nextNum(code){let m=0;if(M)for(const e of M.elements)if(e.type==='station'&&e.code===code)m=Math.max(m,e.num);return m+1;}
+function knownTox(type){const t=STATION_TYPES.find(x=>x[0].toLowerCase()===String(type).toLowerCase());return t?!!t[1]:null;}
+function geom(shape,r){
+  const poly=(n,rr,rot=-Math.PI/2)=>Array.from({length:n},(_,i)=>{const a=rot+i*2*Math.PI/n;return `${r2(Math.cos(a)*rr)},${r2(Math.sin(a)*rr)}`;}).join(' ');
+  switch(shape){
+    case 'square':return `<rect x="${-r}" y="${-r}" width="${2*r}" height="${2*r}" ATTR/>`;
+    case 'triangle':return `<polygon points="${poly(3,r*1.32)}" transform="translate(0 ${r2(r*.22)})" ATTR/>`;
+    case 'diamond':return `<polygon points="${poly(4,r*1.3)}" ATTR/>`;
+    case 'hexagon':return `<polygon points="${poly(6,r*1.12,0)}" ATTR/>`;
+    case 'pentagon':return `<polygon points="${poly(5,r*1.16)}" ATTR/>`;
+    case 'panel':return `<rect x="${r2(-r*1.25)}" y="${r2(-r*.85)}" width="${r2(r*2.5)}" height="${r2(r*1.7)}" rx="${r2(r*.3)}" ATTR/>`;
+    default:return `<circle r="${r}" ATTR/>`;
+  }
+}
+function shapeSvg(shape,r,fill){const g=geom(shape,r),sw=Math.max(1.2,r*.22);
+  return g.replace('ATTR',`fill="none" stroke="#000" stroke-opacity=".5" stroke-width="${r2(sw+1.6)}" stroke-linejoin="round"`)+g.replace('ATTR',`fill="${fill}" stroke="#fff" stroke-width="${r2(sw)}" stroke-linejoin="round"`);}
+function catIcon(c,size=26){
+  if(c.mode==='tox')return `<svg viewBox="-17 -11 34 22" width="${size+8}" height="${Math.round(size*.7)}" aria-hidden="true"><g transform="translate(-7 0)">${shapeSvg(c.shape,6.5,TOX)}</g><g transform="translate(8 0)">${shapeSvg(c.shape,6.5,NONTOX)}</g></svg>`;
+  return `<svg viewBox="-13 -13 26 26" width="${size}" height="${size}" aria-hidden="true">${shapeSvg(c.shape,8,c.color)}</svg>`;
+}
+
+/* ---------------- geometry ---------------- */
+const getEl=id=>M.elements.find(e=>e.id===id);
+const walls=()=>M.elements.filter(e=>e.type==='wall');
+const wallLen=w=>Math.hypot(w.x2-w.x1,w.y2-w.y1);
+const S=()=>M.scale||45; // px per metre (45 used when the plan has no scale yet)
+function fmtLen(px){return M.scale?`${(px/M.scale).toFixed(2)} m`:`${Math.round(px)} px`;}
+function projWall(w,p){const dx=w.x2-w.x1,dy=w.y2-w.y1,L2=dx*dx+dy*dy||1;const t=clamp(((p.x-w.x1)*dx+(p.y-w.y1)*dy)/L2,0,1);const q={x:w.x1+dx*t,y:w.y1+dy*t};return{t,d:dist(p,q),q};}
+function nearestWall(p,max=Infinity){let best=null;for(const w of walls()){const r=projWall(w,p);if(r.d<max&&(!best||r.d<best.d))best={wall:w,...r};}return best;}
+function clampT(t,w,width){const L=wallLen(w)||1,h=Math.min(.5,width/2/L);return clamp(t,h,1-h);}
+function doorPos(o,w){const L=wallLen(w)||1;return{x:w.x1+(w.x2-w.x1)*o.t,y:w.y1+(w.y2-w.y1)*o.t,ang:Math.atan2(w.y2-w.y1,w.x2-w.x1)*180/Math.PI,L};}
+function bboxOf(el){
+  const pad2=v=>v/2+2;
+  switch(el.type){
+    case 'wall':case 'line':case 'arrow':case 'dim':{const p=pad2(el.w||el.sw||2);return{x:Math.min(el.x1,el.x2)-p,y:Math.min(el.y1,el.y2)-p,w:Math.abs(el.x2-el.x1)+2*p,h:Math.abs(el.y2-el.y1)+2*p};}
+    case 'rect':case 'ellipse':case 'image':return{x:el.x,y:el.y,w:el.w,h:el.h};
+    case 'polygon':{const xs=el.pts.map(p=>p[0]),ys=el.pts.map(p=>p[1]);const x=Math.min(...xs),y=Math.min(...ys);return{x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y};}
+    case 'text':{const n=$(`#L-main [data-id="${el.id}"]`);if(n){try{const b=n.getBBox();return{x:b.x,y:b.y,w:b.width,h:b.height};}catch(e){}}return{x:el.x,y:el.y,w:60,h:el.size};}
+    case 'station':{const r=M.settings.marker*(el.size||1)*1.35;return{x:el.x-r,y:el.y-r,w:2*r,h:2*r};}
+    case 'door':{const w=getEl(el.wall);if(!w)return{x:0,y:0,w:0,h:0};const p=doorPos(el,w),h=el.width/2+3;return{x:p.x-h,y:p.y-h,w:2*h,h:2*h};}
+  }
+  return{x:0,y:0,w:0,h:0};
+}
+function moveEl(el,dx,dy){if('x1' in el){el.x1+=dx;el.y1+=dy;el.x2+=dx;el.y2+=dy;}else if(el.pts){el.pts=el.pts.map(p=>[p[0]+dx,p[1]+dy]);}else if('x' in el){el.x+=dx;el.y+=dy;}}
+
+/* ---------------- markup (shared by screen and export) ---------------- */
+function wallMarkup(el,ops,ex){
+  const L=wallLen(el);if(L<.5)return'';const ux=(el.x2-el.x1)/L,uy=(el.y2-el.y1)/L;
+  const gaps=ops.map(o=>[o.t*L-o.width/2,o.t*L+o.width/2]).sort((a,b)=>a[0]-b[0]);
+  const segs=[];let cur=0;for(const[a,b]of gaps){if(a>cur)segs.push([cur,a]);cur=Math.max(cur,b);}if(cur<L)segs.push([cur,L]);
+  let s='';for(const[a,b]of segs){const A=a-(a<=.01?el.w/2:0),B=b+(b>=L-.01?el.w/2:0);
+    s+=`<line x1="${r2(el.x1+ux*A)}" y1="${r2(el.y1+uy*A)}" x2="${r2(el.x1+ux*B)}" y2="${r2(el.y1+uy*B)}" stroke="${el.color}" stroke-width="${el.w}" stroke-linecap="butt"/>`;}
+  if(!ex)s+=`<line x1="${el.x1}" y1="${el.y1}" x2="${el.x2}" y2="${el.y2}" stroke="transparent" stroke-width="${Math.max(el.w,12/E.view.k)}"/>`;
+  return `<g data-id="${el.id}">${s}</g>`;
+}
+function doorMarkup(o,w,ex,ghost){
+  const p=doorPos(o,w),W=o.width,h=W/2,t=w.w,col=o.kind==='exit'?'#2b9348':'#1a1f24',sw=r2(Math.max(1.2,Math.min(t/3,W/18)));
+  const stw=v=>`stroke="${col}" stroke-width="${v}" fill="none"`,st=stw(sw);let inner='';
+  const jambs=`<path d="M${-h} ${-t/2}V${t/2}M${h} ${-t/2}V${t/2}" ${st}/>`;
+  switch(o.kind){
+    case 'double':inner=`<path d="M${-h} 0V${h}M${h} 0V${h}" ${st}/><path d="M0 0A${h} ${h} 0 0 1 ${-h} ${h}M0 0A${h} ${h} 0 0 0 ${h} ${h}" ${st} stroke-dasharray="${r2(W/24)} ${r2(W/36)}"/>`;break;
+    case 'sliding':inner=`<path d="M${-h} ${-t/4}H${r2(W*.08)}M${r2(-W*.08)} ${t/4}H${h}" ${stw(r2(Math.max(sw*1.6,t/4)))}/>`;break;
+    case 'roller':inner=`<path d="M${-h} 0H${h}" ${stw(r2(Math.max(sw*1.4,t/3)))} stroke-dasharray="${r2(W/14)} ${r2(W/22)}"/>`;break;
+    case 'window':inner=`<rect x="${-h}" y="${-t/2}" width="${W}" height="${t}" fill="#ffffff" stroke="${col}" stroke-width="${sw}"/><path d="M${-h} 0H${h}" ${st}/>`;break;
+    case 'opening':inner='';break;
+    default:inner=`<path d="M${-h} 0V${W}" ${st}/><path d="M${h} 0A${W} ${W} 0 0 1 ${-h} ${W}" ${st} stroke-dasharray="${r2(W/16)} ${r2(W/24)}"/>`;
+  }
+  const label=o.kind==='exit'?`<text y="${r2(-t/2-4)}" text-anchor="middle" font-family="${MAPFONT}" font-weight="700" font-size="${r2(Math.max(8,W*.28))}" fill="#2b9348" stroke="#fff" stroke-width="2" paint-order="stroke">EXIT</text>`:'';
+  const hit=ex?'':`<rect x="${-h}" y="${-W}" width="${W}" height="${2*W}" fill="transparent"/>`;
+  return `<g ${ghost?'opacity=".6"':`data-id="${o.id}"`} transform="translate(${r2(p.x)} ${r2(p.y)}) rotate(${r2(p.ang)})">${hit}<g transform="scale(${o.hinge?-1:1} ${o.flip?-1:1})">${jambs}${inner}</g>${label}</g>`;
+}
+function shapeMarkup(el){
+  const fill=el.noFill?'none':el.fill,fo=el.noFill?'':` fill-opacity="${el.fillOp}"`,dash=el.dash?` stroke-dasharray="${el.sw*4} ${el.sw*2.5}"`:'';
+  const st=`fill="${fill}"${fo} stroke="${el.sw>0?el.stroke:'none'}" stroke-width="${el.sw}"${dash} stroke-linejoin="round"`;
+  let s='';
+  if(el.type==='rect')s=`<rect x="${r2(el.x)}" y="${r2(el.y)}" width="${r2(el.w)}" height="${r2(el.h)}" rx="${el.rx||0}" ${st}/>`;
+  else if(el.type==='ellipse')s=`<ellipse cx="${r2(el.x+el.w/2)}" cy="${r2(el.y+el.h/2)}" rx="${r2(el.w/2)}" ry="${r2(el.h/2)}" ${st}/>`;
+  else s=`<polygon points="${el.pts.map(p=>r2(p[0])+','+r2(p[1])).join(' ')}" ${st}/>`;
+  return `<g data-id="${el.id}">${s}</g>`;
+}
+function lineMarkup(el,ex){
+  const dx=el.x2-el.x1,dy=el.y2-el.y1,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;let s='';
+  if(el.type==='dim'){const c=el.color||'#1a1f24',tk=8,nx=-uy*tk,ny=ux*tk,fs=el.size||13;
+    const mx=(el.x1+el.x2)/2,my=(el.y1+el.y2)/2;let ang=Math.atan2(dy,dx)*180/Math.PI;if(ang>90||ang<-90)ang+=180;
+    s=`<line x1="${el.x1}" y1="${el.y1}" x2="${el.x2}" y2="${el.y2}" stroke="${c}" stroke-width="1.2"/><path d="M${r2(el.x1+nx)} ${r2(el.y1+ny)}L${r2(el.x1-nx)} ${r2(el.y1-ny)}M${r2(el.x2+nx)} ${r2(el.y2+ny)}L${r2(el.x2-nx)} ${r2(el.y2-ny)}" stroke="${c}" stroke-width="1.2"/>`+
+      `<text transform="translate(${r2(mx)} ${r2(my)}) rotate(${r2(ang)})" y="-5" text-anchor="middle" font-family="${MAPFONT}" font-size="${fs}" font-weight="700" fill="${c}" stroke="#fff" stroke-width="3" paint-order="stroke" stroke-linejoin="round">${esc(fmtLen(L))}</text>`;
+  }else{
+    const dash=el.dash?` stroke-dasharray="${el.sw*4} ${el.sw*2.5}"`:'';let x2=el.x2,y2=el.y2,head='';
+    if(el.type==='arrow'){const a=Math.max(9,el.sw*4.5),b=a*.55;x2-=ux*a*.8;y2-=uy*a*.8;
+      head=`<polygon points="${r2(el.x2)},${r2(el.y2)} ${r2(el.x2-ux*a-uy*b)},${r2(el.y2-uy*a+ux*b)} ${r2(el.x2-ux*a+uy*b)},${r2(el.y2-uy*a-ux*b)}" fill="${el.stroke}"/>`;}
+    s=`<line x1="${r2(el.x1)}" y1="${r2(el.y1)}" x2="${r2(x2)}" y2="${r2(y2)}" stroke="${el.stroke}" stroke-width="${el.sw}" stroke-linecap="round"${dash}/>${head}`;
+  }
+  if(!ex)s+=`<line x1="${el.x1}" y1="${el.y1}" x2="${el.x2}" y2="${el.y2}" stroke="transparent" stroke-width="${12/E.view.k}"/>`;
+  return `<g data-id="${el.id}">${s}</g>`;
+}
+function textMarkup(el){
+  const lines=String(el.text||' ').split('\n'),ff=FONTS[el.font]||MAPFONT;
+  const halo=el.halo?` stroke="#ffffff" stroke-width="${r2(el.size/5)}" paint-order="stroke" stroke-linejoin="round"`:'';
+  const ts=lines.map((l,i)=>`<tspan x="${r2(el.x)}" dy="${i?1.2:.9}em">${esc(l)||' '}</tspan>`).join('');
+  return `<g data-id="${el.id}"><text x="${r2(el.x)}" y="${r2(el.y)}" font-family="${esc(ff)}" font-size="${el.size}" fill="${el.color}" font-weight="${el.bold?700:400}" font-style="${el.italic?'italic':'normal'}" text-anchor="${el.align||'start'}"${halo}>${ts}</text></g>`;
+}
+function stationMarkup(el,ghost){
+  const cat=catOf(el.code),r=M.settings.marker*(el.size||1),fs=M.settings.label*(el.size||1),col=stColor(el,cat);
+  const halo=`stroke="#ffffff" stroke-width="${r2(fs/3.5)}" paint-order="stroke" stroke-linejoin="round"`;
+  const type=M.settings.showTypes&&!el.hideType&&el.stype?`<text y="${r2(r*1.25+fs*2.05)}" text-anchor="middle" font-family="${MAPFONT}" font-size="${r2(fs*.78)}" fill="#343a40" ${halo}>${esc(el.stype)}</text>`:'';
+  return `<g ${ghost?'opacity=".55"':`data-id="${el.id}"`} transform="translate(${r2(el.x)} ${r2(el.y)})">${shapeSvg(cat.shape,r,col)}<text y="${r2(r*1.25+fs)}" text-anchor="middle" font-family="${MAPFONT}" font-weight="700" font-size="${fs}" fill="#111111" ${halo}>${stId(el)}</text>${type}</g>`;
+}
+function imageMarkup(el){const src=E.assets[el.asset]||'';return `<image href="${src}" xlink:href="${src}" x="${r2(el.x)}" y="${r2(el.y)}" width="${r2(el.w)}" height="${r2(el.h)}" opacity="${el.opacity??1}" preserveAspectRatio="none"/>`;}
+
+function legendMarkup(){
+  const L=M.furn.legend;if(!L.show)return'';const counts={};for(const e of M.elements)if(e.type==='station')counts[e.code]=(counts[e.code]||0)+1;
+  let used=CATS.filter(c=>counts[c.code]);for(const code in counts)if(!CATS.find(c=>c.code===code))used.push(catOf(code));if(!used.length)used=CATS;
+  const anyTox=used.some(c=>c.mode==='tox'),W=280,rh=24,top=40,H=top+used.length*rh+(anyTox?30:0)+8;
+  let rows='';used.forEach((c,i)=>{const y=top+i*rh+rh/2;
+    const icon=c.mode==='tox'?`<g transform="translate(18 ${y})">${shapeSvg(c.shape,6.2,TOX)}</g><g transform="translate(36 ${y})">${shapeSvg(c.shape,6.2,NONTOX)}</g>`:`<g transform="translate(27 ${y})">${shapeSvg(c.shape,7,c.color)}</g>`;
+    rows+=`${icon}<text x="52" y="${y+4.5}" font-family="${MAPFONT}" font-size="12.5" fill="#1a1f24"><tspan font-weight="700">${esc(c.code)}</tspan>  ${esc(c.name)}</text><text x="${W-12}" y="${y+4.5}" text-anchor="end" font-family="${MAPFONT}" font-size="12" fill="#495057">${counts[c.code]||0}</text>`;});
+  if(anyTox){const y=top+used.length*rh+18;rows+=`<line x1="12" y1="${y-14}" x2="${W-12}" y2="${y-14}" stroke="#ced4da"/><circle cx="20" cy="${y}" r="5.5" fill="${TOX}"/><text x="31" y="${y+4}" font-family="${MAPFONT}" font-size="12" fill="#1a1f24">Toxic</text><circle cx="96" cy="${y}" r="5.5" fill="${NONTOX}"/><text x="107" y="${y+4}" font-family="${MAPFONT}" font-size="12" fill="#1a1f24">Non-toxic</text>`;}
+  return `<g data-furn="legend" transform="translate(${L.x} ${L.y}) scale(${L.s||1})"><rect width="${W}" height="${H}" fill="#ffffff" fill-opacity=".95" stroke="#1a1f24" stroke-width="1.2"/><text x="12" y="24" font-family="${MAPFONT}" font-size="13" font-weight="700" letter-spacing="1.5" fill="#1a1f24">STATION LEGEND</text><text x="${W-12}" y="24" text-anchor="end" font-family="${MAPFONT}" font-size="10.5" fill="#868e96">QTY</text>${rows}</g>`;
+}
+function titleMarkup(){
+  const T=M.furn.title;if(!T.show)return'';const W=384,H=136,st=M.settings,a=site?.address||'';
+  const cell=(x,y,label,val,size=12.5,bold=false)=>`<text x="${x}" y="${y}" font-family="${MAPFONT}" font-size="9" letter-spacing="1" fill="#868e96">${label}</text><text x="${x}" y="${y+15}" font-family="${MAPFONT}" font-size="${size}" font-weight="${bold?700:400}" fill="#1a1f24">${esc(val)}</text>`;
+  return `<g data-furn="title" transform="translate(${T.x} ${T.y}) scale(${T.s||1})"><rect width="${W}" height="${H}" fill="#ffffff" fill-opacity=".96" stroke="#1a1f24" stroke-width="1.2"/><path d="M0 52H${W}M0 94H${W}M240 94V${H}M312 94V${H}" stroke="#1a1f24" stroke-width=".8"/>
+  <text x="12" y="24" font-family="${MAPFONT}" font-size="19" font-weight="700" fill="#1a1f24">${esc(site?.name||'')}</text><text x="12" y="42" font-family="${MAPFONT}" font-size="11.5" fill="#495057">${esc(a.length>58?a.slice(0,57)+'…':a)}</text>
+  ${cell(12,68,'PLAN',M.name.length>48?M.name.slice(0,47)+'…':M.name,13,true)}${cell(12,110,'PREPARED BY',st.preparedBy||'—')}${cell(250,110,'DATE',fmtDate(M.updated))}${cell(322,110,'REV',st.revision||'—')}</g>`;
+}
+function northMarkup(){const N=M.furn.north;if(!N.show)return'';
+  return `<g data-furn="north" transform="translate(${N.x} ${N.y}) scale(${N.s||1}) rotate(${N.rot||0})"><circle r="24" fill="#ffffff" fill-opacity=".92" stroke="#1a1f24" stroke-width="1.2"/><polygon points="0,-18 7,8 0,3 -7,8" fill="#1a1f24"/><text y="20" text-anchor="middle" font-family="${MAPFONT}" font-size="11" font-weight="700" fill="#1a1f24">N</text></g>`;}
+function scalebarMarkup(){const B=M.furn.scalebar;if(!B.show||!M.scale)return'';
+  const target=170/(B.s||1)/M.scale;const nice=[1,2,5,10,15,20,25,50,75,100,150,200,250,500,1000].reduce((a,b)=>Math.abs(b-target)<Math.abs(a-target)?b:a);
+  const px=nice*M.scale/(B.s||1);const seg=px/4;let bars='';for(let i=0;i<4;i++)bars+=`<rect x="${r2(i*seg)}" y="0" width="${r2(seg)}" height="7" fill="${i%2?'#ffffff':'#1a1f24'}" stroke="#1a1f24" stroke-width="1"/>`;
+  return `<g data-furn="scalebar" transform="translate(${B.x} ${B.y}) scale(${B.s||1})"><rect x="-8" y="-22" width="${r2(px+16+30)}" height="36" fill="#ffffff" fill-opacity=".85"/>${bars}<text x="0" y="-6" font-family="${MAPFONT}" font-size="11" fill="#1a1f24">0</text><text x="${r2(px)}" y="-6" text-anchor="middle" font-family="${MAPFONT}" font-size="11" fill="#1a1f24">${nice} m</text></g>`;}
+function attribMarkup(){if(!M.bgMeta?.attr||!M.elements.some(e=>e.type==='image'&&e.bg))return'';return `<text x="${M.width-6}" y="${M.height-6}" text-anchor="end" font-family="${MAPFONT}" font-size="10" fill="#ffffff" stroke="#000" stroke-width="2.5" paint-order="stroke" opacity=".85">Imagery © Esri, Maxar, Earthstar Geographics</text>`;}
+
+function mainMarkup(ex){
+  const els=M.elements,wmap=new Map(),ops=new Map();
+  for(const e of els)if(e.type==='wall')wmap.set(e.id,e);
+  for(const e of els)if(e.type==='door'&&wmap.has(e.wall)){if(!ops.has(e.wall))ops.set(e.wall,[]);ops.get(e.wall).push(e);}
+  let s='';
+  for(const e of els)if(e.type==='rect'||e.type==='ellipse'||e.type==='polygon')s+=shapeMarkup(e);
+  for(const e of els)if(e.type==='wall')s+=wallMarkup(e,ops.get(e.id)||[],ex);
+  for(const e of els)if(e.type==='door'&&wmap.has(e.wall))s+=doorMarkup(e,wmap.get(e.wall),ex);
+  for(const e of els)if(e.type==='line'||e.type==='arrow'||e.type==='dim')s+=lineMarkup(e,ex);
+  for(const e of els)if(e.type==='text')s+=textMarkup(e);
+  for(const e of els)if(e.type==='station')s+=stationMarkup(e);
+  return s+attribMarkup()+scalebarMarkup()+northMarkup()+titleMarkup()+legendMarkup();
+}
+function buildSVG({bg=true}={}){
+  const W=M.width,H=M.height;let imgs='';
+  for(const e of [...M.elements].filter(e=>e.type==='image').sort((a,b)=>(b.bg?1:0)-(a.bg?1:0)))if(bg||!e.bg)imgs+=imageMarkup(e);
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#ffffff"/>${imgs}${mainMarkup(true)}</svg>`;
+}
+async function rasterize(scale=1,bg=true){
+  const svg=buildSVG({bg}),W=M.width,H=M.height;let sc=scale;const maxSide=16000,maxArea=120e6;
+  sc=Math.min(sc,maxSide/W,maxSide/H,Math.sqrt(maxArea/(W*H)));
+  const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml;charset=utf-8'}));
+  try{const img=await loadImg(url);const c=document.createElement('canvas');c.width=Math.round(W*sc);c.height=Math.round(H*sc);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(img,0,0,c.width,c.height);return c;}
+  finally{URL.revokeObjectURL(url);}
+}
+
+/* ================= ROUTING / PAGES ================= */
+window.addEventListener('hashchange',go);
+$('#brand').onclick=()=>{location.hash='#/';};
+async function go(){
+  const h=location.hash||'#/';
+  if(route==='map'&&!h.startsWith('#/map/'+M?.id))await leaveEditor();
+  try{
+    if(h.startsWith('#/map/'))await openMap(h.slice(6));
+    else if(h.startsWith('#/site/'))await showSite(h.slice(7));
+    else await showSites();
+  }catch(e){console.error(e);toast('Something went wrong opening that page: '+e.message,'warn');}
+}
+function crumbs(items){$('#crumbs').innerHTML=items.map((it,i)=>i===items.length-1?`<span class="cur">${esc(it[0])}</span>`:`<a href="${it[1]}">${esc(it[0])}</a><span class="sep">/</span>`).join('');}
+const themeBtn=()=>`<button class="ib" data-top="theme" title="Switch light / dark">${ICON.sun}</button>`;
+
+async function showSites(){
+  route='sites';M=null;site=null;
+  const [sites,maps]=await Promise.all([Store.all('sites'),Store.all('maps')]);
+  crumbs([['Sites','#/']]);
+  $('#topActions').innerHTML=`<button class="btn hide-narrow" data-top="import-site">${ICON.upload}Import backup</button><button class="btn primary" data-top="new-site">${ICON.plus}New site</button>${themeBtn()}`;
+  sites.sort((a,b)=>b.updated-a.updated);
+  const card=s=>{const ms=maps.filter(m=>m.siteId===s.id).sort((a,b)=>b.updated-a.updated);const th=ms.find(m=>m.thumb)?.thumb;
+    return `<article class="card" data-site="${s.id}" data-name="${esc((s.name+' '+(s.address||'')).toLowerCase())}"><div class="thumb">${th?`<img src="${th}" alt="">`:`<span class="mono-tile">${esc(s.name.slice(0,2).toUpperCase())}</span>`}</div>
+      <div class="meta"><h3>${esc(s.name)}${s.sample?'<span class="tag">Example</span>':''}</h3><p>${esc(s.address||'No address')}</p><p class="small">${ms.length} plan${ms.length===1?'':'s'} · updated ${fmtDate(s.updated)}</p></div>
+      <div class="card-actions"><button class="btn ghost" data-act="edit">Edit</button><button class="btn ghost" data-act="backup">Back up</button><button class="btn ghost danger" data-act="del">Delete</button></div></article>`;};
+  $('#view').innerHTML=`<div class="page"><div class="page-in"><div class="page-head"><div><h1>Sites</h1><p>Each site is a folder for its floor plans. Open a site to see or add its plans. Everything is saved in this browser; use Back up to keep a copy.</p></div><input class="search" id="siteQ" type="search" placeholder="Search sites" aria-label="Search sites"></div>
+    ${sites.length?`<div class="grid" id="siteGrid">${sites.map(card).join('')}</div>`:`<div class="empty"><h3>No sites yet</h3><p>Create a site for each customer location, for example a food plant called Teagle.</p><p style="margin-top:12px"><button class="btn primary" data-top="new-site">${ICON.plus}New site</button></p></div>`}</div></div>`;
+  $('#siteQ').oninput=e=>{const q=e.target.value.toLowerCase();$$('#siteGrid .card').forEach(c=>c.hidden=!c.dataset.name.includes(q));};
+  $('#siteGrid')?.addEventListener('click',async e=>{const c=e.target.closest('.card');if(!c)return;const id=c.dataset.site,b=e.target.closest('[data-act]');
+    if(!b){location.hash='#/site/'+id;return;}
+    const s=await Store.get('sites',id);
+    if(b.dataset.act==='edit'){if(await editSite(s))showSites();}
+    if(b.dataset.act==='backup')backupSite(s);
+    if(b.dataset.act==='del'){const ms=await Store.mapsOf(id);if(await confirmBox('Delete site',`Delete <b>${esc(s.name)}</b> and its ${ms.length} plan${ms.length===1?'':'s'}? This cannot be undone. Back up first if you might need them.`)){for(const m of ms){await Store.del('maps',m.id);await Store.del('assets',m.id);}await Store.del('sites',id);toast('Site deleted');showSites();}}
+  });
+}
+async function editSite(s){
+  const isNew=!s;s=s||{id:uid(),name:'',address:'',client:'',notes:'',created:Date.now(),updated:Date.now()};
+  const r=await modal({title:isNew?'New site':'Edit site',body:`<label class="f"><span>Site name</span><input name="name" value="${esc(s.name)}" placeholder="e.g. Teagle" required></label><label class="f"><span>Address</span><input name="address" value="${esc(s.address)}" placeholder="Street, suburb, city"></label><label class="f"><span>Client contact</span><input name="client" value="${esc(s.client)}" placeholder="Name, phone"></label><label class="f"><span>Notes</span><textarea name="notes" rows="3">${esc(s.notes)}</textarea></label>`,
+    buttons:[{label:'Cancel',value:null},{label:isNew?'Create site':'Save',value:'ok',primary:true}],before:(v,d)=>{if(!d.name.trim()){toast('Give the site a name.','warn');return false;}}});
+  if(r.value!=='ok')return null;
+  Object.assign(s,{name:r.data.name.trim(),address:r.data.address.trim(),client:r.data.client.trim(),notes:r.data.notes,updated:Date.now()});delete s.sample;
+  await Store.put('sites',s);return s;
+}
+async function backupSite(s){
+  const ms=await Store.mapsOf(s.id),assets={};for(const m of ms){const a=await Store.get('assets',m.id);assets[m.id]=a?.data||{};}
+  download(new Blob([JSON.stringify({format:'pest-station-planner-site',version:1,exported:new Date().toISOString(),site:s,maps:ms,assets,categories:CATS})],{type:'application/json'}),safeName(s.name)+' - site backup.json');
+  toast('Backup saved');
+}
+async function importSiteFile(file){
+  let j;try{j=JSON.parse(await readAs(file,'readAsText'));}catch(e){toast('That file is not a readable backup.','warn');return;}
+  if(j.format==='pest-station-planner-site'){
+    const s={...j.site,id:uid(),updated:Date.now()};delete s.sample;if((await Store.all('sites')).some(x=>x.name===s.name))s.name+=' (imported)';
+    await Store.put('sites',s);
+    for(const m of j.maps||[]){const nm={...m,id:uid(),siteId:s.id};await Store.put('maps',nm);await Store.put('assets',{id:nm.id,data:(j.assets||{})[m.id]||{}});}
+    mergeCats(j.categories);toast(`Imported ${s.name}`);
+  }else if(j.format==='pest-station-planner-map'){toast('That is a single plan file. Open a site, then import it there.','warn');return;}
+  else{toast('That JSON file is not a Station Planner backup.','warn');return;}
+  showSites();
+}
+async function mergeCats(list){if(!Array.isArray(list))return;let added=0;for(const c of list)if(c?.code&&!CATS.find(x=>x.code===c.code)){CATS.push(c);added++;}if(added)await Store.put('meta',{id:'cats',value:CATS});}
+
+async function showSite(id){
+  site=await Store.get('sites',id);if(!site){location.hash='#/';return;}
+  route='site';M=null;const maps=(await Store.mapsOf(id)).sort((a,b)=>b.updated-a.updated);
+  crumbs([['Sites','#/'],[site.name,'#/site/'+id]]);
+  $('#topActions').innerHTML=`<button class="btn hide-narrow" data-top="import-map">${ICON.upload}Import plan</button><button class="btn primary" data-top="new-map">${ICON.plus}New plan</button>${themeBtn()}`;
+  const card=m=>{const n=m.elements.filter(e=>e.type==='station').length;return `<article class="card" data-map="${m.id}"><div class="thumb">${m.thumb?`<img src="${m.thumb}" alt="">`:`<span class="mono-tile">—</span>`}</div><div class="meta"><h3>${esc(m.name)}</h3><p class="small">${n} station${n===1?'':'s'} · rev ${esc(m.settings?.revision||'A')} · ${fmtDate(m.updated)}</p></div>
+    <div class="card-actions"><button class="btn ghost" data-act="rename">Rename</button><button class="btn ghost" data-act="dup">Duplicate</button><button class="btn ghost" data-act="file">Save file</button><button class="btn ghost danger" data-act="del">Delete</button></div></article>`;};
+  $('#view').innerHTML=`<div class="page"><div class="page-in"><div class="page-head"><div><h1>${esc(site.name)}${site.sample?'<span class="tag">Example</span>':''}</h1><div class="site-info">${site.address?`<span><b>Address</b> ${esc(site.address)}</span>`:''}${site.client?`<span><b>Contact</b> ${esc(site.client)}</span>`:''}<span><b>Plans</b> ${maps.length}</span></div>${site.notes?`<p>${esc(site.notes)}</p>`:''}</div><div class="head-actions"><button class="btn" data-top="edit-site">Edit site</button><button class="btn" data-top="backup">Back up site</button></div></div>
+    ${maps.length?`<div class="grid" id="mapGrid">${maps.map(card).join('')}</div>`:`<div class="empty"><h3>No plans for ${esc(site.name)} yet</h3><p>Start from a blank page, a satellite photo of the property, or an existing plan (image or PDF).</p><p style="margin-top:12px"><button class="btn primary" data-top="new-map">${ICON.plus}New plan</button></p></div>`}</div></div>`;
+  $('#mapGrid')?.addEventListener('click',async e=>{const c=e.target.closest('.card');if(!c)return;const mid=c.dataset.map,b=e.target.closest('[data-act]');
+    if(!b){location.hash='#/map/'+mid;return;}
+    const m=await Store.get('maps',mid);
+    if(b.dataset.act==='rename'){const r=await modal({title:'Rename plan',body:`<label class="f"><span>Plan name</span><input name="n" value="${esc(m.name)}"></label>`,buttons:[{label:'Cancel',value:null},{label:'Save',value:'ok',primary:true}]});if(r.value==='ok'&&r.data.n.trim()){m.name=r.data.n.trim();await Store.put('maps',m);showSite(id);}}
+    if(b.dataset.act==='dup'){const a=await Store.get('assets',mid);const n={...clone(m),id:uid(),name:m.name+' (copy)',created:Date.now(),updated:Date.now()};await Store.put('maps',n);await Store.put('assets',{id:n.id,data:a?.data||{}});showSite(id);}
+    if(b.dataset.act==='file'){const a=await Store.get('assets',mid);download(new Blob([JSON.stringify({format:'pest-station-planner-map',version:1,map:m,assets:a?.data||{}})],{type:'application/json'}),safeName(site.name+' - '+m.name)+'.json');}
+    if(b.dataset.act==='del'){if(await confirmBox('Delete plan',`Delete <b>${esc(m.name)}</b>? This cannot be undone.`)){await Store.del('maps',mid);await Store.del('assets',mid);toast('Plan deleted');showSite(id);}}
+  });
+}
+async function newPlan(){
+  const r=await modal({title:'New plan',body:`<label class="f"><span>Plan name</span><input name="name" placeholder="e.g. Ground floor, Warehouse, Site perimeter"></label>
+    <div class="seg" role="radiogroup"><label><input type="radio" name="start" value="blank" checked><span>Blank page</span></label><label><input type="radio" name="start" value="sat"><span>Satellite photo</span></label><label><input type="radio" name="start" value="file"><span>From a file</span></label></div>
+    <label class="f" id="npFile" hidden><span>Plan file</span><input type="file" name="file" accept=".png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.pdf,image/*,application/pdf"></label>`,
+    buttons:[{label:'Cancel',value:null},{label:'Create plan',value:'ok',primary:true}],
+    onOpen:(w)=>{w.addEventListener('change',()=>{$('#npFile',w).hidden=$('input[name=start]:checked',w).value!=='file';});},
+    before:(v,d)=>{if(d.start==='file'&&!d.file?.length){toast('Choose a file to start from.','warn');return false;}}});
+  if(r.value!=='ok')return;
+  const m=newMap(site.id,r.data.name.trim()||'Plan '+((await Store.mapsOf(site.id)).length+1));
+  await Store.put('maps',m);await Store.put('assets',{id:m.id,data:{}});
+  E.pendingSat=r.data.start==='sat';E.pendingFiles=r.data.start==='file'?[...r.data.file]:null;
+  location.hash='#/map/'+m.id;
+}
+async function importMapFiles(files){
+  for(const f of files){let j;try{j=JSON.parse(await readAs(f,'readAsText'));}catch(e){toast(`${f.name} could not be read.`,'warn');continue;}
+    if(j.format!=='pest-station-planner-map'){toast(`${f.name} is not a Station Planner plan file.`,'warn');continue;}
+    const m={...j.map,id:uid(),siteId:site.id,updated:Date.now()};await Store.put('maps',m);await Store.put('assets',{id:m.id,data:j.assets||{}});toast(`Imported ${m.name}`);}
+}
+
+/* top-bar actions (delegated) */
+$('#topActions').addEventListener('click',async e=>{const b=e.target.closest('[data-top]');if(!b)return;const a=b.dataset.top;
+  if(a==='theme')return toggleTheme();
+  if(a==='new-site'){const s=await editSite(null);if(s)location.hash='#/site/'+s.id;}
+  if(a==='import-site'){pick('.json',f=>importSiteFile(f[0]));}
+  if(a==='new-map')newPlan();
+  if(a==='import-map'){pick('.json',async f=>{await importMapFiles(f);showSite(site.id);},true);}
+  if(a==='edit-site'){if(await editSite(site))showSite(site.id);}
+  if(a==='backup')backupSite(site);
+  if(a==='undo')undo();if(a==='redo')redo();
+  if(a==='zin')zoomBy(1.25);if(a==='zout')zoomBy(.8);if(a==='fit')fitView();
+  if(a==='import')$('#fileIn').click();
+  if(a==='sat')openSatellite();
+  if(a==='export')openExport();
+  if(a==='panel')$('#panel').classList.toggle('open');
+});
+document.addEventListener('click',e=>{const b=e.target.closest('[data-top="new-site"],[data-top="new-map"]');if(b&&!b.closest('#topActions'))$(`#topActions [data-top="${b.dataset.top}"]`)?.click();});
+function pick(accept,cb,multi=false){const i=document.createElement('input');i.type='file';i.accept=accept;i.multiple=multi;i.onchange=()=>i.files.length&&cb([...i.files]);i.click();}
+
+/* ================= EDITOR ================= */
+async function openMap(id){
+  if(route==='map'&&M?.id===id)return;
+  const m=await Store.get('maps',id);if(!m){toast('That plan no longer exists.','warn');location.hash='#/';return;}
+  site=await Store.get('sites',m.siteId);M=m;route='map';
+  M.furn=M.furn||newMap().furn;M.settings={...newMap().settings,...M.settings};
+  E.assets=(await Store.get('assets',id))?.data||{};E.assetsDirty=false;
+  E.hist=[];E.fut=[];E.sel.clear();E.tool='select';E.chain=null;E.drag=null;
+  crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[M.name,'#/map/'+id]]);
+  $('#topActions').innerHTML=`<button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
+    <span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button></span>
+    <button class="btn hide-narrow" data-top="import" title="Import images, PDF or plan files">${ICON.upload}Import</button><button class="btn hide-narrow" data-top="sat">${ICON.globe}Satellite</button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button>
+    <span class="status hide-narrow" id="saveSt">Saved</span><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}`;
+  $('#view').innerHTML=`<div class="editor">
+    <nav class="tools" id="tools" aria-label="Drawing tools">${TOOLS.map(t=>t==='-'?'<div class="sep"></div>':`<button class="tool" data-tool="${t[0]}" title="${t[1]} (${t[2]})" aria-label="${t[1]}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t[3]}</svg></button>`).join('')}
+      <div class="sep"></div><button class="tool only-narrow" data-tool="import-m" title="Import" aria-label="Import">${ICON.upload}</button><button class="tool only-narrow" data-tool="sat-m" title="Satellite" aria-label="Satellite">${ICON.globe}</button></nav>
+    <section class="stage-wrap" id="stageWrap"><svg id="stage" xmlns="${NS}"><defs><pattern id="gridp" patternUnits="userSpaceOnUse" width="20" height="20"><path id="gridpath" d="M20 0H0V20" fill="none" stroke="#9aa5b1" stroke-opacity=".35" stroke-width="1"/></pattern></defs>
+      <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-ov"></g></g></svg>
+      <div class="hud"><div class="hint-box" id="hint"></div><div class="coords" id="coords"></div></div></section>
+    <aside class="panel" id="panel"><div class="tabs" role="tablist">${[['stations','Stations'],['props','Properties'],['register','Register'],['map','Plan']].map(t=>`<button data-tab="${t[0]}" role="tab">${t[1]}</button>`).join('')}</div><div class="tab-body" id="tabBody"></div></aside></div>`;
+  bindEditor();
+  if(!M.thumb&&M.elements.length)setTimeout(makeThumb,800);
+  requestAnimationFrame(()=>{fitView();E.tab='stations';setTool('select');
+    if(E.pendingSat){E.pendingSat=false;openSatellite();}
+    if(E.pendingFiles){const f=E.pendingFiles;E.pendingFiles=null;importIntoEditor(f,'bg');}});
+}
+async function leaveEditor(){
+  if(route!=='map'||!M)return;
+  await saveNow();
+  const used=new Set(M.elements.filter(e=>e.type==='image').map(e=>e.asset));let gc=false;
+  for(const k of Object.keys(E.assets))if(!used.has(k)){delete E.assets[k];gc=true;}
+  if(gc)await Store.put('assets',{id:M.id,data:E.assets});
+  try{await makeThumb();}catch(e){}
+  route='';
+}
+window.addEventListener('beforeunload',()=>{if(route==='map')saveNow();});
+
+/* ----- saving ----- */
+let saveT=null,thumbT=null;
+function setStatus(t){const s=$('#saveSt');if(s)s.textContent=t;}
+function scheduleSave(){setStatus('Saving…');clearTimeout(saveT);saveT=setTimeout(saveNow,450);clearTimeout(thumbT);thumbT=setTimeout(makeThumb,4000);}
+async function saveNow(){clearTimeout(saveT);if(!M)return;const m=M;m.updated=Date.now();
+  try{await Store.put('maps',m);if(E.assetsDirty){await Store.put('assets',{id:m.id,data:E.assets});E.assetsDirty=false;}if(site){site.updated=Date.now();await Store.put('sites',site);}if(M===m)setStatus('Saved');}
+  catch(e){console.error(e);setStatus('Not saved');toast('Saving failed. The browser may be out of storage space: '+e.message,'warn');}}
+async function makeThumb(){if(!M)return;const m=M;try{const c=await rasterize(Math.min(1,420/m.width));m.thumb=c.toDataURL('image/jpeg',.72);await Store.put('maps',m);}catch(e){}}
+
+/* ----- history ----- */
+const snap=()=>JSON.stringify({elements:M.elements,furn:M.furn,width:M.width,height:M.height,scale:M.scale,bgMeta:M.bgMeta,settings:M.settings});
+function pushHist(){E.hist.push(snap());if(E.hist.length>120)E.hist.shift();E.fut=[];updUndo();}
+function softPush(){if(Date.now()-E.lastPush>900)pushHist();E.lastPush=Date.now();}
+function restore(s){Object.assign(M,JSON.parse(s));for(const id of [...E.sel])if(!getEl(id))E.sel.delete(id);E.chain=null;renderAll();scheduleSave();updUndo();}
+function undo(){if(!E.hist.length)return;E.fut.push(snap());restore(E.hist.pop());}
+function redo(){if(!E.fut.length)return;E.hist.push(snap());restore(E.fut.pop());}
+function updUndo(){const u=$('#bUndo'),r=$('#bRedo');if(u)u.disabled=!E.hist.length;if(r)r.disabled=!E.fut.length;}
+function changed(){render();refreshPanel();scheduleSave();}
+
+/* ----- view ----- */
+function applyView(){const v=E.view;$('#vp').setAttribute('transform',`translate(${r2(v.x)} ${r2(v.y)}) scale(${v.k})`);const z=$('#zoomLbl');if(z)z.textContent=Math.round(v.k*100)+'%';$('#gridpath').setAttribute('stroke-width',r2(1/v.k));render();}
+function fitView(){const r=$('#stage').getBoundingClientRect();if(!r.width)return;const k=Math.min((r.width-48)/M.width,(r.height-70)/M.height);E.view.k=clamp(k,.03,8);E.view.x=(r.width-M.width*E.view.k)/2;E.view.y=(r.height-M.height*E.view.k)/2-12;applyView();}
+function zoomAt(cx,cy,f){const r=$('#stage').getBoundingClientRect(),v=E.view,px=cx-r.left,py=cy-r.top,wx=(px-v.x)/v.k,wy=(py-v.y)/v.k;v.k=clamp(v.k*f,.03,24);v.x=px-wx*v.k;v.y=py-wy*v.k;applyView();}
+function zoomBy(f){const r=$('#stage').getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,f);}
+function centerOn(x,y){const r=$('#stage').getBoundingClientRect();E.view.x=r.width/2-x*E.view.k;E.view.y=r.height/2-y*E.view.k;applyView();}
+function toWorld(e){const r=$('#stage').getBoundingClientRect();return{x:(e.clientX-r.left-E.view.x)/E.view.k,y:(e.clientY-r.top-E.view.y)/E.view.k};}
+
+/* ----- rendering ----- */
+function renderImages(){
+  const layer=$('#L-img'),keep=new Set();
+  const imgs=M.elements.filter(e=>e.type==='image').sort((a,b)=>(b.bg?1:0)-(a.bg?1:0));
+  for(const el of imgs){keep.add(el.id);let n=layer.querySelector(`[data-id="${el.id}"]`);
+    if(!n){n=document.createElementNS(NS,'image');n.setAttribute('data-id',el.id);n.setAttribute('preserveAspectRatio','none');}
+    if(n.__a!==el.asset){n.setAttribute('href',E.assets[el.asset]||'');n.__a=el.asset;}
+    n.setAttribute('x',el.x);n.setAttribute('y',el.y);n.setAttribute('width',Math.max(1,el.w));n.setAttribute('height',Math.max(1,el.h));n.setAttribute('opacity',el.opacity??1);
+    n.style.pointerEvents=el.locked?'none':'auto';layer.appendChild(n);}
+  for(const n of [...layer.children])if(!keep.has(n.getAttribute('data-id')))n.remove();
+}
+function render(){
+  if(route!=='map'||!M)return;
+  $('#board').setAttribute('width',M.width);$('#board').setAttribute('height',M.height);
+  const g=$('#gridr');g.setAttribute('width',M.width);g.setAttribute('height',M.height);g.style.display=M.settings.showGrid?'':'none';
+  const gp=$('#gridp'),gs=M.settings.grid||20;gp.setAttribute('width',gs);gp.setAttribute('height',gs);$('#gridpath').setAttribute('d',`M${gs} 0H0V${gs}`);
+  renderImages();$('#L-main').innerHTML=mainMarkup(false);renderOverlay();
+}
+function renderOverlay(){
+  if(route!=='map')return;const k=E.view.k,sel=getComputedStyle(document.documentElement).getPropertyValue('--sel').trim()||'#1c7ed6';
+  const lbl=(x,y,t)=>`<text x="${x}" y="${y}" font-family="${MAPFONT}" font-size="${r2(12/k)}" font-weight="700" fill="${sel}" stroke="#fff" stroke-width="${r2(3.5/k)}" paint-order="stroke" stroke-linejoin="round">${esc(t)}</text>`;
+  const sw=r2(1.5/k),dash=`stroke-dasharray="${r2(5/k)} ${r2(4/k)}"`;let s='';
+  for(const id of E.sel){const el=getEl(id);if(!el)continue;const b=bboxOf(el),p=4/k;
+    if(el.type==='station')s+=`<circle cx="${el.x}" cy="${el.y}" r="${r2(M.settings.marker*(el.size||1)*1.35+5/k)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;
+    else s+=`<rect x="${r2(b.x-p)}" y="${r2(b.y-p)}" width="${r2(b.w+2*p)}" height="${r2(b.h+2*p)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;}
+  if(E.sel.size===1&&E.tool==='select'){const el=getEl([...E.sel][0]);if(el){const hs=9/k,h=(n,x,y)=>`<rect data-handle="${n}" x="${r2(x-hs/2)}" y="${r2(y-hs/2)}" width="${r2(hs)}" height="${r2(hs)}" fill="#fff" stroke="${sel}" stroke-width="${sw}" style="cursor:crosshair"/>`;
+    if('x1' in el){s+=h('p1',el.x1,el.y1)+h('p2',el.x2,el.y2);if(el.type==='wall'||el.type==='line')s+=lbl(r2((el.x1+el.x2)/2+8/k),r2((el.y1+el.y2)/2-8/k),fmtLen(Math.hypot(el.x2-el.x1,el.y2-el.y1)));}
+    else if(el.type==='polygon')el.pts.forEach((p,i)=>s+=h('v'+i,p[0],p[1]));
+    else if(['rect','ellipse','image'].includes(el.type))s+=h('se',el.x+el.w,el.y+el.h);}}
+  const d=E.drag,c=E.cursor;
+  if(d?.kind==='marquee'){const x=Math.min(d.a.x,d.b.x),y=Math.min(d.a.y,d.b.y);s+=`<rect x="${x}" y="${y}" width="${Math.abs(d.b.x-d.a.x)}" height="${Math.abs(d.b.y-d.a.y)}" fill="${sel}" fill-opacity=".08" stroke="${sel}" stroke-width="${sw}"/>`;}
+  if(d?.kind==='draw'){const{a,b}=d,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(b.x-a.x),h2=Math.abs(b.y-a.y);
+    if(E.tool==='room'||E.tool==='rect')s+=`<rect x="${x}" y="${y}" width="${w}" height="${h2}" fill="${sel}" fill-opacity=".06" stroke="${sel}" stroke-width="${E.tool==='room'?E.wallStyle.w:sw}" stroke-opacity="${E.tool==='room'?.5:1}"/>`+lbl(x,y-6/k,`${fmtLen(w)} × ${fmtLen(h2)}`);
+    else if(E.tool==='ellipse')s+=`<ellipse cx="${x+w/2}" cy="${y+h2/2}" rx="${w/2}" ry="${h2/2}" fill="none" stroke="${sel}" stroke-width="${sw}"/>`;
+    else s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${E.tool==='calib'?'#e8590c':sel}" stroke-width="${r2(2/k)}"/>`+lbl(r2((a.x+b.x)/2+8/k),r2((a.y+b.y)/2-8/k),fmtLen(dist(a,b)));}
+  if(E.chain&&c){const pts=E.chain.pts,q=E.chainCur||c;const all=[...pts,q];
+    s+=`<polyline points="${all.map(p=>p.x+','+p.y).join(' ')}" fill="none" stroke="${E.tool==='wall'?E.wallStyle.color:sel}" stroke-opacity="${E.tool==='wall'?.55:1}" stroke-width="${E.tool==='wall'?E.wallStyle.w:sw}"/>`;
+    const l=pts[pts.length-1];s+=lbl(r2((l.x+q.x)/2+8/k),r2((l.y+q.y)/2-8/k),fmtLen(dist(l,q)));
+    s+=`<circle cx="${pts[0].x}" cy="${pts[0].y}" r="${r2(5/k)}" fill="#fff" stroke="${sel}" stroke-width="${sw}"/>`;}
+  if(!d&&c){
+    if(E.tool==='station'&&E.cat){const ct=E.catType[E.cat]||{},cat=catOf(E.cat);s+=stationMarkup({code:E.cat,num:nextNum(E.cat),x:c.x,y:c.y,stype:ct.type??cat.type,toxic:ct.toxic??(knownTox(ct.type??cat.type)??cat.mode==='tox')},true);}
+    if(E.tool==='door'){const nw=nearestWall(c,40/k);if(nw){const width=Math.min(defaultDoorWidth(E.doorKind),wallLen(nw.wall)*.95);s+=doorMarkup({kind:E.doorKind,width,t:clampT(nw.t,nw.wall,width),flip:0,hinge:0},nw.wall,true,true);}}
+  }
+  if(E.snapHit&&(d?.kind==='draw'||E.chain||E.tool==='wall'))s+=`<circle cx="${E.snapHit.x}" cy="${E.snapHit.y}" r="${r2(6/k)}" fill="none" stroke="#e8590c" stroke-width="${r2(2/k)}"/>`;
+  $('#L-ov').innerHTML=s;
+}
+function renderAll(){render();renderPanel();updUndo();}
+
+/* ----- snapping ----- */
+function snapP(p,e,anchor){
+  const k=E.view.k;let best=null,bd=10/k;
+  for(const el of M.elements)if('x1' in el&&el.type!=='dim'){for(const q of [{x:el.x1,y:el.y1},{x:el.x2,y:el.y2}]){const d=dist(p,q);if(d<bd){bd=d;best=q;}}}
+  if(E.chain)for(const q of E.chain.pts){const d=dist(p,q);if(d<bd){bd=d;best=q;}}
+  if(best&&!e.altKey){E.snapHit={...best};return{...best};}
+  E.snapHit=null;let q={...p};
+  if(anchor&&e.shiftKey){const ang=Math.atan2(p.y-anchor.y,p.x-anchor.x),sa=Math.round(ang/(Math.PI/4))*(Math.PI/4),len=dist(p,anchor);q={x:anchor.x+Math.cos(sa)*len,y:anchor.y+Math.sin(sa)*len};
+    if(M.settings.snap&&!e.altKey){const g=M.settings.grid;if(Math.abs(Math.cos(sa))>.99)q.x=Math.round(q.x/g)*g;else if(Math.abs(Math.sin(sa))>.99)q.y=Math.round(q.y/g)*g;}}
+  else if(M.settings.snap&&!e.altKey){const g=M.settings.grid;q={x:Math.round(p.x/g)*g,y:Math.round(p.y/g)*g};}
+  return q;
+}
+
+/* ----- tools ----- */
+const HINTS={
+  select:'Click to select, drag to move. Drag on empty space to select an area. <kbd>Shift</kbd> adds to the selection.',
+  pan:'Drag to move around the plan. Scroll to zoom.',
+  wall:'Click to start a wall, then click each corner. Double-click or <kbd>Enter</kbd> to finish, click the first point to close. <kbd>Shift</kbd> locks angles.',
+  room:'Drag to draw a room. It is made of four walls you can add doors to.',
+  door:'Pick a type in Properties, then click on a wall. It snaps into the wall.',
+  rect:'Drag to draw a rectangle or zone.',ellipse:'Drag to draw an ellipse.',
+  polygon:'Click each corner of the area. Double-click or <kbd>Enter</kbd> to finish.',
+  line:'Drag to draw a line. <kbd>Shift</kbd> locks angles.',arrow:'Drag to draw an arrow.',dim:'Drag between two points to add a dimension.',
+  text:'Click where the text should go, then type in Properties.',
+  calib:'Drag along something with a known length, such as a wall or a door.',
+};
+function setTool(t,cat){
+  if(E.chain)finishChain(false);
+  E.tool=t;E.cat=t==='station'?cat:null;E.snapHit=null;
+  $$('#tools .tool').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));
+  const st=$('#stage');st.classList.toggle('draw',!['select','pan'].includes(t));st.classList.toggle('pan',t==='pan');
+  let h=HINTS[t]||'';if(t==='station'){const c=catOf(cat);h=`Click the plan to place <b>${esc(c.code)}${pad(nextNum(c.code))}</b>. Each click adds the next number. <kbd>Esc</kbd> to stop.`;}
+  $('#hint').innerHTML=h;
+  if(['door','rect','ellipse','polygon','line','arrow','text','wall','room'].includes(t)&&!E.sel.size)showTab('props');
+  else renderPanel();
+  renderOverlay();
+}
+function defaultDoorWidth(kind){const d=DOORS.find(x=>x[0]===kind);return r2((d?d[2]:.9)*S());}
+function add(el){el.id=el.id||uid();M.elements.push(el);return el;}
+function addRoom(x,y,w,h){const ws=E.wallStyle,mk=(a,b,c,d)=>add({type:'wall',x1:a,y1:b,x2:c,y2:d,w:ws.w,color:ws.color});return[mk(x,y,x+w,y),mk(x+w,y,x+w,y+h),mk(x+w,y+h,x,y+h),mk(x,y+h,x,y)];}
+function finishDraw(d){
+  const{a,b}=d,w=b.x-a.x,h=b.y-a.y,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);if(Math.hypot(w,h)<3)return;
+  let el=null;const st=E.style;
+  switch(E.tool){
+    case 'room':if(Math.abs(w)<4||Math.abs(h)<4)return;pushHist();addRoom(x,y,Math.abs(w),Math.abs(h));break;
+    case 'rect':case 'ellipse':pushHist();el=add({type:E.tool,x,y,w:Math.abs(w),h:Math.abs(h),stroke:st.stroke,fill:st.fill,noFill:st.noFill,fillOp:st.fillOp,sw:st.sw,dash:st.dash,rx:E.tool==='rect'?st.rx:0});break;
+    case 'line':case 'arrow':pushHist();el=add({type:E.tool,x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:st.stroke,sw:st.sw,dash:st.dash});break;
+    case 'dim':pushHist();el=add({type:'dim',x1:a.x,y1:a.y,x2:b.x,y2:b.y,color:'#1a1f24',size:13});break;
+    case 'calib':calibrate(dist(a,b));return;
+  }
+  if(el)E.sel=new Set([el.id]);changed();
+}
+function chainClick(e,p){
+  const k=E.view.k,last=E.chain?.pts[E.chain.pts.length-1],q=snapP(p,e,last);
+  if(!E.chain){E.chain={pts:[q]};renderOverlay();return;}
+  if(dist(q,last)*k<5){finishChain(false);return;}
+  if(E.chain.pts.length>=2&&dist(q,E.chain.pts[0])*k<9){E.chain.pts.push({...E.chain.pts[0]});finishChain(true);return;}
+  E.chain.pts.push(q);renderOverlay();
+}
+function finishChain(closed){
+  const ch=E.chain;E.chain=null;E.chainCur=null;if(!ch)return;const pts=ch.pts;
+  if(E.tool==='wall'&&pts.length>=2){pushHist();const ws=E.wallStyle;for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)add({type:'wall',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,w:ws.w,color:ws.color});changed();}
+  else if(E.tool==='polygon'){const u=closed?pts.slice(0,-1):pts;if(u.length>=3){pushHist();const st=E.style;const el=add({type:'polygon',pts:u.map(p=>[p.x,p.y]),stroke:st.stroke,fill:st.fill,noFill:st.noFill,fillOp:st.fillOp,sw:st.sw,dash:st.dash});E.sel=new Set([el.id]);changed();}else renderOverlay();}
+  else renderOverlay();
+}
+function placeDoor(p){
+  const nw=nearestWall(p,40/E.view.k);if(!nw){toast('Click on a wall to place a door or window.');return;}
+  pushHist();const width=Math.min(defaultDoorWidth(E.doorKind),wallLen(nw.wall)*.95);
+  const el=add({type:'door',kind:E.doorKind,wall:nw.wall.id,t:clampT(nw.t,nw.wall,width),width,flip:0,hinge:0});E.sel=new Set([el.id]);changed();
+}
+function placeStation(p){
+  const cat=catOf(E.cat),ct=E.catType[E.cat]||{},stype=ct.type??cat.type;
+  const toxic=ct.toxic??(knownTox(stype)??(cat.mode==='tox'));
+  pushHist();const el=add({type:'station',code:cat.code,num:nextNum(cat.code),x:r2(p.x),y:r2(p.y),stype,toxic,notes:'',size:1});
+  changed();$('#hint').innerHTML=`Placed <b>${stId(el)}</b>. Click again for <b>${cat.code}${pad(el.num+1)}</b>, or press <kbd>Esc</kbd> to stop.`;
+}
+function createText(p){pushHist();const el=add({type:'text',x:r2(p.x),y:r2(p.y),text:'Label',...E.textStyle});E.sel=new Set([el.id]);setTool('select');showTab('props');changed();renderPanel();
+  const ta=$('#tabBody textarea[data-k="text"]');if(ta){ta.focus();ta.select();}}
+async function calibrate(px){
+  const r=await modal({title:'Set the plan scale',body:`<p>The line you drew is ${Math.round(px)} px long. How long is it in real life?</p><label class="f"><span>Length (metres)</span><input name="m" type="number" min="0.01" step="0.01" inputmode="decimal"></label>`,buttons:[{label:'Cancel',value:null},{label:'Set scale',value:'ok',primary:true}],
+    before:(v,d)=>{if(!(parseFloat(d.m)>0)){toast('Enter a length greater than zero.','warn');return false;}}});
+  setTool('select');if(r.value!=='ok')return;pushHist();M.scale=r2(px/parseFloat(r.data.m)*1000)/1000;toast(`Scale set: 1 m = ${M.scale.toFixed(1)} px`);changed();showTab('map');
+}
+function deleteSel(){if(!E.sel.size)return;pushHist();const ids=E.sel;M.elements=M.elements.filter(e=>!ids.has(e.id)&&!(e.type==='door'&&ids.has(e.wall)));E.sel=new Set();changed();}
+function duplicateSel(){
+  if(!E.sel.size)return;pushHist();const map=new Map(),out=[],off=M.settings.grid||20;
+  const src=M.elements.filter(e=>E.sel.has(e.id));
+  for(const e of src){if(e.type==='door')continue;const n=clone(e);n.id=uid();map.set(e.id,n.id);moveEl(n,off,off);if(n.type==='station')n.num=nextNum(n.code)+out.filter(o=>o.type==='station'&&o.code===n.code).length;out.push(n);}
+  for(const e of src)if(e.type==='door'){const n=clone(e);n.id=uid();if(map.has(e.wall))n.wall=map.get(e.wall);else{const w=getEl(e.wall);n.t=clampT(e.t+e.width/(wallLen(w)||1)*1.2,w,e.width);}out.push(n);}
+  for(const e of M.elements)if(e.type==='door'&&map.has(e.wall)&&!E.sel.has(e.id)){const n=clone(e);n.id=uid();n.wall=map.get(e.wall);out.push(n);}
+  M.elements.push(...out);E.sel=new Set(out.map(o=>o.id));changed();
+}
+function selectAll(){E.sel=new Set(M.elements.filter(e=>!(e.type==='image'&&e.locked)).map(e=>e.id));renderAll();}
+
+/* ----- pointer handling ----- */
+function bindEditor(){
+  const st=$('#stage'),ptrs=new Map();let pinch=null;
+  st.addEventListener('contextmenu',e=>e.preventDefault());
+  st.addEventListener('mousedown',e=>e.preventDefault());
+  st.addEventListener('pointerdown',e=>{
+    if(document.activeElement&&document.activeElement!==document.body&&$('#panel').contains(document.activeElement))document.activeElement.blur();
+    try{st.setPointerCapture(e.pointerId);}catch(_){}ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(ptrs.size===2){E.drag=null;const[a,b]=[...ptrs.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,v:{...E.view}};return;}
+    if(ptrs.size>2)return;onDown(e);
+  });
+  st.addEventListener('pointermove',e=>{
+    if(ptrs.has(e.pointerId))ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pinch&&ptrs.size===2){const[a,b]=[...ptrs.values()],r=st.getBoundingClientRect(),d=Math.hypot(a.x-b.x,a.y-b.y),cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
+      const k=clamp(pinch.v.k*d/pinch.d,.03,24),wx=(pinch.cx-r.left-pinch.v.x)/pinch.v.k,wy=(pinch.cy-r.top-pinch.v.y)/pinch.v.k;E.view={k,x:cx-r.left-wx*k,y:cy-r.top-wy*k};applyView();return;}
+    onMove(e);
+  });
+  const up=e=>{ptrs.delete(e.pointerId);if(pinch){if(ptrs.size<2)pinch=null;return;}onUp(e);};
+  st.addEventListener('pointerup',up);st.addEventListener('pointercancel',up);
+  st.addEventListener('pointerleave',()=>{if(!E.drag){E.cursor=null;renderOverlay();}});
+  st.addEventListener('wheel',e=>{e.preventDefault();
+    if(!e.ctrlKey&&(Math.abs(e.deltaX)>Math.abs(e.deltaY)*.5)&&e.deltaMode===0&&!Number.isInteger(e.deltaY)){E.view.x-=e.deltaX;E.view.y-=e.deltaY;applyView();return;}
+    zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*(e.ctrlKey?.012:.0016)*(e.deltaMode===1?30:1)));},{passive:false});
+  $('#tools').addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(!b)return;const t=b.dataset.tool;
+    if(t==='import-m')return $('#fileIn').click();if(t==='sat-m')return openSatellite();setTool(t);});
+  $('#panel .tabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab);});
+  const tb=$('#tabBody');tb.addEventListener('input',onPanelInput);tb.addEventListener('change',onPanelChange);tb.addEventListener('click',onPanelClick);
+  const wrap=$('#stageWrap');let dz=null;
+  wrap.addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files')){e.preventDefault();if(!dz){dz=document.createElement('div');dz.className='dropzone';dz.textContent='Drop to import';wrap.appendChild(dz);}}});
+  wrap.addEventListener('dragleave',e=>{if(!wrap.contains(e.relatedTarget)){dz?.remove();dz=null;}});
+  wrap.addEventListener('drop',e=>{e.preventDefault();dz?.remove();dz=null;if(e.dataTransfer.files.length)importIntoEditor([...e.dataTransfer.files]);});
+  new ResizeObserver(()=>{if(route==='map')renderOverlay();}).observe(wrap);
+}
+$('#fileIn').addEventListener('change',e=>{const f=[...e.target.files];e.target.value='';if(f.length&&route==='map')importIntoEditor(f);});
+
+function onDown(e){
+  const p=toWorld(e),t=E.tool;E.cursor=p;
+  if(e.button===1||e.button===2||E.space||t==='pan'){E.drag={kind:'pan',sx:e.clientX,sy:e.clientY,vx:E.view.x,vy:E.view.y};$('#stage').classList.add('panning');return;}
+  if(e.button!==0)return;
+  if(t==='select')return downSelect(e,p);
+  if(t==='wall'||t==='polygon')return chainClick(e,p);
+  if(['room','rect','ellipse','line','arrow','dim','calib'].includes(t)){const q=snapP(p,e);E.drag={kind:'draw',a:q,b:q};renderOverlay();return;}
+  if(t==='text')return createText(p);
+  if(t==='door')return placeDoor(p);
+  if(t==='station')return placeStation(p);
+}
+function downSelect(e,p){
+  const tg=e.target,h=tg.closest('[data-handle]');
+  if(h&&E.sel.size===1){const el=getEl([...E.sel][0]);const d={kind:'handle',h:h.dataset.handle,id:el.id,orig:clone(el),start:p,pushed:false};
+    if(el.type==='wall'&&(d.h==='p1'||d.h==='p2')){const P=d.h==='p1'?{x:el.x1,y:el.y1}:{x:el.x2,y:el.y2};d.conn=[];for(const w of walls()){if(w.id===el.id)continue;if(dist({x:w.x1,y:w.y1},P)<.6)d.conn.push([w.id,'1']);if(dist({x:w.x2,y:w.y2},P)<.6)d.conn.push([w.id,'2']);}}
+    E.drag=d;return;}
+  const f=tg.closest('[data-furn]');if(f){const part=f.dataset.furn,F=M.furn[part];E.sel.clear();E.drag={kind:'furn',part,start:p,ox:F.x,oy:F.y,pushed:false};renderAll();return;}
+  const g=tg.closest('[data-id]');
+  if(g&&g.closest('#vp')){const id=g.getAttribute('data-id');
+    if(e.shiftKey){E.sel.has(id)?E.sel.delete(id):E.sel.add(id);}else if(!E.sel.has(id))E.sel=new Set([id]);
+    E.drag={kind:'move',start:p,orig:new Map([...E.sel].map(i=>[i,clone(getEl(i))]).filter(x=>x[1])),pushed:false};showTab('props');renderOverlay();return;}
+  if(!e.shiftKey&&E.sel.size){E.sel.clear();renderPanel();}
+  E.drag={kind:'marquee',a:p,b:p,add:e.shiftKey};renderOverlay();
+}
+function onMove(e){
+  const p=toWorld(e);E.cursor=p;const d=E.drag;
+  $('#coords').textContent=M.scale?`${(p.x/M.scale).toFixed(1)}, ${(p.y/M.scale).toFixed(1)} m · ${Math.round(E.view.k*100)}%`:`${Math.round(p.x)}, ${Math.round(p.y)} px · ${Math.round(E.view.k*100)}%`;
+  if(!d){if(E.chain){const l=E.chain.pts[E.chain.pts.length-1];E.chainCur=snapP(p,e,l);}else if(E.tool==='wall')snapP(p,e);renderOverlay();return;}
+  const k=E.view.k;
+  switch(d.kind){
+    case 'pan':E.view.x=d.vx+e.clientX-d.sx;E.view.y=d.vy+e.clientY-d.sy;applyView();break;
+    case 'move':{let dx=p.x-d.start.x,dy=p.y-d.start.y;if(!d.pushed){if(Math.hypot(dx,dy)*k<3)return;pushHist();d.pushed=true;}
+      const onlyFree=[...d.orig.values()].every(o=>o.type==='station'||o.type==='text'||o.type==='door');
+      if(M.settings.snap&&!e.altKey&&!onlyFree){const g=M.settings.grid;dx=Math.round(dx/g)*g;dy=Math.round(dy/g)*g;}
+      for(const[id,o]of d.orig){const el=getEl(id);if(!el)continue;
+        if(el.type==='door'){if(d.orig.size===1){const nw=nearestWall(p);if(nw){el.wall=nw.wall.id;el.t=clampT(nw.t,nw.wall,el.width);}}continue;}
+        Object.assign(el,clone(o));moveEl(el,dx,dy);}
+      render();break;}
+    case 'handle':{const el=getEl(d.id);if(!d.pushed){pushHist();d.pushed=true;}const o=d.orig;
+      if(d.h==='p1'||d.h==='p2'){const anchor=d.h==='p1'?{x:o.x2,y:o.y2}:{x:o.x1,y:o.y1};const q=snapP(p,e,anchor);el['x'+d.h[1]]=q.x;el['y'+d.h[1]]=q.y;
+        for(const[wid,end]of d.conn||[]){const w=getEl(wid);if(w){w['x'+end]=q.x;w['y'+end]=q.y;}}}
+      else if(d.h==='se'){const q=snapP(p,e);let w=Math.max(4,q.x-el.x),h=Math.max(4,q.y-el.y);if(el.type==='image'&&!e.shiftKey){const ar=o.w/o.h;h=w/ar;}el.w=w;el.h=h;}
+      else if(d.h[0]==='v'){const q=snapP(p,e);el.pts[+d.h.slice(1)]=[q.x,q.y];}
+      render();break;}
+    case 'furn':{if(!d.pushed){pushHist();d.pushed=true;}const F=M.furn[d.part];F.x=Math.round(d.ox+p.x-d.start.x);F.y=Math.round(d.oy+p.y-d.start.y);render();break;}
+    case 'marquee':d.b=p;renderOverlay();break;
+    case 'draw':d.b=snapP(p,e,['line','arrow','dim','calib'].includes(E.tool)?d.a:null);renderOverlay();break;
+  }
+}
+function onUp(){
+  const d=E.drag;E.drag=null;$('#stage').classList.remove('panning');if(!d)return;
+  if(d.kind==='marquee'){const x=Math.min(d.a.x,d.b.x),y=Math.min(d.a.y,d.b.y),w=Math.abs(d.b.x-d.a.x),h=Math.abs(d.b.y-d.a.y);
+    if(w*E.view.k>3||h*E.view.k>3){for(const el of M.elements){if(el.type==='image'&&el.locked)continue;const b=bboxOf(el);if(b.x<x+w&&b.x+b.w>x&&b.y<y+h&&b.y+b.h>y)E.sel.add(el.id);}if(E.sel.size)showTab('props');}
+    renderAll();return;}
+  if(d.kind==='draw'){finishDraw(d);return;}
+  if(d.pushed)changed();else renderOverlay();
+}
+
+/* ----- keyboard ----- */
+const typing=t=>t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable);
+document.addEventListener('keydown',e=>{
+  if(route!=='map'||$('.modal-wrap'))return;
+  if(typing(e.target)){if(e.key==='Escape')e.target.blur();return;}
+  const mod=e.ctrlKey||e.metaKey,key=e.key.toLowerCase();
+  if(mod&&key==='z'){e.preventDefault();e.shiftKey?redo():undo();return;}
+  if(mod&&key==='y'){e.preventDefault();redo();return;}
+  if(mod&&key==='d'){e.preventDefault();duplicateSel();return;}
+  if(mod&&key==='a'){e.preventDefault();selectAll();return;}
+  if(mod&&key==='s'){e.preventDefault();saveNow();toast('Saved');return;}
+  if(mod||e.altKey)return;
+  switch(e.key){
+    case 'Delete':case 'Backspace':e.preventDefault();deleteSel();return;
+    case 'Escape':if(E.chain)finishChain(false);else if(E.tool!=='select')setTool('select');else{E.sel.clear();renderAll();}return;
+    case 'Enter':if(E.chain)finishChain(false);return;
+    case ' ':e.preventDefault();E.space=true;$('#stage').classList.add('space');return;
+    case '+':case '=':zoomBy(1.25);return;case '-':case '_':zoomBy(.8);return;case '0':fitView();return;
+    case 'ArrowLeft':case 'ArrowRight':case 'ArrowUp':case 'ArrowDown':{if(!E.sel.size)return;e.preventDefault();softPush();const s=e.shiftKey?10:1;const dx=e.key==='ArrowLeft'?-s:e.key==='ArrowRight'?s:0,dy=e.key==='ArrowUp'?-s:e.key==='ArrowDown'?s:0;
+      for(const id of E.sel){const el=getEl(id);if(el&&el.type!=='door')moveEl(el,dx,dy);}changed();return;}
+  }
+  if(/^[1-9]$/.test(e.key)){const c=CATS[+e.key-1];if(c){setTool('station',c.code);showTab('stations');}return;}
+  const map={v:'select',h:'pan',w:'wall',r:'room',d:'door',b:'rect',e:'ellipse',p:'polygon',l:'line',a:'arrow',m:'dim',t:'text'};
+  if(map[key])setTool(map[key]);
+});
+document.addEventListener('keyup',e=>{if(e.key===' '){E.space=false;$('#stage')?.classList.remove('space');}});
+
+/* ================= PANEL ================= */
+function showTab(t){E.tab=t;renderPanel();}
+function refreshPanel(){const a=document.activeElement;if(a&&$('#tabBody')?.contains(a)&&typing(a))return;renderPanel();}
+function renderPanel(){
+  if(route!=='map')return;$$('#panel .tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===E.tab));
+  const tb=$('#tabBody');const scroll=tb.scrollTop;
+  tb.innerHTML=E.tab==='stations'?stationsTab():E.tab==='props'?propsTab():E.tab==='register'?registerTab():mapTab();
+  tb.scrollTop=scroll;
+  $('#stypes').innerHTML=STATION_TYPES.map(t=>`<option value="${esc(t[0])}">`).join('');
+}
+const F={
+  num:(sc,k,l,v,step=1,min=0)=>`<label class="f"><span>${l}</span><input type="number" data-s="${sc}" data-k="${k}" value="${r2(v)}" step="${step}" min="${min}"></label>`,
+  text:(sc,k,l,v,ph='',list='')=>`<label class="f"><span>${l}</span><input type="text" data-s="${sc}" data-k="${k}" value="${esc(v)}" placeholder="${esc(ph)}" ${list?`list="${list}"`:''}></label>`,
+  area:(sc,k,l,v)=>`<label class="f stack"><span>${l}</span><textarea data-s="${sc}" data-k="${k}" rows="3">${esc(v)}</textarea></label>`,
+  color:(sc,k,l,v)=>`<div class="f"><span>${l}</span><div class="row" style="flex-wrap:nowrap"><input type="color" data-s="${sc}" data-k="${k}" value="${v}" style="width:46px;flex:none"><div class="swatches">${COLORS.slice(0,8).map(c=>`<button class="sw" data-sw="${c}" data-s="${sc}" data-k="${k}" style="background:${c}" title="${c}"></button>`).join('')}</div></div></div>`,
+  check:(sc,k,l,v)=>`<label class="chk"><input type="checkbox" data-s="${sc}" data-k="${k}" ${v?'checked':''}> ${l}</label>`,
+  sel:(sc,k,l,v,opts)=>`<label class="f"><span>${l}</span><select data-s="${sc}" data-k="${k}">${opts.map(o=>`<option value="${esc(o[0])}" ${String(o[0])===String(v)?'selected':''}>${esc(o[1])}</option>`).join('')}</select></label>`,
+  range:(sc,k,l,v,min,max,step)=>`<label class="f"><span>${l}</span><input type="range" data-s="${sc}" data-k="${k}" value="${v}" min="${min}" max="${max}" step="${step}"></label>`
+};
+const unit=()=>M.scale?'m':'px',toU=px=>M.scale?r2(px/M.scale):Math.round(px),fromU=v=>M.scale?v*M.scale:v;
+
+function stationsTab(){
+  const counts={};for(const e of M.elements)if(e.type==='station')counts[e.code]=(counts[e.code]||0)+1;
+  let armed='';
+  if(E.tool==='station'&&E.cat){const c=catOf(E.cat),ct=E.catType[c.code]||{},type=ct.type??c.type,tox=ct.toxic??(knownTox(type)??c.mode==='tox');
+    armed=`<div class="armed"><div class="row" style="justify-content:space-between"><span class="sec-h" style="color:var(--accent)">Placing</span><button class="btn sm" data-act="stop">Stop</button></div><div class="big">${esc(c.code)}${pad(nextNum(c.code))}</div>
+      ${F.text('arm','type','New stations',type,'Station type','stypes')}${c.mode==='tox'?F.check('arm','toxic','Toxic (shows red)',tox):''}</div>`;}
+  return `<div class="sec"><p class="hint">Pick a station type, then click the plan. Each click adds the next number, so T001, T002, T003. Drag stations in Select mode to move them.</p></div>${armed}
+    <div class="cats">${CATS.map((c,i)=>`<button class="cat ${E.tool==='station'&&E.cat===c.code?'on':''}" data-cat="${esc(c.code)}">${catIcon(c,24)}<span class="cat-main"><span class="cat-code">${esc(c.code)}${pad(nextNum(c.code))}</span><span class="cat-name">${esc(c.name)}</span></span><span class="cat-count" title="On this plan">${counts[c.code]||0}</span>${i<9?`<kbd>${i+1}</kbd>`:'<span></span>'}</button>`).join('')}</div>
+    <div class="key"><span><i style="background:${TOX}"></i>Toxic</span><span><i style="background:${NONTOX}"></i>Non-toxic</span></div>
+    <div class="row"><button class="btn" data-act="edit-legend">Edit station types</button></div>`;
+}
+function propsTab(){
+  const sel=[...E.sel].map(getEl).filter(Boolean);
+  if(!sel.length){
+    const t=E.tool;
+    if(t==='door')return `<div class="sec"><h3 class="sec-h">Door or window type</h3><div class="chips">${DOORS.map(d=>`<button class="chip ${E.doorKind===d[0]?'on':''}" data-door="${d[0]}">${d[1]}</button>`).join('')}</div><p class="hint">Click on a wall to place it. Drag it later to slide it along the wall or onto another wall.</p></div>`;
+    if(t==='text')return `<div class="sec"><h3 class="sec-h">New text style</h3>${textFields('text',E.textStyle,false)}</div>`;
+    if(t==='wall'||t==='room')return `<div class="sec"><h3 class="sec-h">New wall style</h3>${F.num('wall','w','Thickness (px)',E.wallStyle.w,1,1)}${F.color('wall','color','Colour',E.wallStyle.color)}</div>`;
+    if(['rect','ellipse','polygon','line','arrow'].includes(t))return `<div class="sec"><h3 class="sec-h">New shape style</h3>${styleFields('style',E.style,t)}</div>`;
+    return `<div class="sec"><p class="hint">Nothing selected. Click something on the plan to edit it, or drag across an area to select several things.</p><p class="hint">Shortcuts: <kbd>Ctrl+D</kbd> duplicate, <kbd>Delete</kbd> remove, arrow keys nudge, <kbd>Ctrl+Z</kbd> undo.</p></div>`;
+  }
+  const actions=`<div class="row"><button class="btn sm" data-act="dup">Duplicate</button><button class="btn sm danger" data-act="del">Delete</button></div>`;
+  if(sel.length>1){const n=sel.filter(e=>e.type==='station').length;return `<div class="sec"><h3 class="sec-h">${sel.length} items selected</h3><p class="hint">${n?`${n} station${n===1?'':'s'}. `:''}Drag any of them to move the group.</p>${actions}</div>`;}
+  const el=sel[0];let body='';
+  switch(el.type){
+    case 'station':{const c=catOf(el.code),dup=M.elements.filter(e=>e.type==='station'&&e.code===el.code&&e.num===el.num).length>1;
+      body=`<div class="row" style="gap:10px">${catIcon({...c,mode:'fixed',color:stColor(el,c)},30)}<span class="idbig">${stId(el)}</span></div>${dup?`<p class="warn">Another station already uses ${stId(el)}.</p>`:''}
+        ${F.sel('el','code','Category',el.code,CATS.map(x=>[x.code,`${x.code} · ${x.name}`]))}${F.num('el','num','Number',el.num,1,1)}${F.text('el','stype','Station type',el.stype,'e.g. Snap trap','stypes')}
+        ${c.mode==='tox'?F.check('el','toxic','Toxic (shows red)',el.toxic):''}${F.area('el','notes','Notes',el.notes||'')}${F.range('el','size','Marker size',el.size||1,.5,3,.1)}${F.check('el','hideType','Hide the type label on the plan',el.hideType)}`;break;}
+    case 'wall':body=`<h3 class="sec-h">Wall</h3>${F.num('el','len',`Length (${unit()})`,toU(wallLen(el)),M.scale?.01:1,0)}${F.num('el','w','Thickness (px)',el.w,1,1)}${F.color('el','color','Colour',el.color)}<p class="hint">Drag the end handles to reshape. Joined walls move together.</p>`;break;
+    case 'door':{const w=getEl(el.wall);body=`<h3 class="sec-h">${esc(DOORS.find(d=>d[0]===el.kind)?.[1]||'Door')}</h3><div class="chips">${DOORS.map(d=>`<button class="chip ${el.kind===d[0]?'on':''}" data-door-el="${d[0]}">${d[1]}</button>`).join('')}</div>
+      ${F.num('el','width',`Width (${unit()})`,toU(el.width),M.scale?.05:1,0)}<div class="row"><button class="btn sm" data-act="flip">Flip side</button><button class="btn sm" data-act="hinge">Swap hinge</button></div><p class="hint">Drag the door to slide it along ${w?'the wall':'a wall'}.</p>`;break;}
+    case 'rect':case 'ellipse':body=`<h3 class="sec-h">${el.type==='rect'?'Rectangle':'Ellipse'}</h3>${F.num('el','wU',`Width (${unit()})`,toU(el.w),M.scale?.01:1,0)}${F.num('el','hU',`Height (${unit()})`,toU(el.h),M.scale?.01:1,0)}${styleFields('el',el,el.type)}`;break;
+    case 'polygon':body=`<h3 class="sec-h">Area</h3>${styleFields('el',el,'polygon')}${M.scale?`<p class="hint">Area: ${polyArea(el.pts).toFixed(1)} m²</p>`:''}`;break;
+    case 'line':case 'arrow':body=`<h3 class="sec-h">${el.type==='arrow'?'Arrow':'Line'}</h3>${F.num('el','len',`Length (${unit()})`,toU(Math.hypot(el.x2-el.x1,el.y2-el.y1)),M.scale?.01:1,0)}${styleFields('el',el,el.type)}`;break;
+    case 'dim':body=`<h3 class="sec-h">Dimension</h3><p class="idbig">${fmtLen(Math.hypot(el.x2-el.x1,el.y2-el.y1))}</p>${F.color('el','color','Colour',el.color)}${F.num('el','size','Text size',el.size||13,1,6)}${M.scale?'':'<p class="hint">Set the plan scale in the Plan tab to show metres.</p>'}`;break;
+    case 'text':body=`<h3 class="sec-h">Text</h3>${F.area('el','text','Text',el.text)}${textFields('el',el,true)}`;break;
+    case 'image':body=`<h3 class="sec-h">${el.bg?'Background image':'Image'}</h3>${F.range('el','opacity','Opacity',el.opacity??1,.1,1,.05)}${F.num('el','w','Width (px)',el.w,1,1)}${F.check('el','locked','Lock (stops it being selected on the plan)',el.locked)}<div class="row"><button class="btn sm" data-act="fit-board">Resize page to this image</button></div>`;break;
+  }
+  return `<div class="sec">${body}</div><div class="divider"></div>${actions}`;
+}
+function styleFields(sc,o,type){const closed=['rect','ellipse','polygon'].includes(type);
+  return `${F.color(sc,'stroke','Line colour',o.stroke)}${F.num(sc,'sw','Line width',o.sw,.5,0)}${F.check(sc,'dash','Dashed line',o.dash)}
+    ${closed?`${F.check(sc,'noFill','No fill',o.noFill)}${o.noFill?'':F.color(sc,'fill','Fill colour',o.fill)+F.range(sc,'fillOp','Fill opacity',o.fillOp,0,1,.05)}${type==='rect'?F.num(sc,'rx','Corner radius',o.rx||0,1,0):''}`:''}`;}
+function textFields(sc,o){return `${F.num(sc,'size','Size',o.size,1,4)}${F.color(sc,'color','Colour',o.color)}${F.sel(sc,'font','Font',o.font,Object.keys(FONTS).map(f=>[f,f]))}${F.sel(sc,'align','Align',o.align||'start',[['start','Left'],['middle','Centre'],['end','Right']])}
+  <div class="row">${F.check(sc,'bold','Bold',o.bold)}${F.check(sc,'italic','Italic',o.italic)}${F.check(sc,'halo','White outline',o.halo)}</div>`;}
+function polyArea(pts){let a=0;for(let i=0;i<pts.length;i++){const[x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];a+=x1*y2-x2*y1;}return Math.abs(a/2)/(M.scale*M.scale);}
+
+function registerTab(){
+  const counts={};for(const id of M.elements.filter(e=>e.type==='station').map(stId))counts[id]=(counts[id]||0)+1;
+  const q=E.regQ.toLowerCase();const list=M.elements.filter(e=>e.type==='station'&&(!E.regFilter||e.code===E.regFilter)&&(!q||(stId(e)+' '+e.stype+' '+(e.notes||'')).toLowerCase().includes(q)))
+    .sort((a,b)=>CATS.findIndex(c=>c.code===a.code)-CATS.findIndex(c=>c.code===b.code)||a.code.localeCompare(b.code)||a.num-b.num);
+  const dups=Object.values(counts).filter(n=>n>1).length;
+  return `<div class="reg-tools"><select id="regF" aria-label="Filter by category"><option value="">All types</option>${CATS.map(c=>`<option value="${esc(c.code)}" ${E.regFilter===c.code?'selected':''}>${esc(c.code)} · ${esc(c.name)}</option>`).join('')}</select><input id="regQ" type="search" placeholder="Search" value="${esc(E.regQ)}" aria-label="Search stations"></div>
+    ${dups?`<p class="warn">${dups} station number${dups===1?' is':'s are'} used twice. Use Close gaps to renumber.</p>`:''}
+    ${list.length?`<table class="reg"><thead><tr><th>ID</th><th>Type</th><th>Notes</th></tr></thead><tbody>${list.map(e=>`<tr data-loc="${e.id}" class="${E.sel.has(e.id)?'on':''}"><td class="id"><span class="dot" style="background:${stColor(e)}"></span>${stId(e)}${counts[stId(e)]>1?' <span class="warn">×2</span>':''}</td><td>${esc(e.stype||'')}</td><td class="notes">${esc(e.notes||'')}</td></tr>`).join('')}</tbody></table>`:'<p class="hint">No stations match. Place stations from the Stations tab.</p>'}
+    <div class="row"><button class="btn sm" data-act="csv">Export register (CSV)</button>${E.regFilter?`<button class="btn sm" data-act="renum">Close gaps in ${esc(E.regFilter)}</button>`:''}</div>`;
+}
+function mapTab(){
+  const st=M.settings,f=M.furn,imgs=M.elements.filter(e=>e.type==='image');
+  return `<div class="sec"><h3 class="sec-h">Plan</h3>${F.text('map','name','Name',M.name)}${F.text('set','revision','Revision',st.revision)}${F.text('set','preparedBy','Prepared by',st.preparedBy,'Technician or company')}
+    ${F.num('map','width','Page width (px)',M.width,10,200)}${F.num('map','height','Page height (px)',M.height,10,200)}</div>
+    <div class="sec"><h3 class="sec-h">Scale</h3><p class="hint">${M.scale?`1 metre = ${M.scale.toFixed(2)} px. The page is ${(M.width/M.scale).toFixed(1)} × ${(M.height/M.scale).toFixed(1)} m.`:'No scale set. Lengths show in pixels.'}</p><div class="row"><button class="btn sm" data-act="calib">Calibrate from a known length</button>${M.scale?'<button class="btn sm ghost" data-act="noscale">Clear</button>':''}</div></div>
+    <div class="sec"><h3 class="sec-h">Grid</h3>${F.num('set','grid','Grid size (px)',st.grid,1,2)}<div class="row">${F.check('set','showGrid','Show grid',st.showGrid)}${F.check('set','snap','Snap to grid',st.snap)}</div><p class="hint">Hold <kbd>Alt</kbd> while drawing to skip snapping.</p></div>
+    <div class="sec"><h3 class="sec-h">Stations</h3>${F.range('set','marker','Marker size',st.marker,4,30,1)}${F.range('set','label','Label size',st.label,6,30,1)}${F.check('set','showTypes','Show station type under each ID',st.showTypes)}</div>
+    <div class="sec"><h3 class="sec-h">On the page</h3>${F.check('furn','legend.show','Station legend',f.legend.show)}${F.check('furn','title.show','Title block',f.title.show)}${F.check('furn','north.show','North arrow',f.north.show)}${f.north.show?F.range('furn','north.rot','North rotation',f.north.rot||0,-180,180,1):''}${F.check('furn','scalebar.show','Scale bar (needs a scale)',f.scalebar.show)}
+      ${F.range('furn','all.s','Size of these',f.legend.s||1,.4,3,.05)}<div class="row"><button class="btn sm" data-act="relayout">Put them back in the corners</button></div><p class="hint">Drag them on the plan to move them.</p></div>
+    <div class="sec"><h3 class="sec-h">Images</h3>${imgs.length?`<div class="imglist">${imgs.map((e,i)=>`<div class="imgrow"><img src="${E.assets[e.asset]||''}" alt=""><span class="nm">${e.bg?'Background':'Image '+(i+1)}${e.locked?' · locked':''}</span><span class="row"><button class="btn sm" data-img-lock="${e.id}">${e.locked?'Unlock':'Lock'}</button><button class="btn sm ghost danger" data-img-del="${e.id}" aria-label="Remove image">✕</button></span></div>`).join('')}</div>`:'<p class="hint">No images yet. Use Import or Satellite in the top bar.</p>'}</div>`;
+}
+
+function onPanelInput(e){
+  const t=e.target;if(t.id==='regQ'){E.regQ=t.value;const pos=t.selectionStart;renderPanel();const n=$('#regQ');n.focus();n.setSelectionRange(pos,pos);return;}
+  const sc=t.dataset.s,k=t.dataset.k;if(!sc||!k)return;
+  let v=t.type==='checkbox'?t.checked:(t.type==='number'||t.type==='range')?parseFloat(t.value):t.value;
+  if(typeof v==='number'&&isNaN(v))return;
+  setVal(sc,k,v);
+}
+function onPanelChange(e){const t=e.target;if(t.id==='regF'){E.regFilter=t.value;renderPanel();return;}
+  if(t.type==='checkbox'||t.tagName==='SELECT')renderPanel();
+  else if(t.dataset.k==='stype')renderPanel();}
+function setVal(sc,k,v){
+  if(sc==='arm'){const c=E.cat;E.catType[c]=E.catType[c]||{};E.catType[c][k]=v;if(k==='type'){const kt=knownTox(v);if(kt!==null)E.catType[c].toxic=kt;}renderOverlay();return;}
+  if(sc==='style'){E.style[k]=v;return;}
+  if(sc==='text'){E.textStyle[k]=v;return;}
+  if(sc==='wall'){E.wallStyle[k]=v;return;}
+  softPush();
+  if(sc==='map'){if(k==='name'){M.name=v;crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[v,'#/map/'+M.id]]);}else if(v>=50)M[k]=Math.round(v);changed();return;}
+  if(sc==='set'){M.settings[k]=v;changed();return;}
+  if(sc==='furn'){const[p,kk]=k.split('.');if(p==='all'){for(const x in M.furn)M.furn[x].s=v;}else M.furn[p][kk]=v;changed();return;}
+  for(const id of E.sel){const el=getEl(id);if(!el)continue;
+    switch(k){
+      case 'len':{const L=Math.hypot(el.x2-el.x1,el.y2-el.y1)||1,n=fromU(v);if(n<=0)break;el.x2=el.x1+(el.x2-el.x1)/L*n;el.y2=el.y1+(el.y2-el.y1)/L*n;break;}
+      case 'wU':el.w=Math.max(1,fromU(v));break;case 'hU':el.h=Math.max(1,fromU(v));break;
+      case 'width':if(el.type==='door'){el.width=Math.max(2,fromU(v));const w=getEl(el.wall);if(w)el.t=clampT(el.t,w,el.width);}else if(el.type==='image'){const ar=el.w/el.h;el.w=Math.max(4,v);el.h=el.w/ar;}break;
+      case 'w':if(el.type==='image'){const ar=el.w/el.h;el.w=Math.max(4,v);el.h=el.w/ar;}else el.w=v;break;
+      case 'stype':el.stype=v;{const kt=knownTox(v);if(kt!==null)el.toxic=kt;}break;
+      case 'num':el.num=Math.max(1,Math.round(v));break;
+      case 'code':el.code=v;el.num=nextNum(v);{const c=catOf(v);if(c.mode!=='tox'&&!el.stype)el.stype=c.type;}break;
+      default:el[k]=v;
+    }}
+  render();scheduleSave();
+}
+async function onPanelClick(e){
+  const sw=e.target.closest('[data-sw]');if(sw){const inp=sw.closest('.f').querySelector('input[type=color]');inp.value=sw.dataset.sw;setVal(sw.dataset.s,sw.dataset.k,sw.dataset.sw);return;}
+  const cat=e.target.closest('[data-cat]');if(cat){const c=cat.dataset.cat;if(E.tool==='station'&&E.cat===c)setTool('select');else{E.sel.clear();setTool('station',c);}renderPanel();return;}
+  const dk=e.target.closest('[data-door]');if(dk){E.doorKind=dk.dataset.door;renderPanel();return;}
+  const de=e.target.closest('[data-door-el]');if(de){pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='door'){el.kind=de.dataset.doorEl;el.width=defaultDoorWidth(el.kind);const w=getEl(el.wall);if(w){el.width=Math.min(el.width,wallLen(w)*.95);el.t=clampT(el.t,w,el.width);}}}changed();return;}
+  const loc=e.target.closest('[data-loc]');if(loc){const el=getEl(loc.dataset.loc);E.sel=new Set([el.id]);if(E.view.k<.6)E.view.k=1;centerOn(el.x,el.y);renderPanel();return;}
+  const il=e.target.closest('[data-img-lock]');if(il){pushHist();const el=getEl(il.dataset.imgLock);el.locked=!el.locked;changed();return;}
+  const id2=e.target.closest('[data-img-del]');if(id2){pushHist();M.elements=M.elements.filter(x=>x.id!==id2.dataset.imgDel);changed();return;}
+  const b=e.target.closest('[data-act]');if(!b)return;
+  switch(b.dataset.act){
+    case 'stop':setTool('select');break;
+    case 'edit-legend':editLegend();break;
+    case 'dup':duplicateSel();break;case 'del':deleteSel();break;
+    case 'flip':case 'hinge':pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='door')el[b.dataset.act]=el[b.dataset.act]?0:1;}changed();break;
+    case 'fit-board':{const el=getEl([...E.sel][0]);pushHist();const dx=-el.x,dy=-el.y;M.width=Math.round(el.w);M.height=Math.round(el.h);if(dx||dy)for(const x of M.elements)moveEl(x,dx,dy);layoutFurn();changed();fitView();break;}
+    case 'csv':exportCSV();break;
+    case 'renum':{const c=E.regFilter;if(!await confirmBox('Close numbering gaps',`Renumber all ${esc(c)} stations as ${esc(c)}001, ${esc(c)}002 and so on, keeping their current order?`,'Renumber'))return;
+      pushHist();M.elements.filter(x=>x.type==='station'&&x.code===c).sort((a,b)=>a.num-b.num).forEach((x,i)=>x.num=i+1);changed();toast(`${c} stations renumbered`);break;}
+    case 'calib':setTool('calib');break;
+    case 'noscale':pushHist();M.scale=null;changed();break;
+    case 'relayout':pushHist();layoutFurn();changed();break;
+  }
+}
+
+/* ----- legend editor ----- */
+async function editLegend(){
+  const row=(c,i)=>`<tr data-i="${i}"><td><input class="code" name="code" value="${esc(c.code)}" maxlength="4" aria-label="Prefix"></td><td><input name="name" value="${esc(c.name)}" aria-label="Name"></td>
+    <td><select name="shape" aria-label="Shape">${SHAPES.map(s=>`<option value="${s[0]}" ${c.shape===s[0]?'selected':''}>${s[1]}</option>`).join('')}</select></td>
+    <td><select name="mode" aria-label="Colour rule"><option value="tox" ${c.mode==='tox'?'selected':''}>Red toxic / green non-toxic</option><option value="fixed" ${c.mode!=='tox'?'selected':''}>Fixed colour</option></select></td>
+    <td><input type="color" name="color" value="${c.color}" aria-label="Colour"></td><td><input name="type" value="${esc(c.type)}" list="stypes" aria-label="Default type"></td><td><button type="button" class="btn sm ghost danger" data-rm aria-label="Remove">✕</button></td></tr>`;
+  const r=await modal({title:'Station types',wide:true,body:`<p>Prefixes set the ID on the plan, so T gives T001. Stations already placed keep their prefix if you rename it here.</p>
+    <div class="tbl-wrap"><table class="legend-ed"><thead><tr><th>Prefix</th><th>Name</th><th>Shape</th><th>Colour rule</th><th>Colour</th><th>Default type</th><th></th></tr></thead><tbody id="lgRows">${CATS.map(row).join('')}</tbody></table></div>
+    <div class="row"><button type="button" class="btn sm" id="lgAdd">${ICON.plus}Add a type</button><button type="button" class="btn sm ghost" id="lgReset">Reset to defaults</button></div>`,
+    buttons:[{label:'Cancel',value:null},{label:'Save',value:'ok',primary:true}],
+    onOpen:w=>{const tb=$('#lgRows',w);$('#lgAdd',w).onclick=()=>{tb.insertAdjacentHTML('beforeend',row({code:'',name:'',shape:'circle',mode:'fixed',color:'#495057',type:''},tb.children.length));};
+      $('#lgReset',w).onclick=()=>{tb.innerHTML=DEFAULT_CATS.map(row).join('');};w.addEventListener('click',e=>{const x=e.target.closest('[data-rm]');if(x)x.closest('tr').remove();});},
+    before:(v,d,w)=>{const rows=$$('#lgRows tr',w).map(tr=>{const g=n=>$(`[name=${n}]`,tr).value.trim();return{code:g('code').toUpperCase(),name:g('name'),shape:g('shape'),mode:g('mode'),color:$('[name=color]',tr).value,type:g('type')};}).filter(c=>c.code||c.name);
+      if(rows.some(c=>!/^[A-Z0-9]{1,4}$/.test(c.code))){toast('Each prefix needs 1–4 letters or numbers.','warn');return false;}
+      if(new Set(rows.map(c=>c.code)).size!==rows.length){toast('Two types share the same prefix.','warn');return false;}
+      legendRows=rows;}});
+  if(r.value!=='ok'||!legendRows)return;
+  CATS=legendRows;legendRows=null;await Store.put('meta',{id:'cats',value:CATS});
+  if(E.tool==='station'&&!CATS.find(c=>c.code===E.cat))setTool('select');
+  changed();toast('Station types saved');
+}
+let legendRows=null;
+
+/* ================= IMPORT ================= */
+async function fileToImg(file,page=1){
+  const n=file.name.toLowerCase();
+  if(n.endsWith('.pdf')||file.type==='application/pdf'){
+    await loadScript(CDN.pdfjs);window.pdfjsLib.GlobalWorkerOptions.workerSrc=CDN.pdfworker;
+    const doc=await window.pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;const pg=await doc.getPage(clamp(page,1,doc.numPages));
+    const v1=pg.getViewport({scale:1}),sc=Math.min(4,2600/Math.max(v1.width,v1.height)),vp=pg.getViewport({scale:sc});
+    const c=document.createElement('canvas');c.width=Math.round(vp.width);c.height=Math.round(vp.height);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+    await pg.render({canvasContext:x,viewport:vp}).promise;return{src:c.toDataURL('image/png'),w:c.width,h:c.height,pages:doc.numPages};
+  }
+  let src=await readAs(file,'readAsDataURL');const img=await loadImg(src);let w=img.naturalWidth||1200,h=img.naturalHeight||900;
+  const isSvg=n.endsWith('.svg')||file.type.includes('svg');const max=4096;
+  if(!isSvg&&Math.max(w,h)>max){const s=max/Math.max(w,h);const c=document.createElement('canvas');c.width=Math.round(w*s);c.height=Math.round(h*s);c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    src=file.type==='image/png'?c.toDataURL('image/png'):c.toDataURL('image/jpeg',.9);w=c.width;h=c.height;}
+  return{src,w,h};
+}
+function setBackground(img,{scale=null,meta=null}={}){
+  pushHist();const aid=uid();E.assets[aid]=img.src;E.assetsDirty=true;
+  M.elements=M.elements.filter(e=>!(e.type==='image'&&e.bg));
+  M.elements.unshift({id:uid(),type:'image',asset:aid,x:0,y:0,w:img.w,h:img.h,opacity:1,locked:true,bg:true});
+  M.width=Math.round(img.w);M.height=Math.round(img.h);M.scale=scale;M.bgMeta=meta;
+  if(scale){M.settings.grid=Math.max(2,Math.round(scale));}
+  layoutFurn();changed();fitView();
+}
+function placeImage(img,i=0){
+  pushHist();const aid=uid();E.assets[aid]=img.src;E.assetsDirty=true;const s=Math.min(1,M.width*.6/img.w,M.height*.6/img.h);
+  const el=add({type:'image',asset:aid,x:Math.round(M.width*.2+i*30),y:Math.round(M.height*.2+i*30),w:img.w*s,h:img.h*s,opacity:1,locked:false});E.sel=new Set([el.id]);changed();
+}
+async function importIntoEditor(files,forceMode){
+  const json=files.filter(f=>/\.json$/i.test(f.name)),imgs=files.filter(f=>!/\.json$/i.test(f.name));
+  if(json.length){await importMapFiles(json);toast('Plan files were added to this site. Open them from the site page.');}
+  if(!imgs.length)return;
+  const bad=imgs.filter(f=>!/\.(png|jpe?g|gif|webp|bmp|svg|pdf)$/i.test(f.name)&&!f.type.startsWith('image/')&&f.type!=='application/pdf');
+  if(bad.length){toast(`Can't import ${bad.map(f=>f.name).join(', ')}. Use PNG, JPG, GIF, WEBP, BMP, SVG, PDF or a plan .json file.`,'warn');}
+  const ok=imgs.filter(f=>!bad.includes(f));if(!ok.length)return;
+  let mode=forceMode,page=1;
+  if(!mode){const hasBg=M.elements.some(e=>e.type==='image'&&e.bg),hasPdf=ok.some(f=>/\.pdf$/i.test(f.name));
+    const r=await modal({title:`Import ${ok.length} file${ok.length>1?'s':''}`,body:`<ul class="filelist">${ok.map(f=>`<li>${esc(f.name)}</li>`).join('')}</ul>
+      <div class="seg"><label><input type="radio" name="mode" value="bg" ${!M.elements.length||!hasBg?'checked':''}><span>Use as background</span></label><label><input type="radio" name="mode" value="place" ${M.elements.length&&hasBg?'checked':''}><span>Place as image</span></label></div>
+      <p class="hint">Background resizes the page to fit and locks the image so you can draw over it${hasBg?'. It replaces the current background':''}. ${ok.length>1?'Only the first file becomes the background; the rest are placed as images.':''}</p>
+      ${hasPdf?`<label class="f"><span>PDF page</span><input type="number" name="page" value="1" min="1" step="1"></label>`:''}`,
+      buttons:[{label:'Cancel',value:null},{label:'Import',value:'ok',primary:true}]});
+    if(r.value!=='ok')return;mode=r.data.mode;page=parseInt(r.data.page||'1',10)||1;}
+  toast('Importing…');
+  for(let i=0;i<ok.length;i++){try{const im=await fileToImg(ok[i],page);if(i===0&&mode==='bg'){setBackground(im);if(!M.scale)toast('Background set. Use Plan › Calibrate to set the scale from a known length.');}else placeImage(im,i);}
+    catch(e){console.error(e);toast(`${ok[i].name} could not be imported: ${e.message}`,'warn');}}
+}
+
+/* ================= SATELLITE ================= */
+async function openSatellite(){
+  let lm=null;
+  const r=await modal({title:'Satellite background',wide:true,
+    body:`<div class="sat"><div class="sat-search"><input id="satQ" type="search" placeholder="Search an address or place" value="${esc(site?.address||'')}" aria-label="Address"><button type="button" class="btn" id="satGo">Search</button></div><div class="sat-res" id="satRes"></div><div class="sat-map" id="satMap"></div>
+      <div class="sat-foot"><label class="chk"><input type="checkbox" name="hi" checked> High resolution (2×)</label><span>Frame the property, then use this view. The plan scale is set for you.</span></div></div>`,
+    buttons:[{label:'Cancel',value:null},{label:'Use this view',value:'use',primary:true}],
+    onOpen:async w=>{
+      try{loadCss(CDN.leafletCss);await loadScript(CDN.leaflet);}catch(e){$('#satMap',w).innerHTML='<p style="color:#fff;padding:16px">The map library could not load. Check the internet connection.</p>';return;}
+      const g=site?.geo;lm=L.map($('#satMap',w),{maxZoom:19,zoomSnap:1}).setView(g?[g.lat,g.lng]:[-40.9,174.9],g?g.zoom:5);
+      L.tileLayer(ESRI,{maxZoom:19,attribution:'Imagery © Esri, Maxar, Earthstar Geographics'}).addTo(lm);setTimeout(()=>lm.invalidateSize(),60);
+      const search=async()=>{const q=$('#satQ',w).value.trim();if(!q)return;const res=$('#satRes',w);res.textContent='Searching…';
+        try{const j=await (await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q='+encodeURIComponent(q),{headers:{'Accept-Language':'en'}})).json();
+          if(!j.length){res.textContent='No places found. Try fewer words, or pan the map yourself.';return;}
+          res.innerHTML=j.map((p,i)=>`<button type="button" data-ll="${p.lat},${p.lon}" title="${esc(p.display_name)}">${esc(p.display_name.split(',').slice(0,3).join(','))}</button>`).join('');
+          lm.setView([+j[0].lat,+j[0].lon],18);}catch(e){res.textContent='Search is unavailable right now. Pan and zoom the map instead.';}};
+      $('#satGo',w).onclick=search;$('#satQ',w).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();search();}});
+      $('#satRes',w).addEventListener('click',e=>{const b=e.target.closest('[data-ll]');if(b){const[a,o]=b.dataset.ll.split(',').map(Number);lm.setView([a,o],18);}});
+      if(!g&&site?.address)search();
+    },
+    before:async(v,d,w)=>{if(!lm){toast('The map has not loaded yet.','warn');return false;}
+      const btn=$('footer .primary',w);btn.disabled=true;btn.textContent='Capturing…';
+      try{w.__img=await captureTiles(lm,d.hi);}catch(e){btn.disabled=false;btn.textContent='Use this view';toast('Could not capture the imagery: '+e.message,'warn');return false;}
+      r_hold.img=w.__img;r_hold.geo={lat:lm.getCenter().lat,lng:lm.getCenter().lng,zoom:lm.getZoom()};}
+  });
+  if(r.value!=='use'||!r_hold.img)return;const{img,geo}=r_hold;r_hold.img=null;
+  setBackground(img,{scale:img.pxPerM,meta:{attr:true,lat:geo.lat,lng:geo.lng,zoom:img.zoom}});
+  if(site){site.geo=geo;Store.put('sites',site);}
+  toast(`Satellite background set. Scale: 1 m = ${img.pxPerM.toFixed(2)} px.`);showTab('stations');
+}
+const r_hold={img:null,geo:null};
+async function captureTiles(lm,hi){
+  const z=lm.getZoom(),zz=Math.min(19,z+(hi?1:0)),f=2**(zz-z),size=lm.getSize(),b=lm.getPixelBounds();
+  const ox=b.min.x*f,oy=b.min.y*f,W=Math.round(size.x*f),H=Math.round(size.y*f),n=2**zz;
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.fillStyle='#333';x.fillRect(0,0,W,H);
+  const jobs=[];let fails=0;
+  for(let tx=Math.floor(ox/256);tx<=Math.floor((ox+W-1)/256);tx++)for(let ty=Math.floor(oy/256);ty<=Math.floor((oy+H-1)/256);ty++){
+    if(ty<0||ty>=n)continue;const wx=((tx%n)+n)%n;
+    jobs.push(new Promise(res=>{const im=new Image();im.crossOrigin='anonymous';im.onload=()=>{x.drawImage(im,tx*256-ox,ty*256-oy);res();};im.onerror=()=>{fails++;res();};im.src=ESRI.replace('{z}',zz).replace('{y}',ty).replace('{x}',wx);}));}
+  await Promise.all(jobs);if(fails===jobs.length)throw new Error('the imagery server did not respond');
+  const lat=lm.getCenter().lat,mpp=156543.03392*Math.cos(lat*Math.PI/180)/2**zz;
+  return{src:c.toDataURL('image/jpeg',.9),w:W,h:H,pxPerM:1/mpp,zoom:zz};
+}
+
+/* ================= EXPORT ================= */
+async function openExport(){
+  const base=safeName(`${site?.name||'Site'} - ${M.name}${M.settings.revision?' rev '+M.settings.revision:''}`);
+  const r=await modal({title:'Export plan',body:`<div class="seg" role="radiogroup" aria-label="Format">${['png','jpg','pdf','svg'].map((f,i)=>`<label><input type="radio" name="fmt" value="${f}" ${i===0?'checked':''}><span>${f.toUpperCase()}</span></label>`).join('')}</div>
+    <label class="f"><span>File name</span><input name="fname" value="${esc(base)}"></label>
+    <label class="f" id="exRes"><span>Resolution</span><select name="res"><option value="1">Standard (1×)</option><option value="2" selected>High (2×)</option><option value="3">Print (3×)</option></select></label>
+    <label class="f" id="exPaper" hidden><span>PDF page</span><select name="paper"><option value="a4">A4</option><option value="a3" selected>A3</option><option value="fit">Same shape as the plan</option></select></label>
+    <label class="chk"><input type="checkbox" name="bg" checked> Include background images</label>
+    <div class="divider"></div><div class="row"><span class="hint">Also:</span><button type="button" class="btn sm" id="exCsv">Station register (CSV)</button><button type="button" class="btn sm" id="exJson">Plan file (.json)</button></div>`,
+    buttons:[{label:'Cancel',value:null},{label:'Export',value:'go',primary:true}],
+    onOpen:w=>{w.addEventListener('change',()=>{const f=$('input[name=fmt]:checked',w).value;$('#exRes',w).hidden=f==='svg';$('#exPaper',w).hidden=f!=='pdf';});
+      $('#exCsv',w).onclick=exportCSV;$('#exJson',w).onclick=()=>download(new Blob([JSON.stringify({format:'pest-station-planner-map',version:1,map:M,assets:E.assets})],{type:'application/json'}),base+'.json');},
+    before:async(v,d,w)=>{const btn=$('footer .primary',w);btn.disabled=true;btn.textContent='Exporting…';
+      try{await doExport(d);}catch(e){console.error(e);toast('Export failed: '+e.message,'warn');btn.disabled=false;btn.textContent='Export';return false;}}});
+}
+async function doExport(d){
+  const name=safeName(d.fname||'plan'),bg=d.bg,res=parseFloat(d.res||'2');await saveNow();
+  if(d.fmt==='svg'){download(new Blob([buildSVG({bg})],{type:'image/svg+xml'}),name+'.svg');return;}
+  const c=await rasterize(d.fmt==='pdf'?Math.max(2,res):res,bg);
+  if(d.fmt==='png'||d.fmt==='jpg'){const blob=await new Promise(r=>c.toBlob(r,d.fmt==='png'?'image/png':'image/jpeg',.92));if(!blob)throw new Error('the browser could not create the image');download(blob,name+'.'+d.fmt);return;}
+  const jpg=new Uint8Array(await (await new Promise(r=>c.toBlob(r,'image/jpeg',.92))).arrayBuffer());
+  const PAPER={a4:[595.28,841.89],a3:[841.89,1190.55]};const land=M.width>=M.height;let pw,ph,iw,ih,ix,iy;
+  if(d.paper==='fit'){pw=M.width*.75;ph=M.height*.75;iw=pw;ih=ph;ix=0;iy=0;}
+  else{const P=PAPER[d.paper]||PAPER.a3;[pw,ph]=land?[P[1],P[0]]:P;const m=22,s=Math.min((pw-2*m)/M.width,(ph-2*m)/M.height);iw=M.width*s;ih=M.height*s;ix=(pw-iw)/2;iy=(ph-ih)/2;}
+  download(makePdf(jpg,c.width,c.height,pw,ph,ix,iy,iw,ih,`${site?.name||''} - ${M.name}`),name+'.pdf');
+}
+/* Minimal single-page PDF writer: one JPEG drawn at (x,y,w,h) in points. */
+function makePdf(jpg,pxW,pxH,pw,ph,x,y,w,h,title){
+  const enc=new TextEncoder(),parts=[],offs=[];let len=0;
+  const push=b=>{const u=typeof b==='string'?enc.encode(b):b;parts.push(u);len+=u.length;};
+  const obj=(n,body,stream)=>{offs[n]=len;push(`${n} 0 obj\n${body}\n`);if(stream){push('stream\n');push(stream);push('\nendstream\n');}push('endobj\n');};
+  const f=v=>(Math.round(v*100)/100).toString();
+  const pdfStr=t=>'('+String(t).replace(/[^\x20-\x7e]/g,'-').replace(/([\\()])/g,'\\$1')+')';
+  const content=enc.encode(`q ${f(w)} 0 0 ${f(h)} ${f(x)} ${f(ph-y-h)} cm /Im0 Do Q`);
+  push('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  obj(1,'<< /Type /Catalog /Pages 2 0 R >>');
+  obj(2,'<< /Type /Pages /Kids [3 0 R] /Count 1 >>');
+  obj(3,`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(pw)} ${f(ph)}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`);
+  obj(4,`<< /Type /XObject /Subtype /Image /Width ${pxW} /Height ${pxH} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>`,jpg);
+  obj(5,`<< /Length ${content.length} >>`,content);
+  obj(6,`<< /Title ${pdfStr(title)} /Creator (Station Planner) >>`);
+  const xref=len;let x2=`xref\n0 7\n0000000000 65535 f \n`;for(let i=1;i<=6;i++)x2+=String(offs[i]).padStart(10,'0')+' 00000 n \n';
+  push(x2+`trailer\n<< /Size 7 /Root 1 0 R /Info 6 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  return new Blob(parts,{type:'application/pdf'});
+}
+function exportCSV(){
+  const q=v=>`"${String(v??'').replace(/"/g,'""')}"`;const rows=[['Station ID','Category','Type','Toxic','Notes',M.scale?'X (m)':'X (px)',M.scale?'Y (m)':'Y (px)'].map(q).join(',')];
+  M.elements.filter(e=>e.type==='station').sort((a,b)=>a.code.localeCompare(b.code)||a.num-b.num).forEach(e=>{const c=catOf(e.code);rows.push([stId(e),c.name,e.stype,c.mode==='tox'?(e.toxic?'Yes':'No'):'',e.notes,M.scale?(e.x/M.scale).toFixed(2):Math.round(e.x),M.scale?(e.y/M.scale).toFixed(2):Math.round(e.y)].map(q).join(','));});
+  download(new Blob(['﻿'+rows.join('\r\n')],{type:'text/csv'}),safeName(`${site?.name||'Site'} - ${M.name} - station register`)+'.csv');
+}
+
+/* ================= SAMPLE + BOOT ================= */
+function sampleMap(siteId){
+  const m=newMap(siteId,'Main building – ground floor');m.scale=25;m.settings.grid=25;m.settings.preparedBy='Field technician';
+  const els=m.elements,W=(x1,y1,x2,y2)=>{const w={id:uid(),type:'wall',x1,y1,x2,y2,w:6,color:'#2a2f36'};els.push(w);return w;};
+  const top=W(260,240,1040,240),right=W(1040,240,1040,800),bot=W(1040,800,260,800),left=W(260,800,260,240),mid=W(780,240,780,800),od=W(780,520,1040,520);
+  const D=(wall,kind,t,m2)=>els.push({id:uid(),type:'door',kind,wall:wall.id,t,width:m2*25,flip:0,hinge:0});
+  D(bot,'roller',.167,4);D(mid,'single',.3,.9);D(od,'single',.5,.9);D(left,'double',.5,1.8);D(top,'exit',.2,.9);D(top,'window',.85,1.4);D(right,'window',.25,1.4);
+  els.push({id:uid(),type:'polygon',pts:[[80,80],[1200,80],[1200,1020],[80,1020]],stroke:'#495057',fill:'#2b9348',noFill:true,fillOp:.1,sw:2,dash:true});
+  els.push({id:uid(),type:'rect',x:300,y:600,w:260,h:160,stroke:'#1971c2',fill:'#1971c2',noFill:false,fillOp:.1,sw:1.5,dash:true,rx:4});
+  const T=(x,y,text,size=24,bold=true,color='#495057')=>els.push({id:uid(),type:'text',x,y,text,size,color,font:'Arial',bold,italic:false,halo:true,align:'middle'});
+  T(520,480,'Production');T(910,370,'Office');T(910,650,'Dispatch');T(430,670,'Raw materials',14,false,'#1971c2');T(640,1032,'Fence line',13,false);T(1120,915,'Loading bay',14,false);
+  els.push({id:uid(),type:'dim',x1:260,y1:905,x2:1040,y2:905,color:'#495057',size:13});
+  const st=(code,list,stype,toxic)=>list.forEach((p,i)=>els.push({id:uid(),type:'station',code,num:i+1,x:p[0],y:p[1],stype,toxic,notes:'',size:1}));
+  st('T',[[290,270],[520,270],[750,270],[290,770],[640,770],[750,770]],'Multi-catch trap',false);
+  st('S',[[220,200],[650,200],[1080,200],[1080,840],[650,840],[220,840]],'Toxic bait station',true);
+  st('F',[[80,300],[80,760],[640,80],[1200,550],[400,1020]],'Toxic bait station',true);
+  st('V',[[420,420],[620,640],[900,420]],'Insect monitor (glue board)',false);
+  st('FI',[[290,520],[1010,690]],'Insect light trap (ILT)',false);
+  st('X',[[1000,280]],'Inspection point',false);st('W',[[1010,770]],'Vertebrate monitor',false);st('CP',[[1120,700]],'Control panel',false);
+  els.find(e=>e.type==='station'&&e.code==='X').notes='Floor drain, check monthly';
+  return m;
+}
+async function boot(){
+  await Store.open();
+  try{const c=await Store.get('meta','cats');if(c?.value?.length)CATS=c.value;}catch(e){}
+  try{const seeded=await Store.get('meta','seeded');if(!seeded&&!(await Store.all('sites')).length){
+    const s={id:uid(),name:'Teagle Foods',address:'12 Example Road, East Tāmaki, Auckland',client:'Example contact',notes:'Example site showing how a plan is laid out. Edit or delete it any time.',created:Date.now(),updated:Date.now(),sample:true};
+    await Store.put('sites',s);const m=sampleMap(s.id);await Store.put('maps',m);await Store.put('assets',{id:m.id,data:{}});}
+    await Store.put('meta',{id:'seeded',value:true});}catch(e){console.error(e);}
+  go();
+}
+boot();
+</script>
+</body>
+</html>
