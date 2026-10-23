@@ -1292,11 +1292,11 @@ function renderOverlay(){
   const lbl=(x,y,t)=>`<text x="${x}" y="${y}" font-family="${MAPFONT}" font-size="${r2(12/k)}" font-weight="700" fill="${sel}" stroke="#fff" stroke-width="${r2(3.5/k)}" paint-order="stroke" stroke-linejoin="round">${esc(t)}</text>`;
   const sw=r2(1.5/k),dash=`stroke-dasharray="${r2(5/k)} ${r2(4/k)}"`;let s='';
   const selEls=[...E.sel].map(getEl).filter(Boolean);
-  if(selEls.length===1&&selEls[0].type==='station'){const el=selEls[0];s+=`<circle cx="${el.x}" cy="${el.y}" r="${r2(M.settings.marker*(el.size||1)*1.35+5/k)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;}
-  else if(selEls.length===1&&selEls[0].type==='obj'){const cs=objCorners(selEls[0]);s+=`<polygon points="${cs.map(q=>r2(q.x)+','+r2(q.y)).join(' ')}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;}
+  /* no dashed outline around what's selected (handles and corner nodes still show) */
+  if(selEls.length===1&&(selEls[0].type==='station'||selEls[0].type==='obj')){}
   else if(selEls.length){let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;const all=[...selEls];for(const el of selEls)if(el.type==='zone')all.push(...zoneWalls(el));
     for(const el of all){const bb=bboxOf(el);if(!bb.w&&!bb.h&&!bb.x&&!bb.y)continue;x0=Math.min(x0,bb.x);y0=Math.min(y0,bb.y);x1=Math.max(x1,bb.x+bb.w);y1=Math.max(y1,bb.y+bb.h);}
-    if(isFinite(x0)){const p=6/k;s+=`<rect x="${r2(x0-p)}" y="${r2(y0-p)}" width="${r2(x1-x0+2*p)}" height="${r2(y1-y0+2*p)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash} rx="${r2(3/k)}"/>`;
+    if(isFinite(x0)){const p=6/k;
       if(E.tool==='select'&&!E.readOnly&&canGroupXf()){const hs=10/k,bx=x1+p,by=y1+p,tx=(x0+x1)/2,ty=y0-p,ry=ty-24/k;
         s+=`<rect data-handle="gscale" x="${r2(bx-hs/2)}" y="${r2(by-hs/2)}" width="${r2(hs)}" height="${r2(hs)}" fill="#fff" stroke="${sel}" stroke-width="${sw}" style="cursor:nwse-resize"><title>Drag to resize the group</title></rect>
           <line x1="${r2(tx)}" y1="${r2(ty)}" x2="${r2(tx)}" y2="${r2(ry)}" stroke="${sel}" stroke-width="${sw}"/><circle data-handle="grot" cx="${r2(tx)}" cy="${r2(ry)}" r="${r2(6/k)}" fill="#fff" stroke="${sel}" stroke-width="${sw}" style="cursor:grab"><title>Drag to turn the group</title></circle>`;}}}
