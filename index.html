@@ -1786,8 +1786,9 @@ function objLibrary(){
 }
 function styleFields(sc,o,type){const closed=['rect','ellipse','polygon'].includes(type);
   return `${F.color(sc,'stroke','Line colour',o.stroke)}${F.num(sc,'sw','Line width',o.sw,.5,0)}${F.check(sc,'dash','Dashed line',o.dash)}
-    ${closed?`${F.check(sc,'noFill','No fill',o.noFill)}${o.noFill?'':F.color(sc,'fill','Fill colour',o.fill)+F.range(sc,'fillOp','Fill opacity',o.fillOp,0,1,.05)}${type==='rect'?F.num(sc,'rx','Corner radius',o.rx||0,1,0):''}`:''}`;}
-function textFields(sc,o){return `${F.num(sc,'size','Size',o.size,1,4)}${F.color(sc,'color','Colour',o.color)}${F.sel(sc,'font','Font',o.font,Object.keys(FONTS).map(f=>[f,f]))}${F.sel(sc,'align','Align',o.align||'start',[['start','Left'],['middle','Centre'],['end','Right']])}
+    ${closed?`<div class="f"><span>Fill</span><div class="room-sw">${ROOM_COLORS.map(c=>`<label title="${c==='none'?'No fill':c}"><input type="radio" name="sfill-${sc}" data-sfill="${c}" data-s="${sc}" ${(c==='none'?o.noFill:!o.noFill&&String(o.fill).toLowerCase()===c)?'checked':''}><span style="background:${c==='none'?'transparent':c}">${c==='none'?'✕':''}</span></label>`).join('')}</div></div>
+      ${F.color(sc,'fill','Fill colour',o.fill||'#d0ebff')}${o.noFill?'':F.range(sc,'fillOp','Fill strength',o.fillOp??.55,.05,1,.05)}${type==='rect'?F.num(sc,'rx','Corner radius',o.rx||0,1,0):''}`:''}`;}
+function textFields(sc,o){return `${F.num(sc,'size','Size',o.size,1,4)}${F.color(sc,'color','Colour',o.color)}${F.sel(sc,'font','Font',o.font,Object.keys(FONTS).map(f=>[f,f]))}
   <div class="row">${F.check(sc,'bold','Bold',o.bold)}${F.check(sc,'italic','Italic',o.italic)}</div>
   ${(()=>{const hw=o.haloW??(o.halo===false?0:.2);return `<div class="f"><span>Outline</span><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-halo="-1" data-s="${sc}" aria-label="Thinner outline">−</button><input type="range" data-s="${sc}" data-k="haloW" min="0" max="0.6" step="0.02" value="${hw}" aria-label="Outline thickness" style="flex:1;min-width:0"><button class="btn sm" data-halo="1" data-s="${sc}" aria-label="Thicker outline">+</button><button class="btn sm ghost" data-halo="0" data-s="${sc}">None</button></div></div>`;})()}${F.color(sc,'haloC','Outline colour',o.haloC||'#ffffff')}`;}
 function polyArea(pts){let a=0;for(let i=0;i<pts.length;i++){const[x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];a+=x1*y2-x2*y1;}return Math.abs(a/2)/(M.scale*M.scale);}
@@ -1853,7 +1854,7 @@ function setVal(sc,k,v){
   if(String(sc).startsWith('img:')){const el=getEl(sc.slice(4));if(!el)return;softPush();imgSet(el,k,v);render();scheduleSave();
     const lab=$(`#panel [data-s="${sc}"][data-k="${k}"]`)?.closest('.f')?.querySelector('span');if(lab&&k==='size')lab.textContent=`Size (${Math.round(v)}%)`;if(lab&&k==='rot')lab.textContent=`Turn (${r2(v)}°)`;return;}
   if(sc==='arm'){const c=E.cat;E.catType[c]=E.catType[c]||{};E.catType[c][k]=v;if(k==='type'){const kt=knownTox(v);if(kt!==null)E.catType[c].toxic=kt;}renderOverlay();return;}
-  if(sc==='style'){E.style[k]=v;return;}
+  if(sc==='style'){E.style[k]=v;if(k==='fill'){if(E.style.noFill||!(E.style.fillOp>.05))E.style.fillOp=.55;E.style.noFill=false;}return;}
   if(sc==='text'){E.textStyle[k]=v;return;}
   if(sc==='wall'){if(k==='ls')setLs(E.wallStyle,v);else E.wallStyle[k]=v;return;}
   if(sc==='fence'){if(k==='ls')setLs(E.fenceStyle,v);else E.fenceStyle[k]=v;return;}
@@ -1873,6 +1874,7 @@ function setVal(sc,k,v){
       case 'num':el.num=Math.max(1,Math.round(v));break;
       case 'size':case 'tsize':if(el.type==='station'){el[k]=v;updLabel(sc,k,v);}else el[k]=v;break;
       case 'zdash':for(const w of zoneWalls(el))w.dash=v;break;
+      case 'fill':el.fill=v;if(['rect','ellipse','polygon'].includes(el.type)&&!el.open){if(el.noFill||!(el.fillOp>.05))el.fillOp=.55;el.noFill=false;}break;
       case 'ftext':case 'ffill':case 'fstroke':if(el.type==='svg')fragEdit(el,k,v);break;
       case 'zls':for(const w of zoneWalls(el))setLs(w,v);break;
       case 'zw':for(const w of zoneWalls(el))w.w=Math.max(1,v);break;
@@ -1893,6 +1895,8 @@ async function onPanelClick(e){
   const ob=e.target.closest('[data-obj]');if(ob){E.objKind=ob.dataset.obj;if(E.tool!=='objects')setTool('objects');renderPanel();renderOverlay();$('#panel').classList.remove('open');return;}
   const hb=e.target.closest('[data-halo]');if(hb){const sc=hb.dataset.s,d=+hb.dataset.halo,cur=o=>o.haloW??(o.halo===false?0:.2),nv=o=>d===0?0:clamp(r2(cur(o)+d*.05),0,.6);
     if(sc==='text'){E.textStyle.haloW=nv(E.textStyle);}else{pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='text')el.haloW=nv(el);}changed();}renderPanel();return;}
+  const sf=e.target.closest('[data-sfill]');if(sf){const c=sf.dataset.sfill,sc=sf.dataset.s,apply=o=>{if(c==='none')o.noFill=true;else{if(o.noFill||!(o.fillOp>.05))o.fillOp=.55;o.noFill=false;o.fill=c;}};
+    if(sc==='style')apply(E.style);else{pushHist();for(const id of E.sel){const el=getEl(id);if(el&&['rect','ellipse','polygon'].includes(el.type))apply(el);}changed();}renderPanel();return;}
   const zf=e.target.closest('[data-zfill]');if(zf){pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='zone')el.fill=zf.dataset.zfill;}changed();return;}
   const de=e.target.closest('[data-door-el]');if(de){pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='door'){el.kind=de.dataset.doorEl;el.width=defaultDoorWidth(el.kind);const w=getEl(el.wall);if(w){el.width=Math.min(el.width,wallLen(w)*.95);el.t=clampT(el.t,w,el.width);}}}changed();return;}
   const loc=e.target.closest('[data-loc]');if(loc){const el=getEl(loc.dataset.loc);E.sel=new Set([el.id]);if(E.view.k<.6)E.view.k=1;centerOn(el.x,el.y);renderPanel();return;}
