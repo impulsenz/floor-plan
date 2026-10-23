@@ -265,6 +265,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .gh-title{font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
 .gh-row{display:flex;align-items:center;gap:7px;padding:2px 0}.gh-row i{width:10px;height:10px;border-radius:50%;flex:none}.gh-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gh-row b{font-variant-numeric:tabular-nums}.gh-row.me span{font-weight:700}
 .gh-keys{margin-top:6px;color:var(--ink-3);font-size:11px;line-height:1.7}.gh-keys kbd{font-size:10px;padding:0 4px}
+.gh-rk{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;color:var(--ink-2)}.gh-bar{flex:1;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.gh-bar i{display:block;height:100%;background:var(--ok);width:100%}.gh-bar i.load{background:#f08c00;animation:ghload linear forwards}@keyframes ghload{from{width:0}to{width:100%}}
 .gh-respawn{margin-top:8px;width:100%;justify-content:center}
 .live-peers{display:inline-flex;align-items:center;margin-right:8px}.live-peers[hidden]{display:none}
 .peer{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--pc);border:2px solid var(--pc);box-shadow:0 0 0 2px var(--panel);margin-left:-6px;overflow:hidden}
@@ -1366,7 +1368,7 @@ function render(){
   const gp=$('#gridp'),gs=M.settings.grid||20;gp.setAttribute('width',gs);gp.setAttribute('height',gs);$('#gridpath').setAttribute('d',`M${gs} 0H0V${gs}`);
   renderImages();$('#L-main').innerHTML=mainMarkup(false);renderOverlay();Live.soon();
   {const d=E.drag;if(d?.kind==='move'&&d.fast&&d.dx!==undefined)dragFast(d,d.dx,d.dy);}
-  if(G.dmg.size)for(const[id,n]of G.dmg){const node=document.querySelector(`#L-main > [data-id="${CSS.escape(id)}"]`);if(!node)continue;const max=G.targets.find(q=>q.id===id)?.hp||(getEl(id)?.type==='wall'?5:3);if(n>=max)node.style.display='none';else node.style.opacity=String(1-n/max*.55);}   // keep sliding after a redraw mid-drag
+  if(G.dmg.size)for(const[id,n]of G.dmg){const node=document.querySelector(`#L-main > [data-id="${CSS.escape(id)}"]`);if(!node)continue;const max=G.targets.find(q=>q.id===id)?.hp||(getEl(id)?.type==='wall'?14:8);if(n>=max)node.style.display='none';else node.style.opacity=String(1-n/max*.55);}   // keep sliding after a redraw mid-drag
 }
 function renderOverlay(){
   if(route!=='map')return;const k=E.view.k,sel=getComputedStyle(document.documentElement).getPropertyValue('--sel').trim()||'#1c7ed6';
@@ -2312,13 +2314,13 @@ function updPeers(){const box=$('#livePeers');if(!box)return;const o=Live.others
    Everyone on a plan can press Play to get a little character: WASD to run, Space to jump, arrow keys to shoot.
    Hits score points; anything on the plan that gets hit is chipped, scorched and eventually blown away -
    but only on screen: nothing is changed or saved, and it all comes back when the game ends. */
-const GZ=1.8;   // characters are drawn a bit bigger than the plan's own scale so they're easy to see
-const G={on:false,me:null,players:new Map(),bullets:[],parts:[],decals:[],dmg:new Map(),keys:new Set(),raf:null,last:0,sendT:0,shotT:0,targets:[],told:new Set(),bid:0,
+const GZ=1.8,RELOAD=1800;   // rocket reload time (ms)   // characters are drawn a bit bigger than the plan's own scale so they're easy to see
+const G={mouse:{l:false,r:false},rkT:-1e9,tapL:false,tapR:false,shake:0,on:false,me:null,players:new Map(),bullets:[],parts:[],decals:[],dmg:new Map(),keys:new Set(),raf:null,last:0,sendT:0,shotT:0,targets:[],told:new Set(),bid:0,
   s(){return (M?.width||1600)/1600;},
   start(){if(!M||route!=='map')return;const s=this.s(),id=Live.id||'solo';this.on=true;
     this.me={id,name:meName()||'You',colour:Live.colour||'#e8590c',x:0,y:0,ang:0,z:0,vz:0,hp:100,alive:true,score:this.players.get(id)?.score||0,me:true};
     this.spawn();this.players.set(id,this.me);this.buildTargets();this.hud();this.loop();this.send({t:'st',...this.pub()},true);
-    $('[data-top="game"]')?.classList.add('on');toast('Game on! WASD to run, Space to jump, arrow keys to shoot. Esc or the controller button to stop. Nothing on the plan is really changed.');},
+    $('[data-top="game"]')?.classList.add('on');toast('Game on! WASD to run, Space to jump, aim with the mouse. Left click: machine gun. Right click: rocket. Esc or the controller button to stop. Nothing on the plan is really changed.');},
   stop(){if(!this.me)return;this.send({t:'leave'},true);this.players.delete(this.me.id);this.me=null;this.on=false;this.keys.clear();$('[data-top="game"]')?.classList.remove('on');
     if(!this.players.size)this.end();else this.hud();},
   end(){cancelAnimationFrame(this.raf);this.raf=null;this.players.clear();this.bullets=[];this.parts=[];this.decals=[];const hadDmg=this.dmg.size;this.dmg.clear();this.me=null;this.on=false;
@@ -2331,21 +2333,28 @@ const G={on:false,me:null,players:new Map(),bullets:[],parts:[],decals:[],dmg:ne
   /* everything on the plan a bullet can hit (rooms' fills, the background and very big things are skipped) */
   buildTargets(){const s=this.s(),big=M.width*M.height*.3;this.targets=[];
     for(const e of M.elements){if(this.dmg.get(e.id)>=3)continue;if(e.type==='zone'||(e.type==='image'&&(e.bg||e.locked)))continue;
-      if(e.type==='wall'||e.type==='line'||e.type==='arrow'){this.targets.push({id:e.id,seg:[e.x1,e.y1,e.x2,e.y2],r:Math.max(3*s,(e.w||e.sw||2)/2),hp:e.type==='wall'?5:3});continue;}
-      const b=e.type==='svg'?e.bb:bboxOf(e);if(!b||!(b.w||b.h)||b.w*b.h>big)continue;this.targets.push({id:e.id,b,hp:3});}},
+      if(e.type==='wall'||e.type==='line'||e.type==='arrow'){this.targets.push({id:e.id,seg:[e.x1,e.y1,e.x2,e.y2],r:Math.max(3*s,(e.w||e.sw||2)/2),hp:e.type==='wall'?14:8});continue;}
+      const b=e.type==='svg'?e.bb:bboxOf(e);if(!b||!(b.w||b.h)||b.w*b.h>big)continue;this.targets.push({id:e.id,b,hp:8});}},
+  near(x,y,r){return this.targets.filter(t=>{if(t.seg){const[a,b,c,d]=t.seg,L2=(c-a)**2+(d-b)**2||1,u=clamp(((x-a)*(c-a)+(y-b)*(d-b))/L2,0,1);return Math.hypot(x-(a+u*(c-a)),y-(b+u*(d-b)))<=r+t.r;}
+    const cx=clamp(x,t.b.x,t.b.x+t.b.w),cy=clamp(y,t.b.y,t.b.y+t.b.h);return Math.hypot(x-cx,y-cy)<=r;});},
   hitTarget(x,y){for(const t of this.targets){if(t.seg){const[a,b,c,d]=t.seg,L2=(c-a)**2+(d-b)**2||1,u=clamp(((x-a)*(c-a)+(y-b)*(d-b))/L2,0,1);if(Math.hypot(x-(a+u*(c-a)),y-(b+u*(d-b)))<=t.r)return t;}
       else if(x>=t.b.x-1&&x<=t.b.x+t.b.w+1&&y>=t.b.y-1&&y<=t.b.y+t.b.h+1)return t;}return null;},
-  damage(id,x,y,fromNet){const n=(this.dmg.get(id)||0)+1;this.dmg.set(id,n);const t=this.targets.find(q=>q.id===id),max=t?.hp||3;
+  damage(id,x,y,fromNet,amt=1){const n=(this.dmg.get(id)||0)+amt;this.dmg.set(id,n);const t=this.targets.find(q=>q.id===id),max=t?.hp||3;
     const node=document.querySelector(`#L-main > [data-id="${CSS.escape(id)}"]`)||document.querySelector(`#L-img [data-id="${CSS.escape(id)}"]`);
     this.decals.push({x,y,r:(3+Math.random()*3)*this.s(),rot:Math.random()*360});if(this.decals.length>400)this.decals.shift();
     this.burst(x,y,'#6b5b4b',6,.6);
     if(n>=max){if(node)node.style.display='none';this.targets=this.targets.filter(q=>q.id!==id);const b=t?.b||{x:x-10,y:y-10,w:20,h:20};this.burst(b.x+b.w/2,b.y+b.h/2,'#f08c00',22,1.4);this.burst(b.x+b.w/2,b.y+b.h/2,'#495057',16,1);}
     else if(node)node.style.opacity=String(1-n/max*.55);
-    if(!fromNet)this.send({t:'dmg',id,x:r2(x),y:r2(y)},true);},
+    if(!fromNet)this.send({t:'dmg',id,x:r2(x),y:r2(y),a:amt},true);},
   burst(x,y,col,n,pow){const s=this.s();for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,v=(40+Math.random()*160)*s*pow;this.parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:.5+Math.random()*.5,max:1,col,r:(1+Math.random()*2.5)*s});}},
-  shoot(){const m=this.me,s=this.s(),tip=18*s,v=820*s,id=m.id+':'+(++this.bid);
-    const b={id,owner:m.id,x:m.x+Math.cos(m.ang)*tip,y:m.y+Math.sin(m.ang)*tip,vx:Math.cos(m.ang)*v,vy:Math.sin(m.ang)*v,life:1.1};this.bullets.push(b);
-    this.send({t:'shot',id,x:r2(b.x),y:r2(b.y),vx:r2(b.vx),vy:r2(b.vy)},true);},
+  /* left mouse: machine gun (fast, light). Right mouse: rocket (slow, big blast, long reload). */
+  shoot(kind='mg'){const m=this.me,s=this.s(),tip=20*s*GZ,rk=kind==='rk',spread=rk?0:(Math.random()-.5)*.09,a=m.ang+spread,v=(rk?430:900)*s,id=m.id+':'+(++this.bid);
+    const b={id,owner:m.id,kind,x:m.x+Math.cos(a)*tip,y:m.y+Math.sin(a)*tip,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:rk?1.8:.9};this.bullets.push(b);
+    if(rk)this.burst(b.x,b.y,'#adb5bd',6,.5);this.send({t:'shot',id,k:kind,x:r2(b.x),y:r2(b.y),vx:r2(b.vx),vy:r2(b.vy)},true);},
+  boom(b){const s=this.s(),R=70*s*GZ,m=this.me;this.burst(b.x,b.y,'#ff922b',36,2.2);this.burst(b.x,b.y,'#ffd43b',20,1.6);this.burst(b.x,b.y,'#495057',24,1.3);
+    this.decals.push({x:b.x,y:b.y,r:16*s,rot:Math.random()*360});this.shake=performance.now();
+    if(m&&m.alive&&m.id!==b.owner&&m.z<10*s){const d=Math.hypot(m.x-b.x,m.y-b.y);if(d<R){m.hp-=Math.round(85*(1-d/R*.6));if(m.hp<=0)this.die(b.owner);else this.send({t:'st',...this.pub()},true);}}
+    if(b.owner===m?.id)for(const t of this.near(b.x,b.y,R))this.damage(t.id,t.b?clamp(b.x,t.b.x,t.b.x+t.b.w):b.x,t.b?clamp(b.y,t.b.y,t.b.y+t.b.h):b.y,false,6);},
   die(by){const m=this.me;m.alive=false;m.deadT=performance.now();m.hp=0;this.burst(m.x,m.y,m.colour,30,1.6);this.burst(m.x,m.y,'#c92a2a',14,1);
     const k=this.players.get(by);if(k)k.score=(k.score||0)+1;this.send({t:'dead',by},true);this.hud();setTimeout(()=>this.hud(),1100);},
   respawn(){if(!this.me)return;this.spawn();this.send({t:'st',...this.pub()},true);this.hud();},
@@ -2356,26 +2365,28 @@ const G={on:false,me:null,players:new Map(),bullets:[],parts:[],decals:[],dmg:ne
       if(!this.targets.length)this.buildTargets();this.loop();}
     if(g.t==='st'){const wasDead=!p.alive;Object.assign(p,{tx:g.x,ty:g.y,ang:g.ang,z:g.z,hp:g.hp,score:g.score??p.score,name:g.name,colour:g.colour});
       if(g.alive&&wasDead){p.x=g.x;p.y=g.y;}p.alive=g.alive;if(wasDead!==!g.alive)this.hud();}
-    else if(g.t==='shot')this.bullets.push({id:g.id,owner:from,x:g.x,y:g.y,vx:g.vx,vy:g.vy,life:1.1});
-    else if(g.t==='dmg'){if(!this.targets.length)this.buildTargets();this.damage(g.id,g.x,g.y,true);}
+    else if(g.t==='shot')this.bullets.push({id:g.id,owner:from,kind:g.k||'mg',x:g.x,y:g.y,vx:g.vx,vy:g.vy,life:g.k==='rk'?1.8:.9});
+    else if(g.t==='dmg'){if(!this.targets.length)this.buildTargets();this.damage(g.id,g.x,g.y,true,g.a||1);}
     else if(g.t==='dead'){p.alive=false;p.deadT=performance.now();this.burst(p.x,p.y,p.colour||'#e8590c',30,1.6);const k=this.players.get(g.by);if(k)k.score=(k.score||0)+1;this.hud();}},
   loop(){if(this.raf)return;this.last=performance.now();const step=t=>{this.raf=null;if(route!=='map'||!M){this.end();return;}
       const dt=Math.min(.05,(t-this.last)/1000);this.last=t;this.tick(dt,t);this.draw(t);if(this.players.size||this.parts.length)this.raf=requestAnimationFrame(step);};
     this.raf=requestAnimationFrame(step);},
   tick(dt,t){const s=this.s(),m=this.me,K=this.keys,R=12*s*GZ;
-    if(m&&m.alive){let mx=(K.has('d')?1:0)-(K.has('a')?1:0),my=(K.has('s')?1:0)-(K.has('w')?1:0);const L=Math.hypot(mx,my);
+    if(m&&m.alive){let mx=(K.has('d')||K.has('arrowright')?1:0)-(K.has('a')||K.has('arrowleft')?1:0),my=(K.has('s')||K.has('arrowdown')?1:0)-(K.has('w')||K.has('arrowup')?1:0);const L=Math.hypot(mx,my);
       if(L){mx/=L;my/=L;m.x=clamp(m.x+mx*260*s*dt,R,M.width-R);m.y=clamp(m.y+my*260*s*dt,R,M.height-R);}
-      let ax=(K.has('arrowright')?1:0)-(K.has('arrowleft')?1:0),ay=(K.has('arrowdown')?1:0)-(K.has('arrowup')?1:0);
-      if(!ax&&!ay&&this.aimQ){ax=this.aimQ[0];ay=this.aimQ[1];}this.aimQ=null;   // a quick tap still fires
-      if(ax||ay){m.ang=Math.atan2(ay,ax);if(t-this.shotT>170){this.shotT=t;this.shoot();}}else if(L)m.ang=Math.atan2(my,mx);
+      const c=E.cursor;if(c&&Math.hypot(c.x-m.x,c.y-m.y)>2)m.ang=Math.atan2(c.y-m.y,c.x-m.x);else if(L)m.ang=Math.atan2(my,mx);   // the gun points at the mouse
+      if((this.mouse.l||this.tapL)&&t-this.shotT>85){this.shotT=t;this.shoot('mg');}this.tapL=false;
+      if((this.mouse.r||this.tapR)&&t-this.rkT>RELOAD){this.rkT=t;this.shoot('rk');this.hud();setTimeout(()=>this.hud(),RELOAD+30);}this.tapR=false;
       if((K.has(' ')||this.jumpQ)&&m.z<=0){m.vz=260*s;}this.jumpQ=false;m.vz-=900*s*dt;m.z=Math.max(0,m.z+m.vz*dt);if(m.z===0&&m.vz<0)m.vz=0;
       this.send({t:'st',...this.pub()});}
     for(const p of this.players.values())if(!p.me&&p.tx!==undefined){p.x+=(p.tx-p.x)*Math.min(1,dt*14);p.y+=(p.ty-p.y)*Math.min(1,dt*14);}
-    for(const b of this.bullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
-      if(b.x<0||b.y<0||b.x>M.width||b.y>M.height){b.life=0;continue;}
-      for(const p of this.players.values()){if(p.id===b.owner||!p.alive||p.z>6*s)continue;if(Math.hypot(p.x-b.x,p.y-b.y)<R){b.life=0;this.burst(b.x,b.y,'#c92a2a',8,.8);
-        if(p.me){p.hp-=34;if(p.hp<=0)this.die(b.owner);else this.send({t:'st',...this.pub()},true);}break;}}
-      if(b.life>0){const tg=this.hitTarget(b.x,b.y);if(tg){b.life=0;if(b.owner===m?.id)this.damage(tg.id,b.x,b.y);else this.burst(b.x,b.y,'#6b5b4b',4,.5);}}}
+    for(const b of this.bullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;const rk=b.kind==='rk';
+      if(rk&&Math.random()<.8)this.parts.push({x:b.x,y:b.y,vx:(Math.random()-.5)*20*s,vy:(Math.random()-.5)*20*s,life:.45,col:'#ced4da',r:(2+Math.random()*2)*s});
+      if(b.x<0||b.y<0||b.x>M.width||b.y>M.height){if(rk)this.boom(b);b.life=-1;continue;}
+      let hit=false;for(const p of this.players.values()){if(p.id===b.owner||!p.alive||p.z>6*s)continue;if(Math.hypot(p.x-b.x,p.y-b.y)<R){hit=true;
+        if(!rk){this.burst(b.x,b.y,'#c92a2a',6,.7);if(p.me){p.hp-=12;if(p.hp<=0)this.die(b.owner);else this.send({t:'st',...this.pub()},true);}}break;}}
+      if(!hit){const tg=this.hitTarget(b.x,b.y);if(tg){hit=true;if(!rk){if(b.owner===m?.id)this.damage(tg.id,b.x,b.y);else this.burst(b.x,b.y,'#6b5b4b',3,.5);}}}
+      if(hit||b.life<=0){if(rk)this.boom(b);b.life=-1;}}
     this.bullets=this.bullets.filter(b=>b.life>0);
     for(const q of this.parts){q.x+=q.vx*dt;q.y+=q.vy*dt;q.vx*=.92;q.vy*=.92;q.life-=dt;}this.parts=this.parts.filter(q=>q.life>0);},
   /* a little round runner with a gun, a name, and a health bar; flattened with crosses for eyes when it's out */
@@ -2392,24 +2403,31 @@ const G={on:false,me:null,players:new Map(),bullets:[],parts:[],decals:[],dmg:ne
       ${hp}<text y="${r2(R+14*s)}" text-anchor="middle" font-family="${MAPFONT}" font-size="${r2(9.5*s)}" font-weight="700" fill="#fff" stroke="${col}" stroke-width="${r2(3*s)}" paint-order="stroke">${esc(p.name||'')} · ${p.score||0}</text></g>`;},
   draw(t){const L=$('#L-game');if(!L)return;const s=this.s();let h='';
     for(const d of this.decals)h+=`<g transform="translate(${r2(d.x)} ${r2(d.y)}) rotate(${r2(d.rot)})" pointer-events="none"><circle r="${r2(d.r*1.8)}" fill="#3b2f2f" opacity=".14"/><circle r="${r2(d.r)}" fill="#2b2222" opacity=".5"/><path d="M0 0l${r2(d.r*2.2)} ${r2(d.r*.6)}M0 0l${r2(-d.r*1.6)} ${r2(d.r*1.5)}M0 0l${r2(d.r*.4)} ${r2(-d.r*2)}" stroke="#2b2222" stroke-width="${r2(.7*s)}" opacity=".55"/></g>`;
-    {const s2=s*1.4;for(const b of this.bullets)h+=`<line x1="${r2(b.x)}" y1="${r2(b.y)}" x2="${r2(b.x-b.vx*.025)}" y2="${r2(b.y-b.vy*.025)}" stroke="#ffd43b" stroke-width="${r2(3*s2)}" stroke-linecap="round"/><circle cx="${r2(b.x)}" cy="${r2(b.y)}" r="${r2(2.2*s2)}" fill="#fab005" stroke="#e67700" stroke-width="${r2(.6*s2)}"/>`;}
+    {const s2=s*1.4;for(const b of this.bullets){if(b.kind==='rk'){const deg=Math.atan2(b.vy,b.vx)*180/Math.PI,z=s*1.8;h+=`<g transform="translate(${r2(b.x)} ${r2(b.y)}) rotate(${r2(deg)})"><path d="M${r2(-9*z)} ${r2(-2.5*z)}h${r2(12*z)}l${r2(4*z)} ${r2(2.5*z)}l${r2(-4*z)} ${r2(2.5*z)}h${r2(-12*z)}z" fill="#495057" stroke="#212529" stroke-width="${r2(.6*z)}"/><path d="M${r2(-9*z)} ${r2(-2.5*z)}l${r2(-3*z)} ${r2(-2*z)}v${r2(9*z)}l${r2(3*z)} ${r2(-2*z)}z" fill="#c92a2a"/><circle cx="${r2(-12*z)}" r="${r2((2+Math.random()*1.5)*z)}" fill="#ff922b" opacity=".9"/></g>`;continue;}
+      h+=`<line x1="${r2(b.x)}" y1="${r2(b.y)}" x2="${r2(b.x-b.vx*.02)}" y2="${r2(b.y-b.vy*.02)}" stroke="#ffd43b" stroke-width="${r2(2.4*s2)}" stroke-linecap="round"/><circle cx="${r2(b.x)}" cy="${r2(b.y)}" r="${r2(1.8*s2)}" fill="#fab005"/>`;}}
     if(0)for(const b of this.bullets)h+=`<line x1="${r2(b.x)}" y1="${r2(b.y)}" x2="${r2(b.x-b.vx*.025)}" y2="${r2(b.y-b.vy*.025)}" stroke="#ffd43b" stroke-width="${r2(3*s)}" stroke-linecap="round"/><circle cx="${r2(b.x)}" cy="${r2(b.y)}" r="${r2(2.2*s)}" fill="#fab005" stroke="#e67700" stroke-width="${r2(.6*s)}"/>`;
     for(const p of this.players.values())h+=this.char(p,t);
     for(const q of this.parts)h+=`<circle cx="${r2(q.x)}" cy="${r2(q.y)}" r="${r2(q.r)}" fill="${q.col}" opacity="${r2(Math.min(1,q.life*1.6))}"/>`;
+    const sh=this.shake&&t-this.shake<300?(1-(t-this.shake)/300)*4*s:0;if(sh)L.setAttribute('transform',`translate(${r2((Math.random()-.5)*sh)} ${r2((Math.random()-.5)*sh)})`);else L.removeAttribute('transform');
     L.innerHTML=h;},
   hud(){const wrap=$('#stageWrap');if(!wrap)return;let el=$('#gameHud');if(!this.players.size){el?.remove();return;}
     if(!el){el=document.createElement('div');el.id='gameHud';el.className='game-hud';wrap.appendChild(el);}
     const list=[...this.players.values()].sort((a,b)=>(b.score||0)-(a.score||0)),m=this.me,dead=m&&!m.alive,ready=dead&&performance.now()-(m.deadT||0)>1000;
     el.innerHTML=`<div class="gh-title">Scores</div>${list.map(p=>`<div class="gh-row${p.me?' me':''}"><i style="background:${p.colour}"></i><span>${esc(p.name||'?')}${p.me?' (you)':''}${p.alive?'':' 💀'}</span><b>${p.score||0}</b></div>`).join('')}
-      ${m?`<div class="gh-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> run · <kbd>Space</kbd> jump · arrows shoot · <kbd>Esc</kbd> stop</div>`:'<div class="gh-keys">Press the controller button at the top to join.</div>'}
+      ${m?`<div class="gh-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> run · <kbd>Space</kbd> jump · aim with the mouse<br><b>Left click</b> machine gun · <b>Right click</b> rocket · <kbd>Esc</kbd> stop</div>
+        <div class="gh-rk">Rocket <span class="gh-bar"><i style="animation-duration:${RELOAD}ms" class="${performance.now()-this.rkT<RELOAD?'load':'ready'}"></i></span></div>`:'<div class="gh-keys">Press the controller button at the top to join.</div>'}
       ${dead?`<button class="btn primary gh-respawn" data-respawn ${ready?'':'disabled'}>${ready?'Respawn':'You got tagged…'}</button>`:''}`;
     el.querySelector('[data-respawn]')?.addEventListener('click',()=>this.respawn());}};
 document.addEventListener('keydown',e=>{if(!G.on||!G.me||typing(e.target))return;const k=e.key.toLowerCase();
   if(k==='escape'){e.preventDefault();e.stopImmediatePropagation();G.stop();return;}
   if(['w','a','s','d',' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();G.keys.add(k);
-    if(k===' ')G.jumpQ=true;const A={arrowright:[1,0],arrowleft:[-1,0],arrowdown:[0,1],arrowup:[0,-1]}[k];if(A)G.aimQ=A;}},true);
+    if(k===' ')G.jumpQ=true;}},true);
+document.addEventListener('pointerdown',e=>{if(!G.me||!e.target.closest('#stage'))return;e.preventDefault();e.stopImmediatePropagation();
+  if(e.button===0){G.mouse.l=true;G.tapL=true;}if(e.button===2){G.mouse.r=true;G.tapR=true;}},true);
+document.addEventListener('pointerup',e=>{if(!G.me)return;if(e.button===0)G.mouse.l=false;if(e.button===2)G.mouse.r=false;},true);
+document.addEventListener('contextmenu',e=>{if(G.me&&e.target.closest('#stage'))e.preventDefault();},true);
 document.addEventListener('keyup',e=>{if(!G.on)return;const k=e.key.toLowerCase();if(G.keys.delete(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
-window.addEventListener('blur',()=>G.keys.clear());
+window.addEventListener('blur',()=>{G.keys.clear();G.mouse.l=G.mouse.r=false;});
 
 /* ================= SATELLITE ================= */
 async function openSatellite(){
@@ -2621,7 +2639,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='requests')openRequests();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
-  ['v21','24 Oct 2026',['Play: press the controller button to get a little character and tag each other on the plan (WASD run, Space jump, arrow keys shoot), with live scores and respawning. Anything hit gets scorched or blown away on screen only: nothing is changed or saved']],
+  ['v21','24 Oct 2026',['Play: press the controller button to get a little character and tag each other on the plan (WASD run, Space jump, aim with the mouse, left click machine gun, right click rocket), with live scores and respawning. Anything hit gets scorched or blown away on screen only: nothing is changed or saved']],
   ['v20','24 Oct 2026',['You stay signed in until you sign out (no more sign-out after 5 minutes)','Access requests: search, Waiting / Can edit / All filters, and lists that scroll inside the window','Other people\'s pointers move smoothly','Smooth dragging: what you move slides without redrawing the whole plan, and glides on other people\'s screens too','Dragging snaps to a hidden grid 5 times finer than the one you see, so it glides instead of jumping']],
   ['v19','24 Oct 2026',['Live editing: when two or more people have the same plan open, everyone sees changes and each other\'s pointers as they happen','Ask to edit someone else\'s site or plan; the owner or an admin approves it under Access requests','Walls stay visible while you draw them, with a dot on every corner','Others on the plan see walls, fences, lines and boxes while you are still drawing them','Shapes get room-style fill colours; text align removed; no dashed outline around selected items']],
   ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved)','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
