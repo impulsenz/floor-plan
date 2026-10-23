@@ -479,7 +479,7 @@ const OBJ=[
   ['entry','Pest entry point','Outdoor',.8,.8,80,80,'<path d="M40 4 76 72H4z" fill="#fff" stroke="#e8590c" stroke-width="4"/>'+TX(40,64,34,'!','#e8590c')]
 ];
 const OBJMAP=Object.fromEntries(OBJ.map(o=>[o[0],o]));
-const OBJ_HIDDEN=new Set(['car','truck','entry','nest','woodpile','tap','pond','dock','binarea','lightpole','vgate','bed','filing','washer','vending','lockers','sofa','roundtable','desk','chair','chemstore','spillkit','callpoint','lightfit','flytrap','fan','switchboard','machine','aircon',
+const OBJ_HIDDEN=new Set(['hosereel','exitsign','car','truck','entry','nest','woodpile','tap','pond','dock','binarea','lightpole','vgate','bed','filing','washer','vending','lockers','sofa','roundtable','desk','chair','chemstore','spillkit','callpoint','lightfit','flytrap','fan','switchboard','machine','aircon',
   'trench','column','ramp','lift','coolroom','conveyor','palletjack','ibc','pallet','recycle','bin','dishwasher','hood','greasetrap','freezer','fridge','fryer','bench','prep','stove','handbasin','dsink','sink']);
 const OBJ_LIB=OBJ.filter(o=>!OBJ_HIDDEN.has(o[0]));
 const OBJ_GROUPS=[...new Set(OBJ_LIB.map(o=>o[2]))];
