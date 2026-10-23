@@ -1817,8 +1817,7 @@ function mapTab(){
       ${imgs.length?`<div class="imglist">${imgs.map((e,i)=>`<div class="imgrow"><img src="${E.assets[e.asset]||''}" alt=""><span class="nm">${e.bg?'Background':'Image '+(i+1)}${e.locked?' · locked':''}</span><span class="row"><button class="btn sm" data-img-lock="${e.id}">${e.locked?'Unlock':'Lock'}</button><button class="btn sm ghost danger" data-img-del="${e.id}" aria-label="Remove image">✕</button></span></div>`).join('')}</div>`:''}
       ${(()=>{const bg=imgs.find(e=>e.bg);return bg?`<h3 class="sec-h" style="margin-top:6px">Adjust the background</h3>${imgControls(bg)}<div class="row"><button class="btn sm" data-act="import">Replace file</button></div>`:'';})()}</div>
     <div class="sec"><h3 class="sec-h">On the server</h3><div id="srvInfo" class="srv-info"><span class="hint">Checking…</span></div>
-      <div class="row"><button class="btn sm" data-act="srv-refresh">Refresh</button><button class="btn sm" data-act="srv-link">Make a download link</button></div><div id="srvLink"></div>
-      <p class="hint">For testing: the link downloads this plan's saved data as a file. It works in any browser for 10 minutes, without signing in.</p></div>
+      <div class="row"><button class="btn sm" data-act="srv-refresh">Refresh</button></div></div>
     <div class="sec"><h3 class="sec-h">Stations</h3>${F.range('set','marker','Marker size',st.marker,4,30,1)}${F.range('set','label','Label size',st.label,6,30,1)}</div>
     <div class="sec"><h3 class="sec-h">North arrow</h3>${F.check('furn','north.show','Show north arrow',f.north.show)}${f.north.show?F.range('furn','north.rot','Rotation',f.north.rot||0,-180,180,1)+F.range('furn','north.s','Size',f.north.s||1,.4,3,.05):''}</div>
     <div class="sec"><h3 class="sec-h">Scale</h3><p class="hint">${M.scale?`1 metre = ${M.scale.toFixed(2)} px. The plan area is ${(M.width/M.scale).toFixed(1)} × ${(M.height/M.scale).toFixed(1)} m.`:'No scale set. Lengths show in pixels.'}</p><div class="row"><button class="btn sm" data-act="calib">Calibrate from a known length</button>${M.scale?'<button class="btn sm ghost" data-act="noscale">Clear</button>':''}</div></div>
@@ -1910,7 +1909,6 @@ async function onPanelClick(e){
     case 'st-plan-look':pushHist();for(const id of E.sel){const x=getEl(id);if(x?.type==='station'){delete x.haloW;delete x.haloC;}}changed();renderPanel();break;
     case 'st-all-plan':pushHist();for(const x of M.elements)if(x.type==='station'){delete x.size;delete x.tsize;}changed();renderPanel();break;
     case 'srv-refresh':loadSrvInfo(true);break;
-    case 'srv-link':makeDlLink();break;
     case 'group':{pushHist();const g='g'+uid();for(const id of E.sel){const x=getEl(id);if(x)x.grp=g;}changed();toast('Grouped. Click any of them to pick the whole group.');break;}
     case 'ungroup':{pushHist();for(const id of E.sel){const x=getEl(id);if(x)delete x.grp;}changed();toast('Ungrouped');break;}
     case 'zonefill':pushHist();M.elements=M.elements.filter(x=>!(E.sel.has(x.id)&&x.type==='zone'));E.sel.clear();changed();break;
@@ -2208,18 +2206,13 @@ async function printPlan(){if(!M)return;if(!E.readOnly)saveLocal();toast('Openin
   const imgs=[...d.images,...d.querySelectorAll('image')];await new Promise(r=>setTimeout(r,imgs.length?800:250));
   try{f.contentWindow.focus();f.contentWindow.print();}catch(e){toast('Printing was blocked by the browser. Use Export › PDF and print that instead.','warn');}
   setTimeout(()=>f.remove(),60000);}
-/* What the server holds for this plan (sizes and when it was saved), and a short-lived link to download it. */
+/* What the server holds for this plan: sizes and when it was saved. */
 let srvInfoC={key:null,html:''};
 async function loadSrvInfo(force){const box=$('#srvInfo');if(!box||!M)return;const key=M.id+':'+savedAt;if(!force&&srvInfoC.key===key){box.innerHTML=srvInfoC.html;return;}srvInfoC={key,html:box.innerHTML};
   try{const j=await Store.req('GET','/info/'+encodeURIComponent(M.id));if(!j)throw new Error('Nothing on the server for this plan yet, or the server needs updating (re-run the setup command).');const row=(l,o)=>`<div><span>${l}</span><b>${o?fmtBytes(o.size):'—'}</b></div>`;
     box.innerHTML=row('Plan drawing',j.map)+row('Pictures',j.assets)+row('Undo history',j.hist)+`<div><span>Total</span><b>${fmtBytes((j.map?.size||0)+(j.assets?.size||0)+(j.hist?.size||0))}</b></div>
       <div><span>Last saved</span><b>${j.map?.updated?esc(new Date(j.map.updated).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})):'—'}</b></div><div><span>Owner</span><b>${esc(ownerLabel(M)||'—')}</b></div><div><span>Plan ID</span><b class="mono">${esc(M.id)}</b></div>`;srvInfoC.html=box.innerHTML;}
   catch(e){box.innerHTML=`<span class="hint">${esc(/Unknown path|404/.test(e.message)?'This server needs updating to show this (re-run the setup command).':e.message)}</span>`;srvInfoC.key=null;}}
-async function makeDlLink(){const out=$('#srvLink');if(!out)return;out.innerHTML='<span class="hint">Making a link…</span>';
-  try{if(E.dirty)await saveNow(true);const j=await Store.req('POST','/links',{id:M.id});const url=Store.base+'/api/dl/'+j.key;
-    out.innerHTML=`<div class="row" style="flex-wrap:nowrap;margin-top:6px"><input readonly value="${esc(url)}" id="dlUrl" style="flex:1;min-width:0;height:30px;border:1px solid var(--line);border-radius:6px;padding:0 8px;background:var(--panel);font-size:12px"><button class="btn sm" data-copy-dl>Copy</button></div><p class="hint">Works until ${esc(new Date(j.expires).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))}.</p>`;}
-  catch(e){out.innerHTML=`<span class="hint">${esc(/Unknown path|404/.test(e.message)?'This server needs updating for download links (re-run the setup command).':e.message)}</span>`;}}
-document.addEventListener('click',e=>{if(e.target.closest('[data-copy-dl]')){const i=$('#dlUrl');i.select();navigator.clipboard?.writeText(i.value).then(()=>toast('Link copied'),()=>{document.execCommand('copy');toast('Link copied');});}});
 const EXPORT_STD=3,EXPORT_HD=4.8;   // HD is 60% more resolution than standard
 async function openExport(){
   const base=safeName(`${site?.name||'Site'} - ${M.name}${M.settings.revision?' v'+M.settings.revision:''}`);
@@ -2342,7 +2335,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
-  ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved) and makes a 10-minute test download link','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
+  ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved)','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
   ['v17','24 Oct 2026',['Background button moved to the left toolbar','Print button next to Export prints the plan straight from the browser on one A4 page']],
   ['v16','24 Oct 2026',['Words drawn one letter at a time in an SVG come in as one editable text (straight or turned)','Stations tab: icon and text size for every station on the plan; single stations can still have their own']],
   ['v15','24 Oct 2026',['Background button at the top (or double-click the background) for its settings','Groups from SVG drawings stay together; Group and Ungroup (Ctrl+G); resize and turn a group with handles or buttons','Much less data: plans kept on the device, sent at most once a minute when changed and when you leave, and only downloaded again if they changed','Save indicator moved to the left of undo']],

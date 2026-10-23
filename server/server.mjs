@@ -228,7 +228,6 @@ function serveStatic(res, pathname) {
 }
 
 /* ---------- routes ---------- */
-const dlLinks = new Map();       // key -> {id, expires, by}: short-lived download links
 const failedLogins = new Map();   // ip -> {n, until}: slows down repeated failed sign-ins
 async function handleAuth(req, res, parts, ip) {
   if (parts[1] === 'google' && req.method === 'POST') {
@@ -326,15 +325,6 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, out);
     }
     if (parts[0] === 'auth') return await handleAuth(req, res, parts, ip);
-    if (parts[0] === 'dl' && parts.length === 2 && req.method === 'GET') {
-      const l = dlLinks.get(parts[1]);
-      if (!l || l.expires < Date.now()) return send(res, 404, 'This download link has expired or does not exist.', 'text/plain; charset=utf-8');
-      const m = q.get.get('maps', l.id); if (!m) return send(res, 404, 'That plan is no longer on the server.', 'text/plain; charset=utf-8');
-      const a = q.get.get('assets', l.id), name = (() => { try { return JSON.parse(m.data).name || 'plan'; } catch { return 'plan'; } })().replace(/[^\w .-]+/g, '_');
-      const body = `{"format":"pest-station-planner-map","version":1,"map":${m.data},"assets":${a ? JSON.stringify(JSON.parse(a.data).data || {}) : '{}'}}`;
-      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="${name}.json"`, 'Cache-Control': 'no-store', 'Content-Length': Buffer.byteLength(body) });
-      return res.end(body);
-    }
 
     const me = sessionUser(req);
     if (!me) return notSignedIn(req, res);
@@ -357,15 +347,6 @@ const server = http.createServer(async (req, res) => {
       const map = one(['maps', id]);
       if (!map) return json(res, 404, { error: 'Not found' });
       return json(res, 200, { map, assets: one(['assets', id]), hist: one(['meta', 'hist:' + id]) });
-    }
-    // a 10-minute link to download one plan's saved data (for testing): no sign-in needed to use it
-    if (parts[0] === 'links' && parts.length === 1 && req.method === 'POST') {
-      const { obj } = await readJson(req, 4096);
-      if (!obj?.id || !q.stamp.get('maps', String(obj.id))) return json(res, 404, { error: 'That plan is not on the server' });
-      for (const [k, v] of dlLinks) if (v.expires < Date.now()) dlLinks.delete(k);
-      const key = crypto.randomBytes(18).toString('base64url'), expires = Date.now() + 10 * 60000;
-      dlLinks.set(key, { id: String(obj.id), expires, by: me.email });
-      return json(res, 200, { key, expires });
     }
     const [store, id] = parts;
     if (!STORES.has(store) || parts.length > 2) return json(res, 404, { error: 'Unknown path' });

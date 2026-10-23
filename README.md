@@ -57,7 +57,7 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Ctrl+D** puts the copy where your mouse is.
 - **Undo history** of 100 steps per plan, saved with the plan so you can still undo after closing and reopening it.
 - **Zoom:** fit to screen is 100%; the + and − buttons, keys and mouse wheel go up and down in 5% steps.
-- **On the server** (Settings tab): how big this plan's drawing, pictures and undo history are on the server, when it was last saved, and a 10-minute download link for testing.
+- **On the server** (Settings tab): how big this plan's drawing, pictures and undo history are on the server, and when it was last saved.
 - Scale calibration from any known length, grid with snapping, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
 
 ## Storage

@@ -152,7 +152,6 @@ API (all JSON; `{store}` is `sites`, `maps`, `assets` or `meta`):
 | GET / PUT | `/api/prefs` | your own settings (theme, defaults), stored per account |
 | GET | `/api/maps?summary=1[&siteId=]` | plan list without drawing data (for site pages) |
 | GET | `/api/info/{planId}` | sizes and last-saved times of a plan's drawing, pictures and undo history |
-| POST / GET | `/api/links`, `/api/dl/{key}` | make a 10-minute link that downloads one plan without signing in (for testing) |
 | GET | `/api/{store}` | every record (`?siteId=` filters plans by site) |
 | GET | `/api/{store}/{id}` | one record, or 404 |
 | PUT | `/api/{store}/{id}` | create or replace (body `id` must match) |
