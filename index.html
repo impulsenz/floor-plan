@@ -255,8 +255,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 .login-card h1{font-family:var(--f-head);font-size:26px;margin:4px 0 0}
 .login-card p{margin:0;color:var(--ink-2)}
 .gbtn{min-height:44px;display:grid;place-items:center}
-.acct{width:32px;height:32px;border-radius:50%;border:1px solid var(--line);padding:0;overflow:hidden;cursor:pointer;background:var(--accent-soft);color:var(--accent);font-weight:700;display:grid;place-items:center;flex:none}
-.acct img{width:100%;height:100%;object-fit:cover}
+.live-peers{display:inline-flex;align-items:center;margin-right:8px}.live-peers[hidden]{display:none}
+.peer{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--pc);border:2px solid var(--pc);box-shadow:0 0 0 2px var(--panel);margin-left:-6px;overflow:hidden}
+.peer:first-child{margin-left:0}.peer img{width:100%;height:100%;object-fit:cover}
+.acct-badge{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--danger);color:#fff;font-size:10.5px;font-weight:700;display:grid;place-items:center;border:2px solid var(--panel);line-height:1}
+.acct{position:relative;overflow:visible!important;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);padding:0;overflow:hidden;cursor:pointer;background:var(--accent-soft);color:var(--accent);font-weight:700;display:grid;place-items:center;flex:none}
+.acct img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.acct>span:not(.acct-badge){border-radius:50%}
 .legend-ed.users td{vertical-align:middle}
 .sv-grid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
 .sv-card.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
@@ -547,7 +552,7 @@ const Store={
   async open(){if(!this.base)return false;if(!this.token)this.loadToken();try{const h=await this.health();this.auth=h.auth||null;this.online=true;return true;}catch(e){this.online=false;return false;}},
   /* null = signed in (or sign-in is off); otherwise the reason the login screen should show */
   async whoAmI(){if(!this.auth)return null;if(!this.token)return '';
-    let why={};try{const r=await fetch(this.base+'/api/auth/me',{cache:'no-store',headers:this.hdr(false)});if(r.ok){this.user=(await r.json()).user;return null;}why=await r.json().catch(()=>({}));}catch(e){return 'Cannot reach the server';}
+    let why={};try{const r=await fetch(this.base+'/api/auth/me',{cache:'no-store',headers:this.hdr(false)});if(r.ok){const j=await r.json();this.user=j.user;this.reqCount=j.requests||0;this.meInfo=j;return null;}why=await r.json().catch(()=>({}));}catch(e){return 'Cannot reach the server';}
     this.setToken('');return why.code==='elsewhere'?why.error:'Your sign-in has ended. Please sign in again.';},
   all(s){return this.req('GET','/'+s);},
   get(s,id){return this.req('GET',`/${s}/${encodeURIComponent(id)}`);},
@@ -936,7 +941,32 @@ const themeBtn=()=>`<button class="ib" data-top="theme" title="Switch light / da
 
 /* ---------- ownership ---------- */
 const isAdmin=()=>!Store.auth||Store.user?.role==='admin';
-const canEdit=rec=>!Store.auth||isAdmin()||(!!rec?.owner&&rec.owner===Store.user?.email);
+const canEdit=rec=>!Store.auth||isAdmin()||(!!rec?.owner&&rec.owner===Store.user?.email)||hasGrant(rec);
+/* edit access people were given to someone else's site (and all its plans) or one plan */
+const hasGrant=rec=>{const g=Store.grants;if(!g||!rec?.id)return false;return g.has('maps:'+rec.id)||g.has('sites:'+rec.id)||(!!rec.siteId&&g.has('sites:'+rec.siteId));};
+const isOwnerOrAdmin=rec=>!Store.auth||isAdmin()||(!!rec?.owner&&rec.owner===Store.user?.email);
+async function loadGrants(){Store.grants=new Set();if(!Store.auth)return;try{for(const g of await Store.req('GET','/grants')||[])Store.grants.add(g.store+':'+g.id);}catch(e){}}
+function noteRequests(j){if(!j)return;const before=Store.reqCount||0;Store.reqCount=j.requests||0;updBadge();
+  if(Store.reqCount>before&&before>=0&&Store.reqSeenOnce)toast(`${Store.reqCount} access request${Store.reqCount===1?' is':'s are'} waiting for you. Click your picture › Access requests.`);
+  Store.reqSeenOnce=true;if(j.decisions>0){loadGrants().then(()=>{toast('Your access request has been answered. See your picture › Access requests.');});}}
+function updBadge(){$$('[data-top="account"]').forEach(b=>{let x=b.querySelector('.acct-badge');const n=Store.reqCount||0;if(!n){x?.remove();return;}if(!x){x=document.createElement('span');x.className='acct-badge';b.appendChild(x);}x.textContent=n>9?'9+':n;});}
+async function askAccess(store,id,label){
+  const r=await modal({title:'Ask to edit',body:`<p>Ask the owner of <b>${esc(label)}</b> to let you edit ${store==='sites'?'this site and all its plans':'this plan'}. The owner, or an admin, gets the request and can approve or turn it down.</p><label class="f stack"><span>Message (optional)</span><textarea name="note" rows="3" placeholder="e.g. I'm servicing this site next week"></textarea></label>`,
+    buttons:[{label:'Cancel',value:null},{label:'Send request',value:'ok',primary:true}]});
+  if(r.value!=='ok')return;try{const j=await Store.req('POST','/requests',{store,id,note:r.data.note});toast(j?.already?"You've already asked. You'll see here when it's answered.":'Request sent. You can edit as soon as it is approved.');}catch(e){toast(e.message,'warn');}}
+async function openRequests(){let data;try{data=await Store.req('GET','/requests');}catch(e){toast(e.message,'warn');return;}
+  const who=r=>esc(r.req_name||r.requester),what=r=>`${r.store==='sites'?'Site':'Plan'} <b>${esc(r.name||'(no name)')}</b>`,when=t=>esc(fmtDate(t));
+  const inc=data.incoming||[],mine=data.mine||[];
+  const rowsIn=inc.length?inc.map(r=>`<tr><td>${who(r)}<br><span class="hint">${esc(r.requester)}</span></td><td>${what(r)}${r.note?`<br><span class="hint">“${esc(r.note)}”</span>`:''}</td><td class="hint">${when(r.created)}</td><td>${r.status==='pending'?`<button class="btn sm primary" data-rq="${r.id}" data-d="approve">Approve</button> <button class="btn sm ghost" data-rq="${r.id}" data-d="deny">Turn down</button>`:`<span class="hint">Can edit</span> <button class="btn sm ghost danger" data-rq="${r.id}" data-d="revoke">Remove access</button>`}</td></tr>`).join(''):'<tr><td colspan="4" class="hint">No requests waiting.</td></tr>';
+  const ST={pending:'Waiting',approved:'Approved',denied:'Turned down',revoked:'Access removed'};
+  const rowsMine=mine.length?mine.map(r=>`<tr><td>${what(r)}</td><td class="hint">${when(r.created)}</td><td><b>${ST[r.status]||r.status}</b></td></tr>`).join(''):'<tr><td colspan="3" class="hint">You haven\'t asked for access to anything.</td></tr>';
+  await modal({title:'Access requests',wide:true,body:`<h3 class="sec-h">${isAdmin()?'Requests to you and to admins':'Requests for your sites and plans'}</h3><div class="tbl-wrap"><table class="legend-ed"><thead><tr><th>Who</th><th>For</th><th>Asked</th><th></th></tr></thead><tbody>${rowsIn}</tbody></table></div>
+    <h3 class="sec-h" style="margin-top:10px">Your requests</h3><div class="tbl-wrap"><table class="legend-ed"><thead><tr><th>For</th><th>Asked</th><th>Answer</th></tr></thead><tbody>${rowsMine}</tbody></table></div>`,
+    buttons:[{label:'Close',value:'ok',primary:true}],
+    onOpen:w=>w.addEventListener('click',async e=>{const b=e.target.closest('[data-rq]');if(!b)return;b.disabled=true;
+      try{await Store.req('POST','/requests/'+encodeURIComponent(b.dataset.rq),{decision:b.dataset.d});const td=b.closest('td');td.innerHTML=`<b>${({approve:'Approved',deny:'Turned down',revoke:'Access removed'})[b.dataset.d]}</b>`;
+        Store.reqCount=Math.max(0,(Store.reqCount||0)-(b.dataset.d==='revoke'?0:1));updBadge();}catch(err){toast(err.message,'warn');b.disabled=false;}})});
+  await loadGrants();if(route==='site'&&site)showSite(site.id);else if(route==='sites')showSites();}
 function ownerLabel(rec){if(!Store.auth)return'';const o=rec?.owner;if(!o)return'Admin';if(o===Store.user?.email)return'You';return Store.people?.get(o)||o.split('@')[0];}
 const NOT_YOURS='This belongs to someone else. You can open it and duplicate it, but only the owner or an admin can change it.';
 async function copyPlan(m,siteId,name){if(!m.elements)m=await Store.get('maps',m.id);const a=await Store.get('assets',m.id);const n={...clone(m),id:uid(),siteId,name:name||m.name+' (copy)',created:Date.now(),updated:Date.now()};delete n.owner;
@@ -1017,8 +1047,9 @@ async function showSite(id){
     return `<article class="card" data-map="${m.id}" data-find="${esc([m.name,m.settings?.department,m.settings?.preparedBy,who,m.owner].filter(Boolean).join(' ').toLowerCase())}"><div class="thumb">${m.thumb?`<img src="${m.thumb}" alt="">`:`<span class="mono-tile">—</span>`}</div><div class="meta"><h3>${esc(m.name)}</h3></div>
     <div class="card-actions">${mine?'<button class="btn ghost" data-act="rename">Rename</button>':''}<button class="btn ghost" data-act="dup">Duplicate</button><button class="btn ghost" data-act="file">Save file</button>${mine?'<button class="btn ghost danger" data-act="del">Delete</button>':''}</div></article>`;};
   $('#view').innerHTML=`<div class="page"><div class="page-in"><div class="page-head"><div class="site-head">${site.image?`<img class="site-photo" src="${site.image}" alt="">`:''}<div><h1>${esc(site.name)}${site.sample?'<span class="tag">Example</span>':''}</h1>${Store.auth?`<div class="site-info"><span><b>Owner</b> ${esc(ownerLabel(site))}</span></div>`:''}</div></div>
-    <div class="head-actions">${maps.length>3?`<input class="search" id="planQ" type="search" placeholder="Search plans" aria-label="Search plans">`:''}${siteMine?'<button class="btn" data-top="edit-site">Edit site</button>':''}<button class="btn" data-top="backup">Back up site</button></div></div>
+    <div class="head-actions">${maps.length>3?`<input class="search" id="planQ" type="search" placeholder="Search plans" aria-label="Search plans">`:''}${siteMine?'<button class="btn" data-top="edit-site">Edit site</button>':Store.auth?'<button class="btn" data-ask-site>Ask to edit</button>':''}<button class="btn" data-top="backup">Back up site</button></div></div>
     ${maps.length?`<div class="grid" id="mapGrid">${maps.map(card).join('')}</div>`:`<div class="empty"><h3>No plans for ${esc(site.name)} yet</h3><p>Start from a blank page, a satellite photo of the property, or an existing plan (image or PDF).</p><p style="margin-top:12px"><button class="btn primary" data-top="new-map">${ICON.plus}Create new floor plan</button></p></div>`}</div></div>`;
+  $('[data-ask-site]')?.addEventListener('click',()=>askAccess('sites',site.id,site.name));
   $('#planQ')?.addEventListener('input',e=>{const q=e.target.value.toLowerCase().trim();$$('#mapGrid .card').forEach(c=>c.hidden=!!q&&!q.split(/\s+/).every(w=>c.dataset.find.includes(w)));});
   $('#mapGrid')?.addEventListener('click',async e=>{const c=e.target.closest('.card');if(!c)return;const mid=c.dataset.map,b=e.target.closest('[data-act]');
     if(!b){location.hash='#/map/'+mid;return;}
@@ -1117,11 +1148,11 @@ async function openMap(id){
   if(recovered&&pend.assets){E.assets={...E.assets,...pend.assets};E.assetsDirty=true;}
   {const h=(await Store.get('meta','hist:'+id).catch(()=>null))?.value;E.hist=Array.isArray(h?.hist)?h.hist.slice(-HIST_MAX):[];E.fut=Array.isArray(h?.fut)?h.fut.slice(-HIST_MAX):[];}E.changedSinceOpen=false;E.manualRev=false;E.dirty=!!recovered;E.histDirty=false;E.siteDirty=false;E.changeSeq=0;E.localOk=true;clearTimeout(syncT);syncT=null;E.sel.clear();E.tool='select';E.chain=null;E.drag=null;
   crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[M.name,'#/map/'+id]]);
-  $('#topActions').innerHTML=`<button type="button" class="save-pill saved" id="saveSt" data-save></button><button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
+  $('#topActions').innerHTML=`<span id="livePeers" class="live-peers" hidden></span><button type="button" class="save-pill saved" id="saveSt" data-save></button><button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
     <span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button><button class="ib" data-top="fit" title="Fit to screen (0)" aria-label="Fit to screen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></button></span>
     <button class="btn" data-top="import" title="Import a plan image, PDF or satellite photo" aria-haspopup="menu">${ICON.upload}<span class="hide-narrow">Import</span></button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button><button class="ib" data-top="print" title="Print the plan" aria-label="Print"><svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path d="M5.5 7V2.5h9V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="2.5" y="7" width="15" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="5.5" y="11.5" width="9" height="6" fill="var(--panel)" stroke="currentColor" stroke-width="1.6"/></svg></button>
     <button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
-  if(E.readOnly)$('#topActions').innerHTML=`<span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button></span>
+  if(E.readOnly)$('#topActions').innerHTML=`<span id="livePeers" class="live-peers" hidden></span><span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button></span>
     <button class="btn" data-top="ro-copy">Duplicate to edit</button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button><button class="ib" data-top="print" title="Print the plan" aria-label="Print"><svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path d="M5.5 7V2.5h9V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="2.5" y="7" width="15" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="5.5" y="11.5" width="9" height="6" fill="var(--panel)" stroke="currentColor" stroke-width="1.6"/></svg></button><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
   savedAt=recovered?0:(m.updated||0);setSave(recovered?'local':'saved',recovered?'Changes from this browser not yet sent':'');
   if(recovered)setTimeout(()=>{toast('This browser had changes that hadn\'t reached the server yet. They\'ve been restored and are being saved now.');saveNow(true);},600);
@@ -1131,15 +1162,16 @@ async function openMap(id){
       <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-ov"></g></g></svg>
       <div class="drawbar" id="drawbar" hidden><div class="seg" id="dbMode" role="radiogroup" aria-label="Drawing mode"><label><input type="radio" name="dbmode" value="click"><span>Click points</span></label><label><input type="radio" name="dbmode" value="free"><span>Freehand</span></label></div>
         <span class="dbinfo" id="dbInfo"></span><button type="button" class="btn sm primary" id="dbEnclose" hidden>Enclose space</button><button type="button" class="btn sm" id="dbFinish" hidden>Finish</button><button type="button" class="btn sm ghost" id="dbCancel">Cancel</button></div>
-      ${E.readOnly?`<div class="ro-bar"><span><b>View only.</b> ${esc(ownerLabel(M)==='Admin'?'This plan belongs to an admin.':`This is ${ownerLabel(M)}'s plan.`)} Duplicate it to make changes.</span><button type="button" class="btn sm primary" data-ro-copy>Duplicate to edit</button></div>`:''}
+      ${E.readOnly?`<div class="ro-bar"><span><b>View only.</b> ${esc(ownerLabel(M)==='Admin'?'This plan belongs to an admin.':`This is ${ownerLabel(M)}'s plan.`)} Ask to edit it, or duplicate it to make your own copy.</span><button type="button" class="btn sm" data-ro-ask>Ask to edit</button><button type="button" class="btn sm primary" data-ro-copy>Duplicate to edit</button></div>`:''}
       <div class="hud"><div class="hint-box" id="hint"></div></div></section>
     <aside class="panel" id="panel"><div class="tabs" role="tablist">${[['stations','Stations'],['props','Properties'],['register','Register'],['map','Settings']].map(t=>`<button data-tab="${t[0]}" role="tab">${t[1]}</button>`).join('')}</div><div class="tab-body" id="tabBody"></div></aside></div>`;
   bindEditor();
   if(!M.thumb&&M.elements.length)setTimeout(makeThumb,800);
-  if(E.readOnly){$('[data-ro-copy]')?.addEventListener('click',roCopy);$$('#panel .tabs button').forEach(b=>{if(b.dataset.tab!=='register')b.hidden=true;});}
+  if(E.readOnly){$('[data-ro-copy]')?.addEventListener('click',roCopy);$('[data-ro-ask]')?.addEventListener('click',()=>askAccess('maps',M.id,M.name));$$('#panel .tabs button').forEach(b=>{if(b.dataset.tab!=='register')b.hidden=true;});}
   requestAnimationFrame(()=>{fitView();E.tab=E.readOnly?'register':'stations';setTool(E.readOnly?'pan':'select');if(E.readOnly)$('#hint').innerHTML='View only: drag to move around, scroll to zoom.';
     if(E.pendingSat){E.pendingSat=false;openSatellite();}
     if(E.pendingFiles){const f=E.pendingFiles;E.pendingFiles=null;importIntoEditor(f,'bg');}});
+  Live.start();
 }
 function bumpVersion(v){v=String(v||'').trim();let m=v.match(/^(.*?)(\d+)$/);if(m)return m[1]+String(+m[2]+1).padStart(m[2].length,'0');
   m=v.match(/^(.*?)([A-Ya-y])$/);if(m)return m[1]+String.fromCharCode(m[2].charCodeAt(0)+1);return v?v+'.1':'01';}
@@ -1148,7 +1180,7 @@ async function roCopy(){try{const n=await copyPlan(M,M.siteId,M.name+' (my copy)
 function bumpIfChanged(){if(!M||!E.changedSinceOpen)return;E.changedSinceOpen=false;E.manualRev=false;}   // the version already went up on the first change
 
 async function leaveEditor(){
-  if(route!=='map'||!M)return;
+  if(route!=='map'||!M)return;Live.flush();Live.stop();
   if(E.readOnly){route='';return;}
   const changed_=E.changedSinceOpen;bumpIfChanged();
   if(changed_){E.siteDirty=true;E.dirty=true;try{await makeThumb();}catch(e){}
@@ -1286,7 +1318,7 @@ function render(){
   const sg=sheet();$('#board').setAttribute('width',sg.W);$('#board').setAttribute('y',sg.top);$('#board').setAttribute('height',sg.H);
   const g=$('#gridr');g.setAttribute('width',M.width);g.setAttribute('height',M.height);g.style.display=M.settings.showGrid?'':'none';
   const gp=$('#gridp'),gs=M.settings.grid||20;gp.setAttribute('width',gs);gp.setAttribute('height',gs);$('#gridpath').setAttribute('d',`M${gs} 0H0V${gs}`);
-  renderImages();$('#L-main').innerHTML=mainMarkup(false);renderOverlay();
+  renderImages();$('#L-main').innerHTML=mainMarkup(false);renderOverlay();Live.soon();
 }
 function renderOverlay(){
   if(route!=='map')return;const k=E.view.k,sel=getComputedStyle(document.documentElement).getPropertyValue('--sel').trim()||'#1c7ed6';
@@ -1319,17 +1351,21 @@ function renderOverlay(){
     if(E.tool==='room'||E.tool==='rect')s+=`<rect x="${x}" y="${y}" width="${w}" height="${h2}" fill="${sel}" fill-opacity=".06" stroke="${sel}" stroke-width="${E.tool==='room'?E.wallStyle.w:sw}" stroke-opacity="${E.tool==='room'?.5:1}"/>`+lbl(x,y-6/k,`${fmtLen(w)} × ${fmtLen(h2)}`);
     else if(E.tool==='ellipse')s+=`<ellipse cx="${x+w/2}" cy="${y+h2/2}" rx="${w/2}" ry="${h2/2}" fill="none" stroke="${sel}" stroke-width="${sw}"/>`;
     else s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${E.tool==='calib'?'#e8590c':sel}" stroke-width="${r2(2/k)}"/>`+lbl(r2((a.x+b.x)/2+8/k),r2((a.y+b.y)/2-8/k),fmtLen(dist(a,b)));}
-  if(E.chain&&E.chain.pts.length&&c){const pts=E.chain.pts,q=E.chainCur||c;const all=E.chain.stroke?[...pts,...E.chain.stroke]:[...pts,q];
-    s+=`<polyline points="${all.map(p=>p.x+','+p.y).join(' ')}" fill="none" stroke="${isWallTool(E.tool)?chainStyle().color:sel}" stroke-opacity="${isWallTool(E.tool)?.55:1}" stroke-width="${isWallTool(E.tool)?chainStyle().w:sw}"${isWallTool(E.tool)&&chainStyle().dash?` stroke-dasharray="${r2(Math.max(4,chainStyle().w*2.2))} ${r2(Math.max(3,chainStyle().w*1.6))}"`:''}/>`;
-    const l=pts[pts.length-1];s+=lbl(r2((l.x+q.x)/2+8/k),r2((l.y+q.y)/2-8/k),fmtLen(dist(l,q)));
-    s+=`<circle cx="${pts[0].x}" cy="${pts[0].y}" r="${r2(5/k)}" fill="#fff" stroke="${sel}" stroke-width="${sw}"/>`;}
+  /* what you've drawn so far stays on screen, with a dot at every node; the line to the pointer follows the mouse */
+  if(E.chain&&E.chain.pts.length){const pts=E.chain.pts,q=c?(E.chainCur||c):null,wt=isWallTool(E.tool),cs=wt?chainStyle():null;
+    const stroke=wt?cs.color:sel,width=wt?cs.w:sw,dsh=wt&&cs.dash?` stroke-dasharray="${r2(Math.max(4,cs.w*2.2))} ${r2(Math.max(3,cs.w*1.6))}"`:'';
+    const placed=E.chain.stroke?[...pts,...E.chain.stroke]:pts;
+    if(placed.length>1)s+=`<polyline points="${placed.map(p=>p.x+','+p.y).join(' ')}" fill="none" stroke="${stroke}" stroke-opacity="${wt?.9:1}" stroke-width="${width}" stroke-linejoin="round"${dsh}/>`;
+    const l=pts[pts.length-1];
+    if(q&&!E.chain.stroke){s+=`<line x1="${l.x}" y1="${l.y}" x2="${q.x}" y2="${q.y}" stroke="${stroke}" stroke-opacity="${wt?.45:.7}" stroke-width="${width}"${dsh}/>`;s+=lbl(r2((l.x+q.x)/2+8/k),r2((l.y+q.y)/2-8/k),fmtLen(dist(l,q)));}
+    pts.forEach((p,i)=>{s+=`<circle cx="${p.x}" cy="${p.y}" r="${r2((i===0?5.5:4)/k)}" fill="#fff" stroke="${sel}" stroke-width="${sw}"/>`;});}
   if(!d&&c){
     if(E.tool==='station'&&E.cat){const ct=E.catType[E.cat]||{},cat=catOf(E.cat);s+=stationMarkup({code:E.cat,num:nextNum(E.cat),x:c.x,y:c.y,stype:ct.type??cat.type,toxic:ct.toxic??(knownTox(ct.type??cat.type)??cat.mode==='tox')},true);}
     if(E.tool==='objects'&&!isDoorKind(E.objKind)){const d=OBJMAP[E.objKind];if(d)s+=objMarkup({kind:E.objKind,x:c.x,y:c.y,w:d[3]*S(),h:d[4]*S(),rot:0},false,true);}
     if(E.tool==='objects'&&isDoorKind(E.objKind)){const nw=nearestWall(c,40/k);if(nw){const width=Math.min(defaultDoorWidth(E.objKind),wallLen(nw.wall)*.95);s+=doorMarkup({kind:E.objKind,width,t:clampT(nw.t,nw.wall,width),flip:0,hinge:0},nw.wall,true,true);}}
   }
   if(E.snapHit&&(d?.kind==='draw'||E.chain||isWallTool(E.tool)))s+=`<circle cx="${E.snapHit.x}" cy="${E.snapHit.y}" r="${r2(6/k)}" fill="none" stroke="#e8590c" stroke-width="${r2(2/k)}"/>`;
-  $('#L-ov').innerHTML=s;
+  s+=Live.markup(k);$('#L-ov').innerHTML=s;
 }
 function renderAll(){render();renderPanel();updUndo();}
 
@@ -1546,7 +1582,7 @@ function bindEditor(){
   });
   const up=e=>{ptrs.delete(e.pointerId);if(pinch){if(ptrs.size<2)pinch=null;return;}onUp(e);};
   st.addEventListener('pointerup',up);st.addEventListener('pointercancel',up);
-  st.addEventListener('pointerleave',()=>{if(!E.drag){E.cursor=null;renderOverlay();}});
+  st.addEventListener('pointerleave',()=>{Live.cursor(null,false);if(!E.drag){E.cursor=null;renderOverlay();}});
   st.addEventListener('dblclick',e=>{if(route!=='map'||E.readOnly||E.tool!=='select'||e.target.closest('#vp [data-id],[data-handle],[data-node],[data-furn],[data-field]'))return;if(M.elements.some(x=>x.bg))openBg();});
   st.addEventListener('wheel',e=>{e.preventDefault();
     if(!e.ctrlKey&&(Math.abs(e.deltaX)>Math.abs(e.deltaY)*.5)&&e.deltaMode===0&&!Number.isInteger(e.deltaY)){E.view.x-=e.deltaX;E.view.y-=e.deltaY;applyView();return;}
@@ -1609,7 +1645,7 @@ function downSelect(e,p){
   E.drag={kind:'marquee',a:p,b:p,add:e.shiftKey};renderOverlay();
 }
 function onMove(e){
-  let p=toWorld(e);E.cursor=p;const d=E.drag;
+  let p=toWorld(e);E.cursor=p;const d=E.drag;Live.cursor(p,true);
   if(0)$('#coords').textContent=M.scale?`${(p.x/M.scale).toFixed(1)}, ${(p.y/M.scale).toFixed(1)} m · ${Math.round(E.view.k*100)}%`:`${Math.round(p.x)}, ${Math.round(p.y)} px · ${Math.round(E.view.k*100)}%`;
   if(!d){if(E.chain){const l=E.chain.pts[E.chain.pts.length-1];E.chainCur=snapP(p,e,l);}else if(isWallTool(E.tool))snapP(p,e);renderOverlay();return;}
   const k=E.view.k;
@@ -2132,6 +2168,60 @@ async function importIntoEditor(files,forceMode){
     catch(e){console.error(e);toast(`${ok[i].name} could not be imported: ${e.message}`,'warn');}}
 }
 
+/* ================= LIVE EDITING =================
+   When two or more people have the same plan open, each change is sent straight to the others
+   (only while someone else is there), so everyone sees the same plan as it's being drawn. */
+const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(),props:'',sendT:null,curT:0,sent:new Set(),colour:null,
+  propsStr(){return JSON.stringify({settings:M.settings,furn:M.furn,width:M.width,height:M.height,name:M.name,scale:M.scale,bgMeta:M.bgMeta,nextFrom:M.nextFrom||null});},
+  baseline(){this.base=new Map(M.elements.map(e=>[e.id,JSON.stringify(e)]));this.props=this.propsStr();},
+  start(){this.stop();if(!M||!Store.base)return;this.mapId=M.id;this.id='c'+uid();this.sent=new Set();this.baseline();this.connect();},
+  stop(){const had=this.others().length;this.ctl?.abort();this.ctl=null;this.peers=[];this.cursors.clear();clearTimeout(this.sendT);this.sendT=null;if(had)updPeers();},
+  others(){return this.peers.filter(p=>p.id!==this.id);},
+  async connect(){const id=this.mapId,ctl=new AbortController();this.ctl=ctl;
+    try{const r=await fetch(Store.base+'/api/live/'+encodeURIComponent(id)+'?c='+encodeURIComponent(this.id),{headers:Store.hdr(false),signal:ctl.signal,cache:'no-store'});
+      if(r.ok&&r.body){const rd=r.body.getReader(),dec=new TextDecoder();let buf='';
+        for(;;){const{value,done}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
+          while((i=buf.indexOf('\n\n'))>=0){const chunk=buf.slice(0,i);buf=buf.slice(i+2);const line=chunk.split('\n').find(l=>l.startsWith('data: '));
+            if(line){Net.add('/live/'+id,0,line.length,null);try{this.onMsg(JSON.parse(line.slice(6)));}catch(e){console.error(e);}}}}}}
+    catch(e){}
+    if(this.ctl===ctl&&route==='map'&&M?.id===id){this.peers=[];updPeers();setTimeout(()=>{if(this.ctl===ctl&&route==='map'&&M?.id===id)this.connect();},4000);}},
+  onMsg(m){
+    if(m.type==='hello'){this.colour=m.colour;this.setPeers(m.peers);}
+    else if(m.type==='peers')this.setPeers(m.peers);
+    else if(m.type==='need-state')this.sendState(m.for);
+    else if(m.type==='state')this.applyState(m.state);
+    else if(m.type==='ops')this.applyOps(m.ops);
+    else if(m.type==='cursor'){if(m.on)this.cursors.set(m.from,{x:m.x,y:m.y});else this.cursors.delete(m.from);renderOverlay();}},
+  setPeers(list){const before=new Set(this.others().map(p=>p.id));this.peers=list||[];for(const k of [...this.cursors.keys()])if(!this.peers.some(p=>p.id===k))this.cursors.delete(k);
+    const fresh=this.others().filter(p=>!before.has(p.id));if(fresh.length&&before.size+fresh.length>0&&this.greeted)toast(`${fresh.map(p=>p.name).join(', ')} opened this plan too. You'll both see changes as they happen.`);
+    if(!this.greeted&&this.others().length)toast(`${this.others().map(p=>p.name).join(', ')} ${this.others().length===1?'is':'are'} on this plan too. You'll see each other's changes as they happen.`);
+    this.greeted=true;if(this.others().length)this.baseline();updPeers();renderOverlay();},
+  async post(body){const payload=JSON.stringify({...body,from:this.id});Net.add('/live/'+this.mapId,payload.length+300,300,null);
+    try{await fetch(Store.base+'/api/live/'+encodeURIComponent(this.mapId),{method:'POST',headers:Store.hdr(true),body:payload,cache:'no-store'});}catch(e){}},
+  soon(){if(!this.others().length||E.readOnly||this.sendT||!M||M.id!==this.mapId)return;this.sendT=setTimeout(()=>{this.sendT=null;this.flush();},110);},
+  flush(){if(!M||M.id!==this.mapId||!this.others().length||E.readOnly)return;const up=[],rm=[],seen=new Set();
+    M.elements.forEach((e,i)=>{seen.add(e.id);const s=JSON.stringify(e),was=this.base.get(e.id);if(was!==s){up.push(was===undefined?{el:e,at:i}:{el:e});this.base.set(e.id,s);}});
+    for(const id of [...this.base.keys()])if(!seen.has(id)){rm.push(id);this.base.delete(id);}
+    const ps=this.propsStr(),props=ps!==this.props?JSON.parse(ps):null;this.props=ps;
+    const assets={};for(const u of up){const a=u.el.asset;if(a&&E.assets[a]&&!this.sent.has(a)){assets[a]=E.assets[a];this.sent.add(a);}}
+    if(up.length||rm.length||props)this.post({type:'ops',ops:{up,rm,props,assets:Object.keys(assets).length?assets:undefined}});},
+  sendState(to){if(!M||E.readOnly)return;this.flush();this.post({type:'state',to,state:{elements:M.elements,props:JSON.parse(this.propsStr()),assets:E.assets}});for(const a of Object.keys(E.assets))this.sent.add(a);},
+  applyState(st){if(!M||!st)return;M.elements=st.elements||M.elements;if(st.props)Object.assign(M,st.props);if(st.assets)for(const[k,v]of Object.entries(st.assets))if(!E.assets[k])E.assets[k]=v;
+    for(const id of [...E.sel])if(!getEl(id))E.sel.delete(id);this.baseline();render();renderPanel();},
+  applyOps(o){if(!M||!o)return;const busy=E.drag?.orig?new Set(E.drag.orig.keys()):E.drag?.base?new Set(E.drag.base.keys()):null;let touchSel=false;
+    if(o.assets)Object.assign(E.assets,o.assets);
+    if(o.rm?.length){const rm=new Set(o.rm);M.elements=M.elements.filter(e=>!rm.has(e.id));for(const id of rm){this.base.delete(id);if(E.sel.delete(id))touchSel=true;}}
+    for(const u of o.up||[]){const el=u.el;if(!el?.id||busy?.has(el.id))continue;const i=M.elements.findIndex(x=>x.id===el.id);
+      if(i>=0)M.elements[i]=el;else M.elements.splice(Math.min(u.at??M.elements.length,M.elements.length),0,el);this.base.set(el.id,JSON.stringify(el));if(E.sel.has(el.id))touchSel=true;}
+    if(o.props){Object.assign(M,o.props);this.props=this.propsStr();E.changedSinceOpen=true;crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[M.name,'#/map/'+M.id]]);}
+    render();if(touchSel||o.props)renderPanel();},
+  cursor(p,on){if(!this.others().length||!M)return;const now=Date.now();if(on&&now-this.curT<140)return;this.curT=now;this.post({type:'cursor',x:r2(p?.x||0),y:r2(p?.y||0),on});},
+  markup(k){let s='';for(const[id,c]of this.cursors){const p=this.peers.find(x=>x.id===id);if(!p)continue;const col=p.colour||'#e8590c';
+    s+=`<g transform="translate(${c.x} ${c.y}) scale(${r2(1/k)})" pointer-events="none"><path d="M0 0L0 16L4.5 12L8 19L10.5 18L7 11L13 11Z" fill="${col}" stroke="#fff" stroke-width="1.2"/><text x="14" y="24" font-family="${MAPFONT}" font-size="11.5" font-weight="700" fill="#fff" stroke="${col}" stroke-width="4" paint-order="stroke" stroke-linejoin="round">${esc(p.name)}</text></g>`;}return s;}};
+function updPeers(){const box=$('#livePeers');if(!box)return;const o=Live.others();
+  box.innerHTML=o.map(p=>`<span class="peer" style="--pc:${p.colour}" title="${esc(p.name)} is on this plan too${p.edit?'':' (view only)'}">${p.picture?`<img src="${esc(p.picture)}" alt="" referrerpolicy="no-referrer">`:esc((p.name||'?').slice(0,1).toUpperCase())}</span>`).join('');
+  box.title=o.length?`Live: ${o.map(p=>p.name).join(', ')} ${o.length===1?'is':'are'} on this plan with you`:'';box.hidden=!o.length;}
+
 /* ================= SATELLITE ================= */
 async function openSatellite(){
   let lm=null,rot=0;
@@ -2332,14 +2422,16 @@ async function showLogin(msg){
 let lastActive=Date.now();
 for(const ev of ['pointerdown','keydown','wheel','touchstart'])addEventListener(ev,()=>{lastActive=Date.now();},{passive:true,capture:true});
 setInterval(async()=>{if(!Store.auth||!Store.token||route==='login'||route==='connect')return;
-  if(Date.now()-lastActive<60000){try{const r=await fetch(Store.base+'/api/auth/me',{cache:'no-store',headers:Store.hdr(false)});if(r.status===401){const why=await r.json().catch(()=>({}));Store.setToken('');Store.user=null;signedOut(why.code==='elsewhere'?why.error:'You were signed out after 5 minutes without activity.');}}catch(e){}}
+  if(Date.now()-lastActive<60000){try{const r=await fetch(Store.base+'/api/auth/me',{cache:'no-store',headers:Store.hdr(false)});if(r.status===401){const why=await r.json().catch(()=>({}));Store.setToken('');Store.user=null;signedOut(why.code==='elsewhere'?why.error:'You were signed out after 5 minutes without activity.');}else if(r.ok)noteRequests(await r.json().catch(()=>null));}catch(e){}}
   else if(Date.now()-lastActive>5*60000+5000){Store.setToken('');Store.user=null;signedOut('You were signed out after 5 minutes without activity.');}},30000);
 function accountBtn(){const u=Store.user;if(!u)return'';const ini=esc((u.name||u.email).trim().slice(0,1).toUpperCase());
-  return `<button class="acct" data-top="account" title="${esc(u.email)}" aria-haspopup="menu">${u.picture?`<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">`:`<span>${ini}</span>`}</button>`;}
+  const n=Store.reqCount||0;return `<button class="acct" data-top="account" title="${esc(u.email)}${n?` · ${n} access request${n===1?'':'s'} waiting`:''}" aria-haspopup="menu">${u.picture?`<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">`:`<span>${ini}</span>`}${n?`<span class="acct-badge">${n>9?'9+':n}</span>`:''}</button>`;}
 function openAccountMenu(btn){const u=Store.user;if(!u)return;
-  const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
-  popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
+  const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});if(Store.auth)items.push({v:'requests',label:'Access requests',note:Store.reqCount?`${Store.reqCount} waiting for you`:'Ask for or give edit access'});
+  items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
+  popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='requests')openRequests();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
+  ['v19','24 Oct 2026',['Live editing: when two or more people have the same plan open, everyone sees changes and each other\'s pointers as they happen','Ask to edit someone else\'s site or plan; the owner or an admin approves it under Access requests','Walls stay visible while you draw them, with a dot on every corner','Shapes get room-style fill colours; text align removed; no dashed outline around selected items']],
   ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved)','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
   ['v17','24 Oct 2026',['Background button moved to the left toolbar','Print button next to Export prints the plan straight from the browser on one A4 page']],
   ['v16','24 Oct 2026',['Words drawn one letter at a time in an SVG come in as one editable text (straight or turned)','Stations tab: icon and text size for every station on the plan; single stations can still have their own']],
@@ -2454,6 +2546,7 @@ async function boot(){
   if(route==='connect'||route==='login')route='';
   Servers.ensure(Store.base);
   await Prefs.load();
+  await loadGrants();Store.reqSeenOnce=false;noteRequests(Store.meInfo);
   Store.people=new Map();if(Store.auth){try{for(const p of await Store.req('GET','/people'))Store.people.set(p.email,p.name||p.email.split('@')[0]);}catch(e){}}
   try{const c=await Store.get('meta','cats');if(c?.value?.length)CATS=c.value;}catch(e){}
   if(isAdmin()){

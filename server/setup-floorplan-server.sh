@@ -187,6 +187,28 @@ db.exec(`
     token_hash TEXT PRIMARY KEY,       -- sessions ended because the same account signed in somewhere else
     ended      INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS access_requests (
+    id         TEXT PRIMARY KEY,
+    store      TEXT NOT NULL,          -- sites | maps
+    rec_id     TEXT NOT NULL,
+    name       TEXT,                   -- site or plan name, for the list
+    site_id    TEXT,
+    requester  TEXT NOT NULL,
+    req_name   TEXT,
+    owner      TEXT,                   -- who decides (null = admins)
+    note       TEXT,
+    status     TEXT NOT NULL,          -- pending | approved | denied | revoked
+    created    INTEGER NOT NULL,
+    decided    INTEGER,
+    decided_by TEXT,
+    seen       INTEGER NOT NULL DEFAULT 0   -- the requester has seen the decision
+  );
+  CREATE TABLE IF NOT EXISTS grants (
+    store   TEXT NOT NULL,             -- edit access someone else was given: to a site (and all its plans) or one plan
+    rec_id  TEXT NOT NULL,
+    email   TEXT NOT NULL,
+    PRIMARY KEY (store, rec_id, email)
+  );
   CREATE TABLE IF NOT EXISTS prefs (
     email   TEXT PRIMARY KEY,          -- each person's own settings (theme etc.), so they follow them to any device
     data    TEXT NOT NULL,
@@ -212,7 +234,20 @@ const q = {
   verSite:  db.prepare('SELECT COUNT(*) AS n, MAX(updated) AS m FROM records WHERE store = ? AND site_id = ?'),
   sum:      db.prepare(SUMMARY + ' ORDER BY updated DESC'),
   sumSite:  db.prepare(SUMMARY + ' AND site_id = ? ORDER BY updated DESC'),
-  row:      db.prepare('SELECT owner FROM records WHERE store = ? AND id = ?'),
+  row:      db.prepare('SELECT owner, site_id FROM records WHERE store = ? AND id = ?'),
+  grant:    db.prepare('SELECT 1 FROM grants WHERE store = ? AND rec_id = ? AND email = ?'),
+  myGrants: db.prepare('SELECT store, rec_id AS id FROM grants WHERE email = ?'),
+  addGrant: db.prepare('INSERT OR IGNORE INTO grants (store, rec_id, email) VALUES (?, ?, ?)'),
+  delGrant: db.prepare('DELETE FROM grants WHERE store = ? AND rec_id = ? AND email = ?'),
+  reqNew:   db.prepare(`INSERT INTO access_requests (id, store, rec_id, name, site_id, requester, req_name, owner, note, status, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`),
+  reqOpen:  db.prepare("SELECT id FROM access_requests WHERE store = ? AND rec_id = ? AND requester = ? AND status = 'pending'"),
+  reqGet:   db.prepare('SELECT * FROM access_requests WHERE id = ?'),
+  reqFor:   db.prepare("SELECT * FROM access_requests WHERE (owner = ? OR ?) AND status IN ('pending', 'approved') ORDER BY created DESC LIMIT 300"),
+  reqMine:  db.prepare('SELECT * FROM access_requests WHERE requester = ? AND created > ? ORDER BY created DESC LIMIT 100'),
+  reqSet:   db.prepare('UPDATE access_requests SET status = ?, decided = ?, decided_by = ?, seen = 0 WHERE id = ?'),
+  reqSeen:  db.prepare("UPDATE access_requests SET seen = 1 WHERE requester = ? AND status != 'pending'"),
+  reqCount: db.prepare("SELECT COUNT(*) AS n FROM access_requests WHERE status = 'pending' AND (owner = ? OR ?)"),
+  reqNews:  db.prepare("SELECT COUNT(*) AS n FROM access_requests WHERE requester = ? AND status != 'pending' AND seen = 0"),
   setOwner: db.prepare('UPDATE records SET owner = ? WHERE store = ? AND id = ?'),
   people:   db.prepare('SELECT email, name FROM users'),
   prefs:    db.prepare('SELECT data FROM prefs WHERE email = ?'),
@@ -352,6 +387,15 @@ function serveStatic(res, pathname) {
 }
 
 /* ---------- routes ---------- */
+/* ---------- live editing ----------
+   Everyone with a plan open keeps one stream open to the server (server-sent events). Changes one person
+   makes are passed straight on to the others on that plan; nothing extra is stored. */
+const live = new Map();          // planId -> Map(clientId -> {res, email, name, picture, joined})
+const COLOURS = ['#e8590c', '#1971c2', '#2b8a3e', '#c2255c', '#6741d9', '#0c8599', '#f08c00', '#5c940d'];
+function livePeers(planId) { const room = live.get(planId); return room ? [...room].map(([id, c]) => ({ id, email: c.email, name: c.name, picture: c.picture, colour: c.colour, edit: c.edit })) : []; }
+function liveSend(c, msg) { try { c.res.write(`data: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}\n\n`); } catch {} }
+function liveCast(planId, msg, except, only) { const room = live.get(planId); if (!room) return; const txt = JSON.stringify(msg); for (const [id, c] of room) if (id !== except && (!only || id === only)) liveSend(c, txt); }
+setInterval(() => { for (const [planId, room] of live) for (const [id, c] of room) { if (c.check()) liveSend(c, '{"type":"ping"}'); else { try { c.res.end(); } catch {} room.delete(id); liveCast(planId, { type: 'peers', peers: livePeers(planId) }); } } }, 25000).unref();
 const failedLogins = new Map();   // ip -> {n, until}: slows down repeated failed sign-ins
 async function handleAuth(req, res, parts, ip) {
   if (parts[1] === 'google' && req.method === 'POST') {
@@ -382,7 +426,8 @@ async function handleAuth(req, res, parts, ip) {
     return json(res, 200, { token, user: { email, role: u.role, name: u.name, picture: u.picture } });
   }
   const me = sessionUser(req);
-  if (parts[1] === 'me' && req.method === 'GET') return me ? json(res, 200, { user: me.open ? null : { email: me.email, role: me.role, name: me.name, picture: me.picture }, auth: AUTH_ON }) : notSignedIn(req, res);
+  if (parts[1] === 'me' && req.method === 'GET') return me ? json(res, 200, { user: me.open ? null : { email: me.email, role: me.role, name: me.name, picture: me.picture }, auth: AUTH_ON,
+      requests: me.open ? 0 : q.reqCount.get(me.email, me.role === 'admin' ? 1 : 0).n, decisions: me.open ? 0 : q.reqNews.get(me.email).n }) : notSignedIn(req, res);
   if (parts[1] === 'logout' && req.method === 'POST') { if (me?.tokenHash) q.endSess.run(me.tokenHash); return json(res, 200, { ok: true }); }
   return json(res, 404, { error: 'Unknown path' });
 }
@@ -411,6 +456,42 @@ async function handleUsers(req, res, parts, me) {
   return json(res, 405, { error: 'Method not allowed' });
 }
 
+async function handleRequests(req, res, parts, me) {
+  const admin = me.role === 'admin' ? 1 : 0;
+  if (parts.length === 1 && req.method === 'GET') {
+    const out = { incoming: q.reqFor.all(me.email, admin), mine: q.reqMine.all(me.email, Date.now() - 30 * 86400000) };
+    q.reqSeen.run(me.email);
+    return json(res, 200, out);
+  }
+  if (parts.length === 1 && req.method === 'POST') {
+    if (me.open) return json(res, 400, { error: 'Sign-in is off, so everyone can already edit everything' });
+    const { obj } = await readJson(req, 8192);
+    const store = obj?.store === 'sites' ? 'sites' : obj?.store === 'maps' ? 'maps' : null, id = String(obj?.id || '');
+    if (!store || !id) return json(res, 400, { error: 'Say which site or plan' });
+    const r = q.row.get(store, id), data = q.get.get(store, id);
+    if (!r || !data) return json(res, 404, { error: 'That is no longer on the server' });
+    if (r.owner === me.email || admin) return json(res, 400, { error: 'You can already edit this' });
+    if (q.grant.get(store, id, me.email) || (store === 'maps' && r.site_id && q.grant.get('sites', r.site_id, me.email))) return json(res, 400, { error: 'You can already edit this' });
+    if (q.reqOpen.get(store, id, me.email)) return json(res, 200, { ok: true, already: true });
+    let name = null; try { name = JSON.parse(data.data).name || null; } catch {}
+    q.reqNew.run('r' + crypto.randomBytes(9).toString('base64url'), store, id, name, store === 'maps' ? r.site_id : id, me.email, me.name || null, r.owner || null, String(obj.note || '').slice(0, 500) || null, Date.now());
+    return json(res, 200, { ok: true });
+  }
+  if (parts.length === 2 && req.method === 'POST') {
+    const rq = q.reqGet.get(parts[1]);
+    if (!rq) return json(res, 404, { error: 'That request no longer exists' });
+    const owner = q.row.get(rq.store, rq.rec_id)?.owner ?? rq.owner;
+    if (!admin && owner !== me.email) return json(res, 403, { error: 'Only the owner or an admin can decide this' });
+    const { obj } = await readJson(req, 2048), d = obj?.decision;
+    if (d === 'approve') { q.addGrant.run(rq.store, rq.rec_id, rq.requester); q.reqSet.run('approved', Date.now(), me.email, rq.id); }
+    else if (d === 'deny') { q.reqSet.run('denied', Date.now(), me.email, rq.id); }
+    else if (d === 'revoke') { q.delGrant.run(rq.store, rq.rec_id, rq.requester); q.reqSet.run('revoked', Date.now(), me.email, rq.id); }
+    else return json(res, 400, { error: 'Decision must be approve, deny or revoke' });
+    return json(res, 200, { ok: true });
+  }
+  return json(res, 405, { error: 'Method not allowed' });
+}
+
 /* ---------- who may change what ----------
    Sites and plans belong to whoever created them. Users change and delete only their own;
    admins change anything. A plan's images and undo history follow the plan's owner.
@@ -418,7 +499,7 @@ async function handleUsers(req, res, parts, me) {
 const OWNED = new Set(['sites', 'maps']);
 function writeCheck(me, store, id, method) {
   if (me.open || me.role === 'admin') return null;
-  const ownerOf = (st, key) => { const r = q.row.get(st, key); return r ? { owner: r.owner } : null; };
+  const ownerOf = (st, key) => { const r = q.row.get(st, key); return r ? { owner: r.owner, site_id: r.site_id } : null; };
   let rec = null, what = 'This';
   if (OWNED.has(store)) { rec = ownerOf(store, id); what = store === 'sites' ? 'This site' : 'This plan'; }
   else if (store === 'assets') { rec = ownerOf('maps', id); what = 'This plan'; }
@@ -426,6 +507,16 @@ function writeCheck(me, store, id, method) {
   else if (store === 'meta') { return q.row.get('meta', id) ? 'Only admins can change shared settings.' : null; }
   if (!rec) return null;                                   // new record: allowed, and it becomes theirs
   if (rec.owner === me.email) return null;
+  // edit access the owner (or an admin) approved: to this plan, or to the whole site. Deleting stays with the owner.
+  if (method !== 'DELETE' || store === 'assets' || store === 'meta') {
+    const planId = store === 'maps' ? id : store === 'assets' ? id : store === 'meta' ? id.slice(5) : null;
+    if (store === 'sites' && q.grant.get('sites', id, me.email)) return null;
+    if (planId) { const pr = q.row.get('maps', planId); if (q.grant.get('maps', planId, me.email) || (pr?.site_id && q.grant.get('sites', pr.site_id, me.email))) return null; }
+  }
+  if (method === 'DELETE' && (store === 'sites' || store === 'maps')) {
+    const g = store === 'sites' ? q.grant.get('sites', id, me.email) : (q.grant.get('maps', id, me.email) || (rec.site_id && q.grant.get('sites', rec.site_id, me.email)));
+    if (g) return `You can edit this, but only ${rec.owner || 'an admin'} or an admin can delete it.`;
+  }
   return `${what} belongs to ${rec.owner || 'an admin'}. You can open it and make your own copy, but only the owner or an admin can change it.`;
 }
 
@@ -465,6 +556,43 @@ const server = http.createServer(async (req, res) => {
       return json(res, 405, { error: 'Method not allowed' });
     }
 
+    // ----- live editing -----
+    if (parts[0] === 'live' && parts.length === 2) {
+      const planId = parts[1], row = q.row.get('maps', planId);
+      if (!row) return json(res, 404, { error: 'That plan is not on the server' });
+      if (req.method === 'GET') {
+        const clientId = String(url.searchParams.get('c') || '').slice(0, 40) || crypto.randomBytes(6).toString('base64url');
+        const token = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization || '')?.[1] || '';
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
+        if (!live.has(planId)) live.set(planId, new Map());
+        const room = live.get(planId), used = new Set([...room.values()].map(c => c.colour));
+        const c = { res, email: me.email, name: me.name || me.email.split('@')[0], picture: me.picture || null, colour: COLOURS.find(x => !used.has(x)) || COLOURS[room.size % COLOURS.length],
+          edit: !writeCheck(me, 'maps', planId, 'PUT'), check: () => { if (me.open) return true; const s0 = q.sess.get(sha(token)); return !!s0 && s0.expires > Date.now() && !!q.user.get(s0.email); } };   // checking doesn't count as activity
+        const first = [...room].find(([, x]) => x.edit)?.[0];
+        room.set(clientId, c);
+        liveSend(c, { type: 'hello', you: clientId, colour: c.colour, peers: livePeers(planId) });
+        liveCast(planId, { type: 'peers', peers: livePeers(planId) }, clientId);
+        if (first) liveCast(planId, { type: 'need-state', for: clientId }, null, first);     // the person who was here first sends the latest version
+        req.on('close', () => { room.delete(clientId); if (!room.size) live.delete(planId); else liveCast(planId, { type: 'peers', peers: livePeers(planId) }); });
+        return;
+      }
+      if (req.method === 'POST') {
+        const { obj } = await readJson(req, 20 * 1024 * 1024);
+        const from = String(obj?.from || ''), room = live.get(planId);
+        if (!room?.has(from)) return json(res, 409, { error: 'Not connected to this plan' });
+        if (obj.type === 'cursor') { liveCast(planId, { type: 'cursor', from, x: +obj.x || 0, y: +obj.y || 0, on: !!obj.on }, from); return json(res, 200, { ok: true }); }
+        const deny = writeCheck(me, 'maps', planId, 'PUT');
+        if (deny) return json(res, 403, { error: deny });
+        if (obj.type === 'ops') liveCast(planId, { type: 'ops', from, by: me.name || me.email, ops: obj.ops }, from);
+        else if (obj.type === 'state' && obj.to) liveCast(planId, { type: 'state', from, state: obj.state }, from, String(obj.to));
+        else return json(res, 400, { error: 'Unknown message' });
+        return json(res, 200, { ok: true, peers: room.size - 1 });
+      }
+      return json(res, 405, { error: 'Method not allowed' });
+    }
+    // ----- asking for edit access to someone else's site or plan -----
+    if (parts[0] === 'grants' && parts.length === 1 && req.method === 'GET') return json(res, 200, me.open ? [] : q.myGrants.all(me.email));
+    if (parts[0] === 'requests') return await handleRequests(req, res, parts, me);
     // sizes of what is saved for one plan
     if (parts[0] === 'info' && parts.length === 2 && req.method === 'GET') {
       const id = parts[1], one = st => { const r = q.size.get(st[0], st[1]); return r ? { size: r.size, updated: r.updated } : null; };
@@ -594,8 +722,17 @@ fi
 [ -f /etc/caddy/Caddyfile ] && [ ! -f /etc/caddy/Caddyfile.before-floorplan ] && cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.before-floorplan
 cat > /etc/caddy/Caddyfile <<CADDY
 ${DOMAIN} {
-	encode gzip
-	reverse_proxy 127.0.0.1:${PORT}
+	# live editing streams go straight through, unbuffered
+	@live path /api/live/*
+	handle @live {
+		reverse_proxy 127.0.0.1:${PORT} {
+			flush_interval -1
+		}
+	}
+	handle {
+		encode gzip
+		reverse_proxy 127.0.0.1:${PORT}
+	}
 }
 CADDY
 systemctl enable caddy >/dev/null 2>&1 || true
