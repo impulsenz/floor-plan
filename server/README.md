@@ -77,7 +77,7 @@ Anything already on the server is left as it is, so it's safe to run again.
 
 ## Google sign-in
 
-Once this is on, people sign in with their Google account. Only accounts on your access list (or from a company domain you allow) get in, and anyone is signed out after **5 minutes without activity**.
+Once this is on, people sign in with their Google account. Only accounts on your access list (or from a company domain you allow) get in, and people stay signed in on that browser until they sign out (or an admin removes them, or the same account signs in somewhere else).
 
 ### A. Create a Google sign-in ID (Google Cloud website)
 
@@ -166,4 +166,4 @@ Every GET answers with an `ETag`; send it back as `If-None-Match` and an unchang
 
 Sites and plans record an `owner` (the email of whoever created them). Only the owner or an admin may change or delete them; images and history follow their plan's owner. Records made before ownership existed have no owner, so only admins can change those. `GET /api/people` lists names for showing who owns what.
 
-With sign-in on, every `/api/{store}` and `/api/users` call needs `Authorization: Bearer <token>`. The token comes from `POST /api/auth/google {credential}` (a Google ID token, checked against Google's signing keys and your client ID). Only a hash of each token is stored, and tokens expire after `SESSION_MINUTES` (5) without activity. Each account has one session at a time: a new sign-in ends the old one, and the old browser is told it was signed in elsewhere. `/etc/floorplan.env` holds `GOOGLE_CLIENT_ID`, `ADMIN_EMAILS`, `ALLOWED_DOMAINS`, `ALLOWED_ORIGINS` and `SESSION_MINUTES`; restart with `sudo systemctl restart floorplan` after editing it.
+With sign-in on, every `/api/{store}` and `/api/users` call needs `Authorization: Bearer <token>`. The token comes from `POST /api/auth/google {credential}` (a Google ID token, checked against Google's signing keys and your client ID). Only a hash of each token is stored, and tokens expire after `SESSION_MINUTES` without activity (525600, a year, renewed whenever used). Each account has one session at a time: a new sign-in ends the old one, and the old browser is told it was signed in elsewhere. `/etc/floorplan.env` holds `GOOGLE_CLIENT_ID`, `ADMIN_EMAILS`, `ALLOWED_DOMAINS`, `ALLOWED_ORIGINS` and `SESSION_MINUTES`; restart with `sudo systemctl restart floorplan` after editing it.

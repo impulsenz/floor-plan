@@ -8,7 +8,7 @@
 //   ADMIN_EMAILS       comma-separated emails that are always allowed and can manage users
 //   ALLOWED_DOMAINS    optional, comma-separated domains whose Google accounts may sign in (e.g. mycompany.co.nz)
 //   ALLOWED_ORIGINS    web addresses allowed to call the API (* = any)
-//   SESSION_MINUTES    sign out after this many minutes with no activity (default 5)
+//   SESSION_MINUTES    sign out after this many minutes with no activity (default 525600, a year)
 
 import http from 'node:http';
 import crypto from 'node:crypto';
@@ -25,7 +25,7 @@ const MAX_BODY = Number(process.env.MAX_BODY_MB || 60) * 1024 * 1024;
 const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 const ALLOWED_DOMAINS = (process.env.ALLOWED_DOMAINS || '').split(',').map(s => s.trim().toLowerCase().replace(/^@/, '')).filter(Boolean);
-const SESSION_MS = Number(process.env.SESSION_MINUTES || 5) * 60000;
+const SESSION_MS = Number(process.env.SESSION_MINUTES || 525600) * 60000;   // a year, renewed whenever it's used: people stay signed in until they sign out
 const GOOGLE_CERTS_URL = process.env.GOOGLE_CERTS_URL || 'https://www.googleapis.com/oauth2/v3/certs';
 const AUTH_ON = !!GOOGLE_CLIENT_ID;
 const STORES = new Set(['sites', 'maps', 'assets', 'meta']);

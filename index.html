@@ -2430,13 +2430,14 @@ async function showLogin(msg){
       catch(e){fail("Can't reach the server to finish signing in.");}}});
   $('#gbtn').innerHTML='';google.accounts.id.renderButton($('#gbtn'),{type:'standard',theme:'filled_blue',size:'large',text:'signin_with',shape:'pill',logo_alignment:'left',width:280});
 }
-/* Signed-in sessions end after 5 minutes with no activity. While someone is clicking or typing,
-   the app checks in once a minute so the server knows they're still working. */
+/* People stay signed in until they sign out. The app checks in now and then (every 30 seconds while
+   someone is working, every 2 minutes otherwise) to pick up access requests, or a sign-in somewhere else. */
 let lastActive=Date.now();
 for(const ev of ['pointerdown','keydown','wheel','touchstart'])addEventListener(ev,()=>{lastActive=Date.now();},{passive:true,capture:true});
-setInterval(async()=>{if(!Store.auth||!Store.token||route==='login'||route==='connect')return;
-  if(Date.now()-lastActive<60000){try{const r=await fetch(Store.base+'/api/auth/me',{cache:'no-store',headers:Store.hdr(false)});if(r.status===401){const why=await r.json().catch(()=>({}));Store.setToken('');Store.user=null;signedOut(why.code==='elsewhere'?why.error:'You were signed out after 5 minutes without activity.');}else if(r.ok)noteRequests(await r.json().catch(()=>null));}catch(e){}}
-  else if(Date.now()-lastActive>5*60000+5000){Store.setToken('');Store.user=null;signedOut('You were signed out after 5 minutes without activity.');}},30000);
+let checkTick=0;
+setInterval(async()=>{if(!Store.auth||!Store.token||route==='login'||route==='connect')return;checkTick++;
+  if(Date.now()-lastActive<60000||checkTick%4===0){try{const r=await fetch(Store.base+'/api/auth/me',{cache:'no-store',headers:Store.hdr(false)});if(r.status===401){const why=await r.json().catch(()=>({}));Store.setToken('');Store.user=null;signedOut(why.code==='elsewhere'?why.error:'Your sign-in has ended. Please sign in again.');}else if(r.ok)noteRequests(await r.json().catch(()=>null));}catch(e){}}
+},30000);
 function accountBtn(){const u=Store.user;if(!u)return'';const ini=esc((u.name||u.email).trim().slice(0,1).toUpperCase());
   const n=Store.reqCount||0;return `<button class="acct" data-top="account" title="${esc(u.email)}${n?` · ${n} access request${n===1?'':'s'} waiting`:''}" aria-haspopup="menu">${u.picture?`<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">`:`<span>${ini}</span>`}${n?`<span class="acct-badge">${n>9?'9+':n}</span>`:''}</button>`;}
 function openAccountMenu(btn){const u=Store.user;if(!u)return;
@@ -2444,6 +2445,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='requests')openRequests();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
+  ['v20','24 Oct 2026',['You stay signed in until you sign out (no more sign-out after 5 minutes)']],
   ['v19','24 Oct 2026',['Live editing: when two or more people have the same plan open, everyone sees changes and each other\'s pointers as they happen','Ask to edit someone else\'s site or plan; the owner or an admin approves it under Access requests','Walls stay visible while you draw them, with a dot on every corner','Others on the plan see walls, fences, lines and boxes while you are still drawing them','Shapes get room-style fill colours; text align removed; no dashed outline around selected items']],
   ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved)','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
   ['v17','24 Oct 2026',['Background button moved to the left toolbar','Print button next to Export prints the plan straight from the browser on one A4 page']],
