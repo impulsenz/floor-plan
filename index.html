@@ -432,21 +432,48 @@ const COLORS=['#1a1f24','#495057','#868e96','#ffffff','#d62828','#e8590c','#f59f
 let CATS=clone(DEFAULT_CATS);
 
 /* ---------------- storage (IndexedDB, swap-ready) ---------------- */
+/* Browser storage (IndexedDB). Only used now to copy plans made before the server existed. */
+const LocalStore={
+  db:null,
+  async open(){if(this.db)return true;try{this.db=await new Promise((res,rej)=>{const q=indexedDB.open('pest-station-planner',1);
+      q.onupgradeneeded=()=>{const d=q.result;d.createObjectStore('sites',{keyPath:'id'});const m=d.createObjectStore('maps',{keyPath:'id'});m.createIndex('siteId','siteId');d.createObjectStore('assets',{keyPath:'id'});d.createObjectStore('meta',{keyPath:'id'});};
+      q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});return true;}catch(e){return false;}},
+  run(store,mode,fn){return new Promise((res,rej)=>{const t=this.db.transaction(store,mode);const r=fn(t.objectStore(store));t.oncomplete=()=>res(r?r.result:undefined);t.onerror=()=>rej(t.error);});},
+  async all(s){return this.run(s,'readonly',o=>o.getAll());},
+  async get(s,id){return this.run(s,'readonly',o=>o.get(id));}
+};
+
+/* Server storage. Every read and write goes to the Station Planner server (see server/ in the repo).
+   The server address comes from ?api=… (remembered), or is this page's own address when the app is served by the server. */
+function resolveApi(){
+  let q=null;try{q=new URLSearchParams(location.search).get('api');}catch(e){}
+  if(q){q=q.trim().replace(/\/+$/,'');try{localStorage.setItem('psp-api',q);}catch(e){}
+    try{const u=new URL(location.href);u.searchParams.delete('api');history.replaceState(null,'',u.pathname+u.search+u.hash);}catch(e){}return q;}
+  try{const v=localStorage.getItem('psp-api');if(v)return v;}catch(e){}
+  if(/^https?:$/.test(location.protocol)&&!/\.github\.io$/.test(location.hostname))return location.origin;
+  return '';
+}
 const Store={
-  db:null, mem:{sites:new Map(),maps:new Map(),assets:new Map(),meta:new Map()},
-  async open(){
-    try{
-      this.db=await new Promise((res,rej)=>{const q=indexedDB.open('pest-station-planner',1);
-        q.onupgradeneeded=()=>{const d=q.result;d.createObjectStore('sites',{keyPath:'id'});const m=d.createObjectStore('maps',{keyPath:'id'});m.createIndex('siteId','siteId');d.createObjectStore('assets',{keyPath:'id'});d.createObjectStore('meta',{keyPath:'id'});};
-        q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error);});
-    }catch(e){ this.db=null; setTimeout(()=>toast('This browser is blocking storage, so plans will be lost when the tab closes.','warn'),300); }
+  base:resolveApi(),online:false,
+  setBase(v){this.base=String(v||'').trim().replace(/\/+$/,'');try{localStorage.setItem('psp-api',this.base);}catch(e){}},
+  async req(method,path,body){
+    if(!this.base)throw new Error('No server address set');
+    const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),body?120000:30000);
+    let r;try{r=await fetch(this.base+'/api'+path,{method,signal:ctl.signal,cache:'no-store',headers:body!==undefined?{'Content-Type':'application/json'}:undefined,body:body!==undefined?JSON.stringify(body):undefined});}
+    catch(e){this.online=false;throw new Error(e.name==='AbortError'?'The server took too long to answer':'Cannot reach the server');}
+    finally{clearTimeout(t);}
+    this.online=true;
+    if(r.status===404&&method==='GET')return undefined;
+    if(!r.ok){let m='';try{m=(await r.json()).error;}catch(e){}throw new Error(m||('Server error '+r.status));}
+    return r.json();
   },
-  run(store,mode,fn){return new Promise((res,rej)=>{const t=this.db.transaction(store,mode);const r=fn(t.objectStore(store));t.oncomplete=()=>res(r?r.result:undefined);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error);});},
-  async all(s){return this.db?this.run(s,'readonly',o=>o.getAll()):[...this.mem[s].values()].map(clone);},
-  async get(s,id){return this.db?this.run(s,'readonly',o=>o.get(id)):clone(this.mem[s].get(id));},
-  async put(s,v){if(!this.db){this.mem[s].set(v.id,clone(v));return;}return this.run(s,'readwrite',o=>o.put(v));},
-  async del(s,id){if(!this.db){this.mem[s].delete(id);return;}return this.run(s,'readwrite',o=>o.delete(id));},
-  async mapsOf(siteId){return this.db?this.run('maps','readonly',o=>o.index('siteId').getAll(siteId)):[...this.mem.maps.values()].filter(m=>m.siteId===siteId).map(clone);}
+  async health(base=this.base){const r=await fetch(base.replace(/\/+$/,'')+'/api/health',{cache:'no-store'});if(!r.ok)throw new Error('Server error '+r.status);const j=await r.json();if(j.app!=='station-planner')throw new Error('That address is not a Station Planner server');return j;},
+  async open(){if(!this.base)return false;try{await this.health();this.online=true;return true;}catch(e){this.online=false;return false;}},
+  all(s){return this.req('GET','/'+s);},
+  get(s,id){return this.req('GET',`/${s}/${encodeURIComponent(id)}`);},
+  put(s,v){return this.req('PUT',`/${s}/${encodeURIComponent(v.id)}`,v);},
+  del(s,id){return this.req('DELETE',`/${s}/${encodeURIComponent(id)}`);},
+  mapsOf(siteId){return this.req('GET','/maps?siteId='+encodeURIComponent(siteId));}
 };
 
 /* ---------------- small UI helpers ---------------- */
@@ -773,6 +800,7 @@ window.addEventListener('hashchange',go);
 $('#brand').onclick=()=>{location.hash='#/';};
 async function go(){
   const h=location.hash||'#/';
+  if(route==='connect')return;
   if(route==='map'&&!h.startsWith('#/map/'+M?.id))await leaveEditor();
   try{
     if(h.startsWith('#/map/'))await openMap(h.slice(6));
@@ -787,7 +815,7 @@ async function showSites(){
   route='sites';M=null;site=null;
   const [sites,maps]=await Promise.all([Store.all('sites'),Store.all('maps')]);
   crumbs([['Sites','#/']]);
-  $('#topActions').innerHTML=`<button class="btn hide-narrow" data-top="import-site">${ICON.upload}Import backup</button><button class="btn primary" data-top="new-site">${ICON.plus}New site</button>${themeBtn()}`;
+  $('#topActions').innerHTML=`<button class="btn ghost hide-narrow" data-top="server" title="Server connection">${ICON.globe}Server</button><button class="btn hide-narrow" data-top="import-site">${ICON.upload}Import backup</button><button class="btn primary" data-top="new-site">${ICON.plus}New site</button>${themeBtn()}`;
   sites.sort((a,b)=>b.updated-a.updated);
   const card=s=>{const ms=maps.filter(m=>m.siteId===s.id).sort((a,b)=>b.updated-a.updated);const th=ms.find(m=>m.thumb)?.thumb;
     return `<article class="card" data-site="${s.id}" data-name="${esc((s.name+' '+(s.address||'')).toLowerCase())}"><div class="thumb">${th?`<img src="${th}" alt="">`:`<span class="mono-tile">${esc(s.name.slice(0,2).toUpperCase())}</span>`}</div>
@@ -888,6 +916,7 @@ async function importMapFiles(files){
 /* top-bar actions (delegated) */
 $('#topActions').addEventListener('click',async e=>{const b=e.target.closest('[data-top]');if(!b)return;const a=b.dataset.top;
   if(a==='theme')return toggleTheme();
+  if(a==='server')return openServerDialog();
   if(a==='new-site'){const s=await editSite(null);if(s)location.hash='#/site/'+s.id;}
   if(a==='import-site'){pick('.json',f=>importSiteFile(f[0]));}
   if(a==='new-map')newPlan();
@@ -951,7 +980,7 @@ function bumpVersion(v){v=String(v||'').trim();let m=v.match(/^(.*?)(\d+)$/);if(
 function bumpIfChanged(){if(!M||!E.changedSinceOpen)return;E.changedSinceOpen=false;if(E.manualRev){E.manualRev=false;return;}M.settings.revision=bumpVersion(M.settings.revision);M.settings.planDate=isoDate(Date.now());}
 async function leaveEditor(){
   if(route!=='map'||!M)return;
-  bumpIfChanged();await saveNow();
+  bumpIfChanged();await saveNow(true);
   const used=new Set(M.elements.filter(e=>e.type==='image').map(e=>e.asset));let gc=false;
   const histTxt=E.hist.join('')+E.fut.join('');
   for(const k of Object.keys(E.assets))if(!used.has(k)&&!histTxt.includes(k)){delete E.assets[k];gc=true;}
@@ -959,15 +988,17 @@ async function leaveEditor(){
   try{await makeThumb();}catch(e){}
   route='';
 }
-window.addEventListener('beforeunload',()=>{if(route==='map'){bumpIfChanged();saveNow();}});
+window.addEventListener('beforeunload',e=>{if(route==='map'){bumpIfChanged();saveNow(true);if($('#saveSt')?.textContent!=='Saved'){e.preventDefault();e.returnValue='';}}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&route==='map')saveNow(true);});
 
 /* ----- saving ----- */
 let saveT=null,thumbT=null;
 function setStatus(t){const s=$('#saveSt');if(s)s.textContent=t;}
 function scheduleSave(){setStatus('Saving…');clearTimeout(saveT);saveT=setTimeout(saveNow,450);clearTimeout(thumbT);thumbT=setTimeout(makeThumb,4000);}
-async function saveNow(){clearTimeout(saveT);if(!M)return;const m=M;m.updated=Date.now();
-  try{await Store.put('maps',m);if(M===m)await Store.put('meta',{id:'hist:'+m.id,value:{hist:E.hist.slice(-HIST_MAX),fut:E.fut.slice(-HIST_MAX)}});if(E.assetsDirty){await Store.put('assets',{id:m.id,data:E.assets});E.assetsDirty=false;}if(site){site.updated=Date.now();await Store.put('sites',site);}if(M===m)setStatus('Saved');}
-  catch(e){console.error(e);setStatus('Not saved');toast('Saving failed. The browser may be out of storage space: '+e.message,'warn');}}
+let lastHistSave=0,saveFailNote=0;
+async function saveNow(force){clearTimeout(saveT);if(!M)return;const m=M;m.updated=Date.now();
+  try{await Store.put('maps',m);if(M===m&&(force||Date.now()-lastHistSave>15000)){await Store.put('meta',{id:'hist:'+m.id,value:{hist:E.hist.slice(-HIST_MAX),fut:E.fut.slice(-HIST_MAX)}});lastHistSave=Date.now();}if(E.assetsDirty){await Store.put('assets',{id:m.id,data:E.assets});E.assetsDirty=false;}if(site){site.updated=Date.now();await Store.put('sites',site);}if(M===m)setStatus('Saved');}
+  catch(e){console.error(e);setStatus('Not saved');if(Date.now()-saveFailNote>20000){saveFailNote=Date.now();toast(`Not saved: ${e.message}. Trying again…`,'warn');}clearTimeout(saveT);saveT=setTimeout(saveNow,8000);}}
 async function makeThumb(){if(!M)return;const m=M;try{const c=await rasterize(Math.min(1,420/m.width));m.thumb=c.toDataURL('image/jpeg',.72);await Store.put('maps',m);}catch(e){}}
 
 /* ----- history ----- */
@@ -1764,8 +1795,41 @@ function sampleMap(siteId){
   els.find(e=>e.type==='station'&&e.code==='X').notes='Floor drain, check monthly';
   return m;
 }
+function showConnect(msg){
+  route='connect';M=null;site=null;crumbs([['Connect to server','#/']]);$('#topActions').innerHTML=themeBtn();
+  const mixed=location.protocol==='https:'&&/^http:/i.test(Store.base);
+  $('#view').innerHTML=`<div class="page"><div class="page-in" style="max-width:640px"><div class="page-head"><div><h1>Connect to your server</h1>
+    <p>Plans are saved on your Station Planner server, so they're the same on every device. Enter the server address the setup script printed, for example <b>https://140-238-1-2.sslip.io</b>.</p></div></div>
+    <form id="cxForm" class="sec" style="gap:12px"><label class="f" style="grid-template-columns:120px minmax(0,1fr)"><span>Server address</span><input id="cxUrl" type="url" required placeholder="https://…" value="${esc(Store.base)}" style="height:36px"></label>
+    ${Store.base?`<p class="warn">${esc(msg||(mixed?'This page is https, so it can only use an https server address.':`Can't reach ${Store.base}. Check the address and that the server is running.`))}</p>`:''}
+    <div class="row"><button class="btn primary" type="submit">Connect</button></div></form></div></div>`;
+  $('#cxForm').onsubmit=async e=>{e.preventDefault();const v=$('#cxUrl').value.trim().replace(/\/+$/,'');if(!v)return;const b=$('#cxForm .primary');b.disabled=true;b.textContent='Connecting…';
+    try{await Store.health(v);Store.setBase(v);toast('Connected');boot();}catch(err){b.disabled=false;b.textContent='Connect';showConnect(err.message==='Failed to fetch'?`Can't reach ${v}. Check the address, that the server is running, and that ports 80 and 443 are open.`:err.message);}};
+}
+async function openServerDialog(){
+  let info='';try{const h=await Store.health();info=`Connected. The server holds ${h.counts.sites||0} site${h.counts.sites===1?'':'s'} and ${h.counts.maps||0} plan${h.counts.maps===1?'':'s'}.`;}catch(e){info=`Not connected: ${e.message}.`;}
+  let local=null;if(await LocalStore.open()){try{const ls=await LocalStore.all('sites'),lm=await LocalStore.all('maps');local={sites:ls.length,maps:lm.length};}catch(e){}}
+  const r=await modal({title:'Server',body:`<label class="f"><span>Server address</span><input name="url" type="url" value="${esc(Store.base)}"></label><p>${esc(info)}</p>
+    ${local&&local.maps?`<div class="divider"></div><p>This browser also has <b>${local.sites} site${local.sites===1?'':'s'}</b> and <b>${local.maps} plan${local.maps===1?'':'s'}</b> saved from before the server was set up.</p><div class="row"><button type="button" class="btn" id="svUp">${ICON.upload}Copy them to the server</button></div><p class="hint" id="svUpMsg">Anything already on the server is left as it is.</p>`:''}`,
+    buttons:[{label:'Close',value:null},{label:'Save address',value:'ok',primary:true}],
+    onOpen:w=>{const up=$('#svUp',w);if(up)up.onclick=async()=>{up.disabled=true;const m=$('#svUpMsg',w);try{const n=await uploadLocal(t=>m.textContent=t);m.textContent=`Done: copied ${n.sites} site${n.sites===1?'':'s'} and ${n.maps} plan${n.maps===1?'':'s'}.`;if(route==='sites')showSites();}catch(e){m.textContent='Copy stopped: '+e.message;up.disabled=false;}};},
+    before:async(v,d)=>{const u=d.url.trim().replace(/\/+$/,'');if(u===Store.base)return;try{await Store.health(u);}catch(e){toast(`Can't connect to ${u}: ${e.message}`,'warn');return false;}}});
+  if(r.value==='ok'){const u=r.data.url.trim().replace(/\/+$/,'');if(u!==Store.base){Store.setBase(u);toast('Server changed');boot();}}
+}
+/* Copy sites, plans, images and settings saved in this browser up to the server. Existing server records are kept. */
+async function uploadLocal(progress){
+  if(!(await LocalStore.open()))throw new Error('this browser has no saved data');
+  const sites=await LocalStore.all('sites'),maps=await LocalStore.all('maps');const n={sites:0,maps:0};
+  for(const s of sites){if(!(await Store.get('sites',s.id))){await Store.put('sites',s);n.sites++;}}
+  let i=0;for(const m of maps){i++;progress&&progress(`Copying plan ${i} of ${maps.length}…`);
+    if(await Store.get('maps',m.id))continue;const a=await LocalStore.get('assets',m.id);await Store.put('assets',{id:m.id,data:a?.data||{}});
+    const h=await LocalStore.get('meta','hist:'+m.id);if(h)await Store.put('meta',h);await Store.put('maps',m);n.maps++;}
+  for(const k of ['cats','brand']){const v=await LocalStore.get('meta',k);if(v&&!(await Store.get('meta',k)))await Store.put('meta',v);}
+  return n;
+}
 async function boot(){
-  await Store.open();
+  if(!(await Store.open())){showConnect();return;}
+  if(route==='connect')route='';
   try{const c=await Store.get('meta','cats');if(c?.value?.length)CATS=c.value;}catch(e){}
   /* one-off: flying insect prefix FI -> U, in the station types and in every saved plan */
   try{if(!(await Store.get('meta','mig-fi-u'))){const fi=CATS.find(c=>c.code==='FI');if(fi&&!CATS.find(c=>c.code==='U')){fi.code='U';await Store.put('meta',{id:'cats',value:CATS});}

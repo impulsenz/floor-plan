@@ -45,7 +45,12 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 
 ## Storage
 
-Everything is stored in the browser (IndexedDB). It stays on that device and browser only, so use **Back up** on a site to keep a copy. All storage calls go through the `Store` object in `index.html`, which is the one place to swap in a cloud database (e.g. Supabase with Google login) later.
+Plans are saved on your own **Station Planner server** (Node.js + SQLite, behind HTTPS), so they're the same on every device. Setup for an Oracle Cloud instance is in [`server/README.md`](server/README.md): open ports 80/443, then run `server/setup-floorplan-server.sh` on the instance.
+
+- The server also serves the app, so its address is all you need.
+- To use the GitHub Pages copy, open it once with `?api=https://your-server-address`, or set the address with the **Server** button on the Sites page.
+- Plans made before the server existed can be copied up with **Server → Copy them to the server**.
+- There is no login yet; authentication will be added in front of the API next.
 
 ## Keyboard shortcuts
 
@@ -53,4 +58,4 @@ Everything is stored in the browser (IndexedDB). It stays on that device and bro
 
 ## Hosting
 
-Turn on GitHub Pages (Settings → Pages → Deploy from branch → `main` / root) and open the site URL. Opening `index.html` straight from disk also works.
+The server serves the app at its own address. GitHub Pages (Settings → Pages → Deploy from branch → `main` / root) also works, pointed at the server with `?api=`.
