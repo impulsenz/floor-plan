@@ -213,7 +213,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sat-list li span{font-size:12px;color:var(--ink-2)}
 .sat-list li.on,.sat-list li:hover{background:var(--panel-2)}
 .sat-list li.none{cursor:default;color:var(--ink-2)}
-.sat-frame{position:relative;height:min(54vh,520px);overflow:hidden;border-radius:8px;border:1px solid var(--line);background:#222}
+.sat-frame{position:relative;height:min(54vh,520px);max-width:100%;overflow:hidden;border-radius:8px;border:1px solid var(--line);background:#222}
 .sat-frame .sat-map{position:absolute;height:auto;border:0;border-radius:0;transform-origin:50% 50%}
 .sat-rot{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
 .sat-rot input[type=range]{flex:1;min-width:140px;accent-color:var(--accent)}
@@ -225,6 +225,20 @@ button,input,select,textarea{font:inherit;color:inherit}
 .room-sw span{display:grid;place-items:center;width:30px;height:30px;border-radius:6px;border:1px solid var(--line);font-size:13px;color:var(--ink-3)}
 .room-sw input:checked+span{outline:2px solid var(--accent);outline-offset:2px}
 .room-sw input:focus-visible+span{outline:2px solid var(--sel);outline-offset:2px}
+.objlib{display:flex;flex-direction:column;gap:12px}
+.objlib input[type=search]{height:32px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:0 10px;width:100%}
+.objgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.objtile{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px 7px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;min-width:0}
+.objtile:hover{border-color:var(--ink-3)}
+.objtile.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.objtile .pv{width:100%;aspect-ratio:4/3;background:#ffffff;border-radius:5px;display:grid;place-items:center;overflow:hidden}
+.objtile .pv svg{width:86%;height:86%}
+.objtile span{font-size:11.5px;line-height:1.2;text-align:center;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.objtile.on span{color:var(--accent);font-weight:600}
+.flash{animation:flash 1.4s ease-out}
+@keyframes flash{0%,40%{box-shadow:0 0 0 3px var(--accent);border-radius:6px}100%{box-shadow:0 0 0 0 transparent}}
+#L-main .fld{fill:transparent;cursor:pointer}
+#L-main .fld:hover{fill:rgba(28,126,214,.10)}
 .logo-prev{max-height:34px;max-width:110px;border:1px solid var(--line);border-radius:4px;background:#fff;padding:2px}
 .kv{display:grid;grid-template-columns:104px minmax(0,1fr);gap:4px 8px;font-size:13px}
 .kv span{color:var(--ink-2)}
@@ -310,7 +324,94 @@ const STATION_TYPES=[['Toxic bait station',1],['Toxic wax block',1],['Toxic soft
   ['Insect monitor (glue board)',0],['Pheromone trap',0],['Stored product pheromone trap',0],['Insect light trap (ILT)',0],['Electric fly killer (EFK)',0],
   ['Vertebrate monitor',0],['Live capture trap',0],['Bird deterrent',0],['Inspection point',0],['Control panel',0]];
 const SHAPES=[['circle','Circle'],['square','Square'],['triangle','Triangle'],['diamond','Diamond'],['hexagon','Hexagon'],['pentagon','Pentagon'],['panel','Panel']];
-const DOORS=[['single','Single door',.9],['double','Double door',1.8],['sliding','Sliding door',1.8],['roller','Roller door',3.5],['exit','Fire exit',.9],['window','Window',1.2],['opening','Opening',1.0]];
+const DOORS=[['single','Single door',.9],['double','Double door',1.8],['sliding','Sliding door',1.8],['bifold','Bi-fold door',2.4],['roller','Roller door',3.5],['revolving','Revolving door',2],['exit','Fire exit',.9],['strip','Strip curtain',1.5],['aircurtain','Air curtain',1.2],['gate','Gate',3],['window','Window',1.2],['opening','Opening',1.0]];
+const isDoorKind=k=>DOORS.some(d=>d[0]===k);
+/* Free-standing objects: [id, name, group, width m, depth m, viewBox w, viewBox h, symbol markup] */
+const TX=(x,y,s,t,c='#1a1f24',w=700)=>`<text x="${x}" y="${y}" font-size="${s}" font-weight="${w}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" fill="${c}" stroke="none">${t}</text>`;
+const vlines=(x0,x1,step,y0,y1)=>{let d='';for(let x=x0;x<=x1;x+=step)d+=`M${x} ${y0}V${y1}`;return `<path d="${d}"/>`;};
+const hlines=(y0,y1,step,x0,x1)=>{let d='';for(let y=y0;y<=y1;y+=step)d+=`M${x0} ${y}H${x1}`;return `<path d="${d}"/>`;};
+const OBJ=[
+  ['sink','Sink','Kitchen & food',.6,.5,60,50,'<rect x="2" y="2" width="56" height="46" rx="3" fill="#fff"/><rect x="9" y="11" width="42" height="31" rx="6"/><circle cx="30" cy="27" r="2.5"/><path d="M30 2v9"/>'],
+  ['dsink','Double sink','Kitchen & food',1.2,.5,120,50,'<rect x="2" y="2" width="116" height="46" rx="3" fill="#fff"/><rect x="8" y="11" width="48" height="31" rx="6"/><rect x="64" y="11" width="48" height="31" rx="6"/><circle cx="32" cy="27" r="2.5"/><circle cx="88" cy="27" r="2.5"/><path d="M60 2v9"/>'],
+  ['handbasin','Hand basin','Kitchen & food',.5,.4,50,40,'<path d="M2 2h46v8c0 15-10 28-23 28S2 25 2 10z" fill="#fff"/><ellipse cx="25" cy="15" rx="14" ry="10"/><circle cx="25" cy="15" r="2"/>'],
+  ['bench','Bench / counter','Kitchen & food',2,.6,200,60,'<rect x="2" y="2" width="196" height="56" fill="#fff"/><path d="M2 12h196" stroke-dasharray="6 4"/>'],
+  ['prep','Stainless prep table','Kitchen & food',1.5,.7,150,70,'<rect x="2" y="2" width="146" height="66" fill="#fff"/><rect x="8" y="8" width="134" height="54" stroke-opacity=".45"/><path d="M8 8l134 54M142 8L8 62" stroke-opacity=".3"/>'],
+  ['stove','Stove / oven','Kitchen & food',.9,.7,90,70,'<rect x="2" y="2" width="86" height="66" fill="#fff"/><circle cx="25" cy="22" r="11"/><circle cx="65" cy="22" r="11"/><circle cx="25" cy="49" r="11"/><circle cx="65" cy="49" r="11"/>'],
+  ['fryer','Deep fryer','Kitchen & food',.5,.7,50,70,'<rect x="2" y="2" width="46" height="66" fill="#fff"/><rect x="8" y="8" width="34" height="40"/>'+'<path d="M12 16h26M12 24h26M12 32h26M12 40h26"/><circle cx="25" cy="58" r="4"/>'],
+  ['fridge','Fridge','Kitchen & food',.8,.7,80,70,'<rect x="2" y="2" width="76" height="66" fill="#fff"/><path d="M2 58h76"/>'+TX(40,37,19,'REF')],
+  ['freezer','Chest freezer','Kitchen & food',1.4,.7,140,70,'<rect x="2" y="2" width="136" height="66" fill="#fff"/><path d="M2 12h136"/>'+TX(70,49,20,'FRZ')],
+  ['dishwasher','Dishwasher','Kitchen & food',.6,.6,60,60,'<rect x="2" y="2" width="56" height="56" fill="#fff"/><path d="M2 12h56"/>'+TX(30,42,17,'DW')],
+  ['hood','Extraction hood','Kitchen & food',1.5,.9,150,90,'<rect x="2" y="2" width="146" height="86" fill="#fff" stroke-dasharray="8 5"/><path d="M2 2l146 86M148 2L2 88" stroke-dasharray="8 5"/>'],
+  ['greasetrap','Grease trap','Kitchen & food',.8,.6,80,60,'<rect x="2" y="2" width="76" height="56" fill="#fff"/><rect x="9" y="9" width="62" height="42"/>'+TX(40,37,17,'GT')],
+  ['bin','Rubbish bin','Kitchen & food',.5,.5,50,50,'<circle cx="25" cy="25" r="23" fill="#fff"/><path d="M15 15l20 20M35 15L15 35"/>'],
+  ['recycle','Recycling bin','Kitchen & food',.6,.6,60,60,'<rect x="2" y="2" width="56" height="56" rx="5" fill="#fff"/><path d="M30 14l13 22H17z"/>'],
+  ['pallet','Pallet','Warehouse & storage',1.2,1,120,100,'<rect x="2" y="2" width="116" height="96" fill="#fff"/>'+hlines(18,82,32,2,118)],
+  ['racking','Pallet racking','Warehouse & storage',2.7,1.1,270,110,'<rect x="2" y="2" width="266" height="106" fill="#fff"/><path d="M90 2v106M180 2v106"/><path d="M2 2l88 106M90 2l90 106M180 2l88 106" stroke-opacity=".35"/>'],
+  ['shelving','Shelving','Warehouse & storage',1.8,.5,180,50,'<rect x="2" y="2" width="176" height="46" fill="#fff"/><path d="M2 25h176M60 2v46M120 2v46"/>'],
+  ['ibc','IBC tank','Warehouse & storage',1.2,1,120,100,'<rect x="2" y="2" width="116" height="96" fill="#fff"/><path d="M40 2v96M80 2v96M2 34h116M2 66h116" stroke-opacity=".4"/><circle cx="60" cy="50" r="13" fill="#fff"/>'],
+  ['tank','Tank / vat','Warehouse & storage',2,2,100,100,'<circle cx="50" cy="50" r="48" fill="#fff"/><circle cx="50" cy="50" r="36"/><circle cx="50" cy="50" r="4"/>'],
+  ['silo','Silo','Warehouse & storage',4,4,100,100,'<circle cx="50" cy="50" r="48" fill="#fff"/><path d="M50 2v96M2 50h96"/><circle cx="50" cy="50" r="14" fill="#fff"/>'],
+  ['skip','Skip / dumpster','Warehouse & storage',3,1.8,150,90,'<path d="M2 12 14 2h122l12 10v66l-12 10H14L2 78z" fill="#fff"/><path d="M14 2v86M136 2v86"/>'+TX(75,54,22,'SKIP')],
+  ['forklift','Forklift','Warehouse & storage',1.2,2.6,60,130,'<path d="M16 2v40M44 2v40" stroke-linecap="square"/><rect x="6" y="42" width="48" height="84" rx="7" fill="#fff"/><rect x="14" y="62" width="32" height="30"/><path d="M2 50v14M58 50v14M2 104v14M58 104v14"/>'],
+  ['palletjack','Pallet jack','Warehouse & storage',.6,1.6,60,160,'<path d="M12 2v110M48 2v110"/><rect x="6" y="110" width="48" height="26" rx="4" fill="#fff"/><path d="M30 136v20M20 156h20"/>'],
+  ['conveyor','Conveyor','Warehouse & storage',4,.8,200,40,'<rect x="2" y="2" width="196" height="36" fill="#fff"/>'+vlines(14,190,12,2,38).replace('<path','<path stroke-opacity=".5"')+'<path d="M84 20h32m-9-7 9 7-9 7" stroke-width="2.5"/>'],
+  ['coolroom','Cool room','Warehouse & storage',3,3,100,100,'<rect x="2" y="2" width="96" height="96" fill="#fff"/><rect x="8" y="8" width="84" height="84"/>'+TX(50,56,16,'COOL ROOM')],
+  ['stairs','Stairs','Building & services',1.2,3,60,150,'<rect x="2" y="2" width="56" height="146" fill="#fff"/>'+hlines(20,130,14,2,58)+'<path d="M30 140V16m-7 9 7-9 7 9"/>'],
+  ['ramp','Ramp','Building & services',1.5,3,75,150,'<rect x="2" y="2" width="71" height="146" fill="#fff"/><path d="M2 148 37 2l36 146" stroke-opacity=".5"/><path d="M37 124V40m-7 9 7-9 7 9"/>'],
+  ['lift','Lift / elevator','Building & services',2,2,100,100,'<rect x="2" y="2" width="96" height="96" fill="#fff"/><rect x="9" y="9" width="82" height="82"/><path d="M9 9l82 82M91 9 9 91"/>'],
+  ['column','Column / pillar','Building & services',.5,.5,50,50,'<rect x="2" y="2" width="46" height="46" fill="#343a40"/>'],
+  ['drain','Floor drain','Building & services',.4,.4,40,40,'<rect x="2" y="2" width="36" height="36" fill="#fff"/>'+vlines(9,31,5.5,8,32)],
+  ['trench','Trench drain','Building & services',3,.3,300,30,'<rect x="2" y="2" width="296" height="26" fill="#fff"/>'+vlines(12,290,10,6,24)],
+  ['manhole','Manhole / sump','Building & services',.9,.9,90,90,'<circle cx="45" cy="45" r="43" fill="#fff"/><circle cx="45" cy="45" r="34"/><path d="M22 45h46M45 22v46"/>'],
+  ['downpipe','Downpipe','Building & services',.2,.2,20,20,'<circle cx="10" cy="10" r="8" fill="#fff"/><circle cx="10" cy="10" r="3" fill="#1a1f24"/>'],
+  ['toilet','Toilet','Building & services',.45,.7,45,70,'<rect x="4" y="2" width="37" height="16" rx="2" fill="#fff"/><ellipse cx="22.5" cy="44" rx="18" ry="24" fill="#fff"/><ellipse cx="22.5" cy="46" rx="11" ry="15"/>'],
+  ['urinal','Urinal','Building & services',.4,.35,40,35,'<path d="M2 2h36v10c0 12-8 21-18 21S2 24 2 12z" fill="#fff"/><path d="M10 6v8a10 10 0 0 0 20 0V6"/>'],
+  ['shower','Shower','Building & services',.9,.9,90,90,'<rect x="2" y="2" width="86" height="86" fill="#fff"/><path d="M2 2l86 86M88 2L2 88" stroke-opacity=".3"/><circle cx="45" cy="45" r="6" fill="#fff"/>'],
+  ['hwc','Hot water cylinder','Building & services',.6,.6,60,60,'<circle cx="30" cy="30" r="28" fill="#fff"/>'+TX(30,36,15,'HWC')],
+  ['switchboard','Switchboard','Building & services',1,.3,100,30,'<rect x="2" y="2" width="96" height="26" fill="#fff"/><path d="M53 5 43 16h12L45 26" stroke-linejoin="round"/>'],
+  ['machine','Plant / machinery','Building & services',2,1.5,120,90,'<rect x="2" y="2" width="116" height="86" fill="#fff"/><circle cx="40" cy="45" r="22"/><circle cx="40" cy="45" r="6"/><rect x="74" y="20" width="32" height="50"/>'],
+  ['aircon','Air conditioning unit','Building & services',1,.5,100,50,'<rect x="2" y="2" width="96" height="46" fill="#fff"/><circle cx="28" cy="25" r="17"/><path d="M28 8v34M11 25h34" stroke-opacity=".6"/>'+hlines(12,38,6.5,58,90)],
+  ['fan','Exhaust fan','Building & services',.6,.6,60,60,'<rect x="2" y="2" width="56" height="56" fill="#fff"/><circle cx="30" cy="30" r="22"/><path d="M30 30c0-14 11-14 10-5zM30 30c14 0 14 11 5 10zM30 30c0 14-11 14-10 5zM30 30c-14 0-14-11-5-10z"/>'],
+  ['lightfit','Light fitting','Building & services',1.2,.3,120,30,'<rect x="2" y="2" width="116" height="26" fill="#fff"/><path d="M2 2l116 26M118 2L2 28"/>'],
+  ['flytrap','Fly screen / mesh','Building & services',1.2,.2,120,20,'<rect x="2" y="2" width="116" height="16" fill="#fff"/><path d="M2 2l16 16M14 2l16 16M26 2l16 16M38 2l16 16M50 2l16 16M62 2l16 16M74 2l16 16M86 2l16 16M98 2l16 16M14 18 30 2M26 18 42 2M38 18 54 2M50 18 66 2M62 18 78 2M74 18 90 2M86 18l16-16M98 18l16-16" stroke-opacity=".5"/>'],
+  ['extinguisher','Fire extinguisher','Safety',.4,.4,40,40,'<circle cx="20" cy="20" r="18" fill="#d62828" stroke="#fff"/>'+TX(20,26,15,'FE','#fff')],
+  ['hosereel','Fire hose reel','Safety',.5,.5,50,50,'<circle cx="25" cy="25" r="23" fill="#d62828" stroke="#fff"/><circle cx="25" cy="25" r="11" stroke="#fff"/><circle cx="25" cy="25" r="3" fill="#fff" stroke="none"/>'],
+  ['callpoint','Fire alarm call point','Safety',.3,.3,30,30,'<rect x="2" y="2" width="26" height="26" fill="#d62828" stroke="#fff"/><circle cx="15" cy="15" r="6" fill="#fff" stroke="none"/>'],
+  ['eyewash','Eye wash station','Safety',.4,.4,40,40,'<circle cx="20" cy="20" r="18" fill="#2b9348" stroke="#fff"/><path d="M7 20q13-11 26 0-13 11-26 0z" stroke="#fff"/><circle cx="20" cy="20" r="3.5" fill="#fff" stroke="none"/>'],
+  ['firstaid','First aid kit','Safety',.4,.4,40,40,'<rect x="2" y="2" width="36" height="36" rx="4" fill="#2b9348" stroke="#fff"/><path d="M20 9v22M9 20h22" stroke="#fff" stroke-width="5"/>'],
+  ['exitsign','Exit sign','Safety',.6,.3,60,30,'<rect x="2" y="2" width="56" height="26" rx="2" fill="#2b9348" stroke="#fff"/>'+TX(30,21,14,'EXIT','#fff')],
+  ['assembly','Assembly point','Safety',1.2,1.2,100,100,'<rect x="2" y="2" width="96" height="96" fill="#2b9348" stroke="#fff"/><circle cx="50" cy="50" r="7" fill="#fff" stroke="none"/><path d="M14 14l22 22M86 14 64 36M14 86l22-22M86 86 64 64" stroke="#fff" stroke-width="5"/><path d="M28 36h8v-8M72 36h-8v-8M28 64h8v8M72 64h-8v8" stroke="#fff" stroke-width="5"/>'],
+  ['chemstore','Chemical store','Safety',1,1,100,100,'<path d="M50 4 96 50 50 96 4 50z" fill="#fff" stroke="#d62828" stroke-width="5"/>'+TX(50,66,42,'!','#d62828')],
+  ['spillkit','Spill kit','Safety',.6,.6,60,60,'<rect x="2" y="2" width="56" height="56" rx="4" fill="#f59f00" stroke="#fff"/>'+TX(30,37,14,'SPILL','#1a1f24')],
+  ['desk','Desk','Office & amenities',1.5,.75,150,75,'<rect x="2" y="2" width="146" height="50" fill="#fff"/><rect x="58" y="44" width="34" height="28" rx="6" fill="#fff"/>'],
+  ['chair','Chair','Office & amenities',.5,.5,50,50,'<rect x="6" y="12" width="38" height="34" rx="6" fill="#fff"/><rect x="6" y="3" width="38" height="9" rx="3" fill="#fff"/>'],
+  ['table','Meeting table','Office & amenities',2.4,1.4,240,140,'<rect x="30" y="30" width="180" height="80" rx="6" fill="#fff"/><rect x="50" y="6" width="34" height="20" rx="5"/><rect x="104" y="6" width="34" height="20" rx="5"/><rect x="158" y="6" width="34" height="20" rx="5"/><rect x="50" y="114" width="34" height="20" rx="5"/><rect x="104" y="114" width="34" height="20" rx="5"/><rect x="158" y="114" width="34" height="20" rx="5"/>'],
+  ['roundtable','Round table','Office & amenities',1.4,1.4,140,140,'<circle cx="70" cy="70" r="40" fill="#fff"/><rect x="55" y="4" width="30" height="20" rx="5"/><rect x="55" y="116" width="30" height="20" rx="5"/><rect x="4" y="55" width="20" height="30" rx="5"/><rect x="116" y="55" width="20" height="30" rx="5"/>'],
+  ['sofa','Couch','Office & amenities',2,.9,200,90,'<rect x="2" y="2" width="196" height="86" rx="10" fill="#fff"/><path d="M22 22h156M22 22v66M178 22v66M100 22v66"/>'],
+  ['lockers','Lockers','Office & amenities',1.8,.5,180,50,'<rect x="2" y="2" width="176" height="46" fill="#fff"/>'+vlines(38,146,36,2,48)],
+  ['filing','Filing cabinet','Office & amenities',.5,.6,50,60,'<rect x="2" y="2" width="46" height="56" fill="#fff"/><path d="M2 50h46M19 26h12"/>'],
+  ['washer','Washing machine','Office & amenities',.6,.6,60,60,'<rect x="2" y="2" width="56" height="56" fill="#fff"/><circle cx="30" cy="33" r="17"/><path d="M8 10h12"/>'],
+  ['vending','Vending machine','Office & amenities',1,.8,100,80,'<rect x="2" y="2" width="96" height="76" fill="#fff"/><rect x="10" y="10" width="56" height="60"/><path d="M76 14h14M76 24h14M76 34h14"/>'],
+  ['bed','Bed','Office & amenities',1.4,2,140,200,'<rect x="2" y="2" width="136" height="196" rx="4" fill="#fff"/><rect x="14" y="12" width="48" height="28" rx="6"/><rect x="78" y="12" width="48" height="28" rx="6"/><path d="M2 60h136"/>'],
+  ['tree','Tree','Outdoor',4,4,100,100,'<path d="M50 4c10 0 16 8 16 8s12-2 18 8 2 18 2 18 10 8 6 18-14 12-14 12 0 14-12 18-18-4-18-4-8 10-18 6-12-14-12-14-14-2-16-12 4-18 4-18-8-10-2-18 14-8 14-8 6-12 16-12z" fill="#d3f9d8"/><circle cx="50" cy="50" r="4" fill="#1a1f24"/>'],
+  ['shrub','Garden / shrubs','Outdoor',1.5,1.5,100,100,'<circle cx="50" cy="50" r="46" fill="#d3f9d8" stroke-dasharray="8 6"/><path d="M34 50h32M50 34v32" stroke-opacity=".6"/>'],
+  ['car','Car','Outdoor',1.9,4.6,76,184,'<rect x="2" y="2" width="72" height="180" rx="22" fill="#fff"/><path d="M10 50q28-14 56 0l-6 26H16zM14 140h48l4 22q-28 10-56 0z"/><path d="M16 76h44v64H16z" stroke-opacity=".5"/>'],
+  ['truck','Truck','Outdoor',2.5,9,100,360,'<rect x="6" y="2" width="88" height="70" rx="8" fill="#fff"/><path d="M14 22h72"/><rect x="2" y="80" width="96" height="278" fill="#fff"/>'],
+  ['carpark','Car park space','Outdoor',2.5,5,100,200,'<path d="M2 198V2h96v196"/>'+TX(50,118,56,'P','#1971c2')],
+  ['vgate','Vehicle gate','Outdoor',5,.4,250,20,'<rect x="0" y="3" width="10" height="14" fill="#1a1f24"/><rect x="240" y="3" width="10" height="14" fill="#1a1f24"/><path d="M10 4h230M10 16h230"/><path d="M10 16 40 4l30 12 30-12 30 12 30-12 30 12 30-12 10 4" stroke-opacity=".6"/>'],
+  ['lightpole','Light pole','Outdoor',.6,.6,60,60,'<circle cx="30" cy="30" r="9" fill="#ffe066"/><path d="M30 2v14M30 44v14M2 30h14M44 30h14M10 10l10 10M40 40l10 10M50 10 40 20M20 40 10 50"/>'],
+  ['binarea','Bin enclosure','Outdoor',3,2,150,100,'<rect x="2" y="2" width="146" height="96" fill="#fff" stroke-dasharray="10 6"/><circle cx="40" cy="50" r="22"/><circle cx="100" cy="50" r="22"/>'],
+  ['dock','Loading dock','Outdoor',3.5,2,175,100,'<rect x="2" y="2" width="171" height="96" fill="#fff"/><path d="M2 30 30 2M2 64 64 2M2 98 98 2M36 98l96-96M70 98l96-96M104 98l69-69M138 98l35-35" stroke-opacity=".4"/>'],
+  ['bollard','Bollard','Outdoor',.3,.3,30,30,'<circle cx="15" cy="15" r="12" fill="#f59f00"/>'],
+  ['tap','Outdoor tap','Outdoor',.3,.3,30,30,'<circle cx="15" cy="15" r="12" fill="#a5d8ff"/><path d="M8 15h14M15 8v14"/>'],
+  ['pond','Pond / water','Outdoor',3,2,150,100,'<ellipse cx="75" cy="50" rx="72" ry="47" fill="#d0ebff"/><path d="M40 42q8-6 16 0t16 0M78 60q8-6 16 0t16 0" stroke="#1971c2"/>'],
+  ['woodpile','Wood / debris pile','Outdoor',2,1.5,100,75,'<path d="M6 60 20 16l28 10 22-20 24 30-6 34z" fill="#fff3bf"/><path d="M20 16l10 44M48 26l-6 34M70 6l-4 54" stroke-opacity=".5"/>'],
+  ['nest','Nest / harbourage','Outdoor',1,1,100,100,'<circle cx="50" cy="50" r="46" fill="#fff" stroke="#d62828" stroke-dasharray="8 6"/>'+TX(50,62,32,'N','#d62828')],
+  ['entry','Pest entry point','Outdoor',.8,.8,80,80,'<path d="M40 4 76 72H4z" fill="#fff" stroke="#e8590c" stroke-width="4"/>'+TX(40,64,34,'!','#e8590c')]
+];
+const OBJMAP=Object.fromEntries(OBJ.map(o=>[o[0],o]));
+const OBJ_GROUPS=[...new Set(OBJ.map(o=>o[2]))];
+
 const COLORS=['#1a1f24','#495057','#868e96','#ffffff','#d62828','#e8590c','#f59f00','#2b9348','#1971c2','#6741d9','#c2255c','#9c5b16'];
 let CATS=clone(DEFAULT_CATS);
 
@@ -378,21 +479,26 @@ const ICON={
 const TOOLS=[
   ['select','Select & move','V','<path d="M5 3l14 8-6 2-3 6z"/>'],
   ['pan','Pan the view','H','<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>'],
-  '-',
-  ['wall','Wall (click corners)','W','<path d="M3 19 L21 5" stroke-width="4"/>'],
+  '-','g:draw',
   ['room','Room (drag a box)','R','<rect x="4" y="5" width="16" height="14" stroke-width="3"/>'],
-  ['door','Door or window on a wall','D','<path d="M5 20V4h0"/><path d="M5 4a16 16 0 0 1 14 16" stroke-dasharray="3 2"/><path d="M3 20h18"/>'],
-  'shapes',
+  ['objects','Objects: doors, windows, fixtures','O','<rect x="3" y="11" width="18" height="7" rx="2"/><path d="M6 11V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4M6 18v2M18 18v2"/>'],
+  'g:shapes',
   ['text','Text','T','<path d="M5 6V4h14v2M12 4v16M9 20h6"/>']
 ];
-const SHAPE_TOOLS=[
-  ['rect','Rectangle / zone','B','<rect x="4" y="6" width="16" height="12" rx="1"/>'],
-  ['ellipse','Ellipse','E','<ellipse cx="12" cy="12" rx="8" ry="6"/>'],
-  ['polygon','Area outline','P','<path d="M4 18 7 5l9 2 4 9-8 3z"/>'],
-  ['line','Line','L','<path d="M4 20 20 4"/>'],
-  ['arrow','Arrow','A','<path d="M4 20 19 5M11 5h8v8"/>']
-];
-const SHAPE_IDS=SHAPE_TOOLS.map(t=>t[0]);
+const GROUPS={
+  draw:{label:'Draw',items:[
+    ['wall','Wall','W','<path d="M3 19 L21 5" stroke-width="4"/>'],
+    ['fence','Fence line','F','<path d="M3 19 L21 5" stroke-dasharray="3 3" stroke-width="2.5"/>'],
+    ['line','Line','L','<path d="M4 20 20 4"/>'],
+    ['arrow','Arrow','A','<path d="M4 20 19 5M11 5h8v8"/>']]},
+  shapes:{label:'Shapes',items:[
+    ['rect','Rectangle / zone','B','<rect x="4" y="6" width="16" height="12" rx="1"/>'],
+    ['ellipse','Ellipse','E','<ellipse cx="12" cy="12" rx="8" ry="6"/>'],
+    ['polygon','Area outline','P','<path d="M4 18 7 5l9 2 4 9-8 3z"/>']]}
+};
+const groupOf=t=>Object.keys(GROUPS).find(g=>GROUPS[g].items.some(i=>i[0]===t));
+const SHAPE_IDS=['rect','ellipse','polygon','line','arrow'];
+const isWallTool=t=>t==='wall'||t==='fence';
 const toolSvg=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const ROOM_COLORS=['none','#ffe8cc','#fff3bf','#d3f9d8','#d0ebff','#e5dbff','#ffdeeb','#e9ecef','#c3fae8'];
 let BRAND={title:'Pest Management Programme Device Location Plan',logo:null};
@@ -403,17 +509,21 @@ let route='', site=null, M=null;
 const E={view:{x:40,y:40,k:1},tool:'select',cat:null,doorKind:'single',sel:new Set(),hist:[],fut:[],drag:null,chain:null,cursor:null,snapHit:null,space:false,assets:{},assetsDirty:false,tab:'stations',catType:{},lastPush:0,pendingSat:false,regFilter:'',regQ:''};
 E.style={stroke:'#1a1f24',fill:'#1971c2',noFill:true,fillOp:.15,sw:2,dash:false,rx:0};
 E.textStyle={size:20,color:'#1a1f24',font:'Arial',bold:false,italic:false,halo:true,align:'start'};
-E.wallStyle={w:8,color:'#2a2f36',dash:false};E.lastShape='rect';E.roomFill='#d0ebff';
+E.wallStyle={w:8,color:'#2a2f36',dash:false};E.last={draw:'wall',shapes:'rect'};E.objKind='single';E.fenceStyle={w:3,color:'#495057',dash:true};E.roomFill='#d0ebff';
 
 const FONTS={'Arial':'Arial, Helvetica, sans-serif','Arial Narrow':'"Arial Narrow", "Roboto Condensed", Arial, sans-serif','Georgia':'Georgia, "Times New Roman", serif','Verdana':'Verdana, Geneva, sans-serif','Courier New':'"Courier New", Courier, monospace','Impact':'Impact, "Arial Black", sans-serif'};
 
-function newMap(siteId,name){return{id:uid(),siteId,name,created:Date.now(),updated:Date.now(),width:1600,height:1100,elements:[],scale:null,bgMeta:null,
+function newMap(siteId,name){return{id:uid(),siteId,name,created:Date.now(),updated:Date.now(),width:1600,height:a4Height(1600,false),elements:[],scale:null,bgMeta:null,
   furn:{legend:{show:true,x:1320,y:20,s:1},title:{show:true,x:1200,y:950,s:1},north:{show:true,x:60,y:60,rot:0,s:1},scalebar:{show:true,x:40,y:1060,s:1}},
   settings:{grid:20,snap:true,showGrid:true,marker:10,label:12,showTypes:true,preparedBy:'',revision:'01',department:'',planDate:isoDate(Date.now()),showFrame:true},thumb:null};}
 function isoDate(t){const d=new Date(t);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function layoutFurn(){const W=M.width,H=M.height,f=M.furn;const s=clamp(Math.min(W,H)/1100,.5,2.2);f.north=f.north||{show:true,rot:0};f.north.s=r2(s);f.north.x=Math.round(46*s);f.north.y=Math.round(46*s);}
 /* The printed sheet = black header band + plan area + bottom information bar. */
-function sheet(){const W=M.width,u=W/1600,on=M.settings.showFrame!==false;const HH=on?Math.round(112*u):0,FH=on?Math.round(170*u):0;return{W,u,HH,FH,top:-HH,H:M.height+HH+FH};}
+function sheet(){const W=M.width,u=W/1600,on=M.settings.showFrame!==false;const HH=on?Math.round(112*u):0,FH=on?Math.round(212*u):0;return{W,u,HH,FH,top:-HH,H:M.height+HH+FH};}
+/* Plan height that makes the whole printed sheet A4 (landscape 1:√2, or portrait). */
+function a4Height(W,portrait,frame=true){const u=W/1600,extra=frame?Math.round(112*u)+Math.round(212*u):0;return Math.max(200,Math.round((portrait?W*Math.SQRT2:W/Math.SQRT2)-extra));}
+function setA4(portrait){M.height=a4Height(M.width,portrait,M.settings.showFrame!==false);layoutFurn();}
+function paperOf(){const g=sheet(),r=g.H/g.W;return Math.abs(r-1/Math.SQRT2)<.01?'a4l':Math.abs(r-Math.SQRT2)<.01?'a4p':'custom';}
 
 /* ---------------- station helpers ---------------- */
 const pad=n=>String(n).padStart(3,'0');
@@ -461,6 +571,7 @@ function bboxOf(el){
     case 'polygon':{const xs=el.pts.map(p=>p[0]),ys=el.pts.map(p=>p[1]);const x=Math.min(...xs),y=Math.min(...ys);return{x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y};}
     case 'text':{const n=$(`#L-main [data-id="${el.id}"]`);if(n){try{const b=n.getBBox();return{x:b.x,y:b.y,w:b.width,h:b.height};}catch(e){}}return{x:el.x,y:el.y,w:60,h:el.size};}
     case 'station':{const r=M.settings.marker*(el.size||1)*1.35;return{x:el.x-r,y:el.y-r,w:2*r,h:2*r};}
+    case 'obj':{const cs=objCorners(el),xs=cs.map(p=>p.x),ys=cs.map(p=>p.y),x=Math.min(...xs),y=Math.min(...ys);return{x,y,w:Math.max(...xs)-x,h:Math.max(...ys)-y};}
     case 'door':{const w=getEl(el.wall);if(!w)return{x:0,y:0,w:0,h:0};const p=doorPos(el,w),h=el.width/2+3;return{x:p.x-h,y:p.y-h,w:2*h,h:2*h};}
   }
   return{x:0,y:0,w:0,h:0};
@@ -487,6 +598,11 @@ function doorMarkup(o,w,ex,ghost){
     case 'roller':inner=`<path d="M${-h} 0H${h}" ${stw(r2(Math.max(sw*1.4,t/3)))} stroke-dasharray="${r2(W/14)} ${r2(W/22)}"/>`;break;
     case 'window':inner=`<rect x="${-h}" y="${-t/2}" width="${W}" height="${t}" fill="#ffffff" stroke="${col}" stroke-width="${sw}"/><path d="M${-h} 0H${h}" ${st}/>`;break;
     case 'opening':inner='';break;
+    case 'bifold':inner=`<path d="M${-h} 0L${r2(-h/2)} ${r2(W*.28)}L0 0L${r2(h/2)} ${r2(W*.28)}L${h} 0" ${st}/>`;break;
+    case 'revolving':inner=`<circle r="${r2(h)}" ${st}/><path d="M${r2(-h*.7)} ${r2(-h*.7)}L${r2(h*.7)} ${r2(h*.7)}M${r2(h*.7)} ${r2(-h*.7)}L${r2(-h*.7)} ${r2(h*.7)}" ${st}/>`;break;
+    case 'strip':{let d='';const n=Math.max(4,Math.round(W/(t*1.2)));for(let i=1;i<n;i++){const x=r2(-h+i*W/n);d+=`M${x} ${r2(-t*.7)}V${r2(t*.7)}`;}inner=`<path d="${d}" ${stw(r2(sw*.8))} stroke-opacity=".7"/><path d="M${-h} 0H${h}" ${st} stroke-dasharray="${r2(W/30)} ${r2(W/30)}"/>`;break;}
+    case 'aircurtain':inner=`<rect x="${r2(-h*.85)}" y="${r2(-t/2-W*.14)}" width="${r2(W*.85)}" height="${r2(W*.1)}" fill="#ffffff" ${st}/><path d="M${r2(-h*.5)} ${r2(-t/2-W*.04)}V${r2(t/2+W*.12)}M0 ${r2(-t/2-W*.04)}V${r2(t/2+W*.12)}M${r2(h*.5)} ${r2(-t/2-W*.04)}V${r2(t/2+W*.12)}" ${st} stroke-dasharray="${r2(W/40)} ${r2(W/40)}"/>`;break;
+    case 'gate':inner=`<rect x="${r2(-h-t*.6)}" y="${r2(-t*.6)}" width="${r2(t*1.2)}" height="${r2(t*1.2)}" fill="${col}"/><rect x="${r2(h-t*.6)}" y="${r2(-t*.6)}" width="${r2(t*1.2)}" height="${r2(t*1.2)}" fill="${col}"/><path d="M${-h} 0L${r2(-h+h*.87)} ${r2(h*.5)}M${h} 0L${r2(h-h*.87)} ${r2(h*.5)}" ${stw(r2(sw*1.5))}/><path d="M0 0A${h} ${h} 0 0 1 ${r2(-h+h*.87)} ${r2(h*.5)}M0 0A${h} ${h} 0 0 0 ${r2(h-h*.87)} ${r2(h*.5)}" ${st} stroke-dasharray="${r2(W/30)} ${r2(W/40)}"/>`;break;
     default:inner=`<path d="M${-h} 0V${W}" ${st}/><path d="M${h} 0A${W} ${W} 0 0 1 ${-h} ${W}" ${st} stroke-dasharray="${r2(W/16)} ${r2(W/24)}"/>`;
   }
   const label=o.kind==='exit'?`<text y="${r2(-t/2-4)}" text-anchor="middle" font-family="${MAPFONT}" font-weight="700" font-size="${r2(Math.max(8,W*.28))}" fill="#2b9348" stroke="#fff" stroke-width="2" paint-order="stroke">EXIT</text>`:'';
@@ -529,7 +645,17 @@ function stationMarkup(el,ghost){
   const type=M.settings.showTypes&&!el.hideType&&el.stype?`<text y="${r2(r*1.25+fs*2.05)}" text-anchor="middle" font-family="${MAPFONT}" font-size="${r2(fs*.78)}" fill="#343a40" ${halo}>${esc(el.stype)}</text>`:'';
   return `<g ${ghost?'opacity=".55"':`data-id="${el.id}"`} transform="translate(${r2(el.x)} ${r2(el.y)})">${shapeSvg(cat.shape,r,col)}<text y="${r2(r*1.25+fs)}" text-anchor="middle" font-family="${MAPFONT}" font-weight="700" font-size="${fs}" fill="#111111" ${halo}>${stId(el)}</text>${type}</g>`;
 }
-function imageMarkup(el){const src=E.assets[el.asset]||'';return `<image href="${src}" xlink:href="${src}" x="${r2(el.x)}" y="${r2(el.y)}" width="${r2(el.w)}" height="${r2(el.h)}" opacity="${el.opacity??1}" preserveAspectRatio="none"/>`;}
+function objMarkup(el,ex,ghost){
+  const d=OBJMAP[el.kind];if(!d)return'';const vw=d[5],vh=d[6],sx=el.w/vw,sy=el.h/vh,sw=r2(clamp(Math.min(el.w,el.h)*.035,.7,3)/Math.sqrt(sx*sy));
+  const fs=M.settings.label,lab=el.label?`<text y="${r2(el.h/2+fs*1.1)}" text-anchor="middle" font-family="${MAPFONT}" font-size="${fs}" font-weight="700" fill="#343a40" stroke="#fff" stroke-width="${r2(fs/4)}" paint-order="stroke">${esc(el.label)}</text>`:'';
+  const hit=ex||ghost?'':`<rect x="${r2(-el.w/2)}" y="${r2(-el.h/2)}" width="${r2(el.w)}" height="${r2(el.h)}" fill="transparent"/>`;
+  return `<g ${ghost?'opacity=".55"':`data-id="${el.id}"`} transform="translate(${r2(el.x)} ${r2(el.y)}) rotate(${el.rot||0})">${hit}<g transform="translate(${r2(-el.w/2)} ${r2(-el.h/2)}) scale(${r2(sx*1e4)/1e4} ${r2(sy*1e4)/1e4})" fill="none" stroke="${el.color||'#1a1f24'}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${d[7]}</g>${lab}</g>`;
+}
+function objPreview(id){const d=OBJMAP[id];if(d){const p=Math.max(d[5],d[6])*.06;return `<svg viewBox="${-p} ${-p} ${d[5]+2*p} ${d[6]+2*p}" fill="none" stroke="#1a1f24" stroke-width="${r2(Math.max(d[5],d[6])/45)}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d[7]}</svg>`;}
+  const fw={id:'pv',x1:-34,y1:0,x2:34,y2:0,w:6,color:'#2a2f36'},o={kind:id,width:id==='window'?36:40,t:.5,flip:0,hinge:0};const W=o.width;
+  return `<svg viewBox="-36 ${id==='aircurtain'?-14:-26} 72 ${id==='aircurtain'?36:72}" aria-hidden="true">${wallMarkup(fw,[o],true)}${doorMarkup(o,fw,true,false).replace(/data-id="[^"]*"/,'')}</svg>`;}
+function objCorners(el){const a=(el.rot||0)*Math.PI/180,c=Math.cos(a),s2=Math.sin(a),hw=el.w/2,hh=el.h/2;return[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([x,y])=>({x:el.x+x*c-y*s2,y:el.y+x*s2+y*c}));}
+function imageMarkup(el){const src=E.assets[el.asset]||'';return `<image data-asset="${esc(el.asset)}" href="${src}" xlink:href="${src}" x="${r2(el.x)}" y="${r2(el.y)}" width="${r2(el.w)}" height="${r2(el.h)}" opacity="${el.opacity??1}" preserveAspectRatio="none"/>`;}
 
 function usedCats(){const counts={},tox={};for(const e of M.elements)if(e.type==='station'){counts[e.code]=(counts[e.code]||0)+1;const t=tox[e.code]||(tox[e.code]={y:0,n:0});e.toxic?t.y++:t.n++;}
   let used=CATS.filter(c=>counts[c.code]);for(const code in counts)if(!CATS.find(c=>c.code===code))used.push(catOf(code));return{used:used.length?used:CATS,counts,tox};}
@@ -537,28 +663,33 @@ const fitFont=(t,maxW,size)=>Math.min(size,maxW/Math.max(1,String(t).length*.56)
 const clip=(t,n)=>{t=String(t??'');return t.length>n?t.slice(0,Math.max(1,n-1))+'…':t;};
 function frameMarkup(ex){
   const g=sheet();if(!g.HH)return'';const{W,u,HH,FH}=g,H=M.height,st=M.settings,f=v=>r2(v*u),T=(x,y,size,txt,o='')=>`<text x="${r2(x)}" y="${r2(y)}" font-family="${MAPFONT}" font-size="${r2(size)}" ${o}>${esc(txt)}</text>`;
-  const logoW=f(330),bandW=W-logoW-f(8),title=BRAND.title||'';
-  let s=`<rect x="0" y="${-HH}" width="${W}" height="${HH}" fill="#ffffff"/><rect x="0" y="${-HH}" width="${r2(bandW)}" height="${HH}" fill="#000000"/>`;
-  s+=T(bandW/2,-HH/2+f(13),fitFont(title,bandW*.92,f(38)),title,'font-weight="700" fill="#ffffff" text-anchor="middle"');
-  const lx=bandW+f(14),ly=-HH+f(8),lw=logoW-f(18),lh=HH-f(16);
-  if(BRAND.logo)s+=`<image href="${BRAND.logo}" xlink:href="${BRAND.logo}" x="${r2(lx)}" y="${r2(ly)}" width="${r2(lw)}" height="${r2(lh)}" preserveAspectRatio="xMaxYMid meet"/>`;
-  else if(!ex)s+=`<rect x="${r2(lx)}" y="${r2(ly)}" width="${r2(lw)}" height="${r2(lh)}" fill="none" stroke="#adb5bd" stroke-width="${f(1.5)}" stroke-dasharray="${f(6)} ${f(5)}"/>`+T(lx+lw/2,ly+lh/2+f(5),f(14),'Your logo (Plan tab)','fill="#868e96" text-anchor="middle"');
+  const hit=(field,x,y,w,h,label)=>ex?'':`<rect class="fld" data-field="${field}" x="${r2(x)}" y="${r2(y)}" width="${r2(w)}" height="${r2(h)}" rx="${f(4)}" pointer-events="all"><title>${esc(label)}</title></rect>`;
+  // header: full-width black band, logo on top at the right
+  const lh=HH-f(22),ar=BRAND.logo?(BRAND.logoAR||3):3,lw=Math.min(lh*ar,W*.36),lx=W-f(14)-lw,ly=-HH+f(11);
+  let s=`<rect x="0" y="${-HH}" width="${W}" height="${HH}" fill="#000000"/>`;
+  const titleW=(BRAND.logo||!ex?lx-f(14):W-f(28)),title=BRAND.title||'';
+  s+=T(f(14)+titleW/2,-HH/2+f(13),fitFont(title,titleW*.94,f(38)),title,'font-weight="700" fill="#ffffff" text-anchor="middle"')+hit('brand:title',f(8),-HH+f(8),titleW,HH-f(16),'Edit heading');
+  if(BRAND.logo)s+=`<image href="${BRAND.logo}" xlink:href="${BRAND.logo}" x="${r2(lx)}" y="${r2(ly)}" width="${r2(lw)}" height="${r2(lh)}" preserveAspectRatio="xMidYMid meet"/>`;
+  else if(!ex)s+=`<rect x="${r2(lx)}" y="${r2(ly)}" width="${r2(lw)}" height="${r2(lh)}" fill="none" stroke="#868e96" stroke-width="${f(1.5)}" stroke-dasharray="${f(6)} ${f(5)}"/>`+T(lx+lw/2,ly+lh/2+f(5),f(14),'Add your logo','fill="#adb5bd" text-anchor="middle"');
+  s+=hit('brand:logo',lx-f(4),ly-f(4),lw+f(8),lh+f(8),'Change logo');
   s+=`<rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="#adb5bd" stroke-width="${f(1)}"/>`;
-  const y0=H+f(10),fh=FH-f(10),kx=r2(W*.695),fs=f(17),bold='font-weight="700" fill="#111111"';
+  // bottom bar
+  const y0=H+f(10),fh=FH-f(10),kx=r2(W*.59),fs=f(15),bold='font-weight="700" fill="#111111"';
   s+=`<rect x="0" y="${y0}" width="${W}" height="${r2(fh)}" fill="#ffffff" stroke="#111111" stroke-width="${f(2.2)}"/><line x1="${kx}" y1="${y0}" x2="${kx}" y2="${r2(y0+fh)}" stroke="#111111" stroke-width="${f(2.2)}"/>`;
-  const row=i=>y0+fh*[.21,.47,.73,.92][i],c1=f(14),c2=W*.31,c3=W*.49,n1=Math.floor((c2-c1-f(10))/(fs*.56)),n2=Math.floor((c3-c2-f(10))/(fs*.56)),n3=Math.floor((kx-c3-f(10))/(fs*.56));
+  const row=i=>y0+fh*[.2,.43,.66,.86][i],c1=f(14),c2=W*.265,c3=W*.43,cw1=c2-c1-f(8),cw2=c3-c2-f(8),cw3=kx-c3-f(8),n=w=>Math.floor(w/(fs*.56));
   const date=st.planDate?new Date(st.planDate+'T00:00'):new Date(M.created);
-  s+=T(c1,row(0),fs,clip('Title: '+(site?.name||''),n1),bold)+T(c1,row(1),fs,clip('Address: '+(site?.address||''),n1),bold)+T(c1,row(2),fs,clip('Department: '+(st.department||''),n1),bold)+T(c1+f(28),row(3),fs,clip(M.name,n1-3),bold);
-  s+=T(c2,row(0),fs,clip('Date: '+date.toLocaleDateString('en-NZ',{day:'numeric',month:'long',year:'numeric'}),n2),bold)+T(c2,row(1),fs,clip('Version: '+(st.revision||''),n2),bold)+T(c2,row(2),fs,clip('Site Ref: '+(site?.siteRef||''),n2),bold);
-  s+=T(c3,row(0),fs,clip('Drawn By: '+(st.preparedBy||''),n3),bold)+T(c3,row(1),fs,M.scale&&st.showScale?clip(`Scale: 1 m = ${M.scale.toFixed(1)} px`,n3):'MAP NOT TO SCALE',bold)+T(c3,row(2),fs,clip('Contract No: '+(site?.contractNo||''),n3),bold);
-  // key
-  s+=T(kx+f(14),y0+f(34),fs,'KEY:',bold);
-  const{used,tox}=usedCats(),n=used.length,cols=n<=4?1:n<=8?2:3,rows=Math.ceil(n/cols),ax=kx+f(78),aw=W-ax-f(10),ah=fh-f(16),cw=aw/cols,rh=ah/rows;
-  const labels=used.map(c=>{const t=tox[c.code];let suf='',col=c.color;if(c.mode==='tox'){if(t&&t.y&&!t.n){suf=' - Toxic';col=TOX;}else if(t&&t.n&&!t.y){suf=' - Non-toxic';col=NONTOX;}else{suf=' - Toxic / Non-toxic';col='#1a1f24';}}if(col.toLowerCase()==='#ffffff')col='#111111';return{c,txt:`${c.code}000 - ${c.name}${suf}`,col,t};});
-  const longest=Math.max(...labels.map(l=>l.txt.length),8),kf=Math.min(fs*.95,rh*.5,(cw-f(30))/(longest*.56));
-  labels.forEach((l,i)=>{const cx=ax+Math.floor(i/rows)*cw,cy=y0+f(8)+(i%rows)*rh+rh/2,r=kf*.62,c=l.c;
+  const cell=(field,x,i,w,txt,label)=>T(x,row(i),fs,clip(txt,n(w)),bold)+hit(field,x-f(5),row(i)-fs*1.05,w+f(6),fs*1.45,label);
+  s+=cell('site:name',c1,0,cw1,'Title: '+(site?.name||''),'Edit site name')+cell('site:address',c1,1,cw1,'Address: '+(site?.address||''),'Edit address')+cell('set:department',c1,2,cw1,'Department: '+(st.department||''),'Edit department')+cell('map:name',c1+f(26),3,cw1-f(26),M.name,'Edit plan name');
+  s+=cell('set:planDate',c2,0,cw2,'Date: '+date.toLocaleDateString('en-NZ',{day:'numeric',month:'long',year:'numeric'}),'Edit date')+cell('set:revision',c2,1,cw2,'Version: '+(st.revision||''),'Edit version')+cell('site:siteRef',c2,2,cw2,'Site Ref: '+(site?.siteRef||''),'Edit site ref');
+  s+=cell('set:preparedBy',c3,0,cw3,'Drawn By: '+(st.preparedBy||''),'Edit drawn by')+T(c3,row(1),fs,'MAP NOT TO SCALE',bold)+cell('site:contractNo',c3,2,cw3,'Contract No: '+(site?.contractNo||''),'Edit contract no');
+  // key: two columns, readable size
+  s+=T(kx+f(14),y0+f(30),fs,'KEY:',bold)+hit('key',kx+f(4),y0+f(4),W-kx-f(8),fh-f(8),'Edit station types');
+  const{used,tox}=usedCats(),cnt=used.length,cols=cnt<=4?1:2,rows=Math.ceil(cnt/cols),ax=kx+f(14),aw=W-ax-f(12),top=y0+f(42),ah=y0+fh-f(8)-top,cw=aw/cols,rh=ah/Math.max(rows,1);
+  const labels=used.map(c=>{const t=tox[c.code];let suf='',col=c.color;if(c.mode==='tox'){if(t&&t.y&&!t.n){suf=' - Toxic';col=TOX;}else if(t&&t.n&&!t.y){suf=' - Non-toxic';col=NONTOX;}else col='#1a1f24';}if(col.toLowerCase()==='#ffffff')col='#111111';return{c,txt:`${c.code}000 - ${c.name}${suf}`,col,t};});
+  const longest=Math.max(...labels.map(l=>l.txt.length),10),kf=Math.max(f(10),Math.min(f(15.5),rh*.62,(cw-f(34))/(longest*.55)));
+  labels.forEach((l,i)=>{const cx=ax+Math.floor(i/rows)*cw,cy=top+(i%rows)*rh+rh/2,r=kf*.6,c=l.c;
     const mk=c.mode==='tox'?(l.t&&l.t.y&&!l.t.n?shapeSvg(c.shape,r,TOX):l.t&&l.t.n&&!l.t.y?shapeSvg(c.shape,r,NONTOX):splitSvg(c.shape,r)):shapeSvg(c.shape,r,c.color);
-    s+=`<g transform="translate(${r2(cx+r+f(2))} ${r2(cy)})">${mk}</g>`+T(cx+r*2+f(10),cy+kf*.36,kf,l.txt,`font-weight="700" fill="${l.col}"`);});
+    s+=`<g transform="translate(${r2(cx+r+f(2))} ${r2(cy)})">${mk}</g>`+T(cx+r*2+f(10),cy+kf*.36,kf,clip(l.txt,Math.floor((cw-r*2-f(14))/(kf*.55))),`font-weight="700" fill="${l.col}"`);});
   return `<g ${ex?'':'pointer-events="none"'}>${s}</g>`;
 }
 function northMarkup(){const N=M.furn.north;if(!N.show)return'';
@@ -570,6 +701,7 @@ function mainMarkup(ex){
   let s='';
   for(const e of els)if(e.type==='rect'||e.type==='ellipse'||e.type==='polygon')s+=shapeMarkup(e);
   for(const e of els)if(e.type==='wall')s+=wallMarkup(e,ops.get(e.id)||[],ex);
+  for(const e of els)if(e.type==='obj')s+=objMarkup(e,ex);
   for(const e of els)if(e.type==='door'&&wmap.has(e.wall))s+=doorMarkup(e,wmap.get(e.wall),ex);
   for(const e of els)if(e.type==='line'||e.type==='arrow'||e.type==='dim')s+=lineMarkup(e,ex);
   for(const e of els)if(e.type==='text')s+=textMarkup(e);
@@ -579,7 +711,7 @@ function mainMarkup(ex){
 function buildSVG({bg=true}={}){
   const g=sheet(),W=g.W,H=g.H;let imgs='';
   for(const e of [...M.elements].filter(e=>e.type==='image').sort((a,b)=>(b.bg?1:0)-(a.bg?1:0)))if(bg||!e.bg)imgs+=imageMarkup(e);
-  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 ${g.top} ${W} ${H}"><defs>${SPLIT_DEF}</defs><rect x="0" y="${g.top}" width="${W}" height="${H}" fill="#ffffff"/>${imgs}${mainMarkup(true)}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 ${g.top} ${W} ${H}"><metadata id="pest-station-planner">${btoa(unescape(encodeURIComponent(JSON.stringify({format:'pest-station-planner-map',version:1,map:{...M,thumb:null}}))))}</metadata><defs>${SPLIT_DEF}</defs><rect x="0" y="${g.top}" width="${W}" height="${H}" fill="#ffffff"/>${imgs}${mainMarkup(true)}</svg>`;
 }
 async function rasterize(scale=1,bg=true){
   const svg=buildSVG({bg}),g=sheet(),W=g.W,H=g.H;let sc=scale;const maxSide=16000,maxArea=120e6;
@@ -627,10 +759,10 @@ async function showSites(){
 }
 let brandT=null;
 function saveBrand(){clearTimeout(brandT);return new Promise(res=>{brandT=setTimeout(async()=>{try{await Store.put('meta',{id:'brand',value:BRAND});}catch(e){}res();},300);});}
-async function editSite(s){
+async function editSite(s,focus){
   const isNew=!s;s=s||{id:uid(),name:'',address:'',client:'',notes:'',created:Date.now(),updated:Date.now()};
   const r=await modal({title:isNew?'New site':'Edit site',body:`<label class="f"><span>Site name</span><input name="name" value="${esc(s.name)}" placeholder="e.g. Teagle" required></label><label class="f"><span>Address</span><input name="address" value="${esc(s.address)}" placeholder="Street, suburb, city"></label><label class="f"><span>Site ref</span><input name="siteRef" value="${esc(s.siteRef||'')}" placeholder="e.g. NZ2809085700001"></label><label class="f"><span>Contract no</span><input name="contractNo" value="${esc(s.contractNo||'')}" placeholder="e.g. 28090857/00001"></label><label class="f"><span>Client contact</span><input name="client" value="${esc(s.client)}" placeholder="Name, phone"></label><label class="f"><span>Notes</span><textarea name="notes" rows="3">${esc(s.notes)}</textarea></label>`,
-    buttons:[{label:'Cancel',value:null},{label:isNew?'Create site':'Save',value:'ok',primary:true}],before:(v,d)=>{if(!d.name.trim()){toast('Give the site a name.','warn');return false;}}});
+    buttons:[{label:'Cancel',value:null},{label:isNew?'Create site':'Save',value:'ok',primary:true}],onOpen:w=>{if(focus)setTimeout(()=>{const i=$(`[name="${focus}"]`,w);if(i){i.focus();i.select();}},80);},before:(v,d)=>{if(!d.name.trim()){toast('Give the site a name.','warn');return false;}}});
   if(r.value!=='ok')return null;
   Object.assign(s,{name:r.data.name.trim(),address:r.data.address.trim(),siteRef:r.data.siteRef.trim(),contractNo:r.data.contractNo.trim(),client:r.data.client.trim(),notes:r.data.notes,updated:Date.now()});delete s.sample;
   await Store.put('sites',s);return s;
@@ -684,10 +816,24 @@ async function newPlan(){
   E.pendingSat=r.data.start==='sat';E.pendingFiles=r.data.start==='file'?[...r.data.file]:null;
   location.hash='#/map/'+m.id;
 }
+/* Read a plan back from our own .json or .svg export. Returns {map,assets} or null. */
+async function readPlanFile(f){
+  const txt=await readAs(f,'readAsText');
+  if(/\.svg$/i.test(f.name)||/^\s*<(\?xml|svg)/.test(txt)){
+    const doc=new DOMParser().parseFromString(txt,'image/svg+xml'),md=doc.querySelector('metadata#pest-station-planner');if(!md)return null;
+    let j;try{j=JSON.parse(decodeURIComponent(escape(atob(md.textContent.trim()))));}catch(e){return null;}
+    const assets={};doc.querySelectorAll('image[data-asset]').forEach(im=>{assets[im.getAttribute('data-asset')]=im.getAttribute('href')||im.getAttribute('xlink:href');});
+    return{map:j.map,assets};}
+  try{const j=JSON.parse(txt);return j.format==='pest-station-planner-map'?{map:j.map,assets:j.assets||{}}:null;}catch(e){return null;}
+}
 async function importMapFiles(files){
-  for(const f of files){let j;try{j=JSON.parse(await readAs(f,'readAsText'));}catch(e){toast(`${f.name} could not be read.`,'warn');continue;}
-    if(j.format!=='pest-station-planner-map'){toast(`${f.name} is not a Station Planner plan file.`,'warn');continue;}
-    const m={...j.map,id:uid(),siteId:site.id,updated:Date.now()};await Store.put('maps',m);await Store.put('assets',{id:m.id,data:j.assets||{}});toast(`Imported ${m.name}`);}
+  for(const f of files){
+    if(/\.(svg|json)$/i.test(f.name)){const pl=await readPlanFile(f).catch(()=>null);if(pl){const m={...pl.map,id:uid(),siteId:site.id,updated:Date.now(),thumb:null};await Store.put('maps',m);await Store.put('assets',{id:m.id,data:pl.assets});toast(`Imported ${m.name}`);continue;}}
+    if(/\.json$/i.test(f.name)){toast(`${f.name} is not a Station Planner plan file.`,'warn');continue;}
+    // any other drawing (an SVG from elsewhere, an image or a PDF) becomes a new plan with it as the background
+    const m=newMap(site.id,f.name.replace(/\.[^.]+$/,''));await Store.put('maps',m);await Store.put('assets',{id:m.id,data:{}});
+    E.pendingFiles=[f];location.hash='#/map/'+m.id;return;
+  }
 }
 
 /* top-bar actions (delegated) */
@@ -696,7 +842,7 @@ $('#topActions').addEventListener('click',async e=>{const b=e.target.closest('[d
   if(a==='new-site'){const s=await editSite(null);if(s)location.hash='#/site/'+s.id;}
   if(a==='import-site'){pick('.json',f=>importSiteFile(f[0]));}
   if(a==='new-map')newPlan();
-  if(a==='import-map'){pick('.json',async f=>{await importMapFiles(f);showSite(site.id);},true);}
+  if(a==='import-map'){pick('.json,.svg,.png,.jpg,.jpeg,.gif,.webp,.bmp,.pdf,image/*,application/pdf',async f=>{await importMapFiles(f);if(route==='site')showSite(site.id);},true);}
   if(a==='edit-site'){if(await editSite(site))showSite(site.id);}
   if(a==='backup')backupSite(site);
   if(a==='undo')undo();if(a==='redo')redo();
@@ -706,8 +852,9 @@ $('#topActions').addEventListener('click',async e=>{const b=e.target.closest('[d
   if(a==='panel')$('#panel').classList.toggle('open');
 });
 document.addEventListener('click',e=>{const b=e.target.closest('[data-top="new-site"],[data-top="new-map"]');if(b&&!b.closest('#topActions'))$(`#topActions [data-top="${b.dataset.top}"]`)?.click();});
+function groupBtn(g){const G=GROUPS[g],cur=G.items.find(x=>x[0]===E.last[g])||G.items[0];return `<button class="tool" data-tool="grp-${g}" data-group="${g}" title="${G.label}: ${G.items.map(x=>x[1].toLowerCase()).join(', ')}" aria-label="${G.label}" aria-haspopup="menu">${toolSvg(cur[3])}<span class="more"></span></button>`;}
 function closePop(){$('.popmenu')?.remove();document.removeEventListener('pointerdown',popAway,true);}
-function popAway(e){if(!e.target.closest('.popmenu')&&!e.target.closest('#shapesBtn,[data-top="import"]'))closePop();}
+function popAway(e){if(!e.target.closest('.popmenu')&&!e.target.closest('[data-group],[data-top="import"]'))closePop();}
 function popMenu(anchor,items,side,cb){
   closePop();const m=document.createElement('div');m.className='popmenu';m.setAttribute('role','menu');
   m.innerHTML=items.map((it,i)=>`<button type="button" role="menuitem" data-i="${i}" class="${it.on?'on':''}">${it.icon||''}<span>${esc(it.label)}</span>${it.kbd?`<kbd>${it.kbd}</kbd>`:it.note?`<small>${esc(it.note)}</small>`:''}</button>`).join('');
@@ -730,11 +877,11 @@ async function openMap(id){
   E.hist=[];E.fut=[];E.sel.clear();E.tool='select';E.chain=null;E.drag=null;
   crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[M.name,'#/map/'+id]]);
   $('#topActions').innerHTML=`<button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
-    <span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button></span>
+    <span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button><button class="ib" data-top="fit" title="Fit to screen (0)" aria-label="Fit to screen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></button></span>
     <button class="btn" data-top="import" title="Import a plan image, PDF or satellite photo" aria-haspopup="menu">${ICON.upload}<span class="hide-narrow">Import</span></button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button>
     <span class="status hide-narrow" id="saveSt">Saved</span><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}`;
   $('#view').innerHTML=`<div class="editor">
-    <nav class="tools" id="tools" aria-label="Drawing tools">${TOOLS.map(t=>t==='-'?'<div class="sep"></div>':t==='shapes'?`<button class="tool" data-tool="shapes" id="shapesBtn" title="Shapes: rectangle, ellipse, area, line, arrow" aria-label="Shapes" aria-haspopup="menu">${toolSvg(SHAPE_TOOLS.find(x=>x[0]===E.lastShape)[3])}<span class="more"></span></button>`:`<button class="tool" data-tool="${t[0]}" title="${t[1]} (${t[2]})" aria-label="${t[1]}">${toolSvg(t[3])}</button>`).join('')}</nav>
+    <nav class="tools" id="tools" aria-label="Drawing tools">${TOOLS.map(t=>t==='-'?'<div class="sep"></div>':typeof t==='string'?groupBtn(t.slice(2)):`<button class="tool" data-tool="${t[0]}" title="${t[1]} (${t[2]})" aria-label="${t[1]}">${toolSvg(t[3])}</button>`).join('')}</nav>
     <section class="stage-wrap" id="stageWrap"><svg id="stage" xmlns="${NS}"><defs>${SPLIT_DEF}<pattern id="gridp" patternUnits="userSpaceOnUse" width="20" height="20"><path id="gridpath" d="M20 0H0V20" fill="none" stroke="#9aa5b1" stroke-opacity=".35" stroke-width="1"/></pattern></defs>
       <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-ov"></g></g></svg>
       <div class="hud"><div class="hint-box" id="hint"></div><div class="coords" id="coords"></div></div></section>
@@ -777,7 +924,7 @@ function changed(){render();refreshPanel();scheduleSave();}
 
 /* ----- view ----- */
 function applyView(){const v=E.view;$('#vp').setAttribute('transform',`translate(${r2(v.x)} ${r2(v.y)}) scale(${v.k})`);const z=$('#zoomLbl');if(z)z.textContent=Math.round(v.k*100)+'%';$('#gridpath').setAttribute('stroke-width',r2(1/v.k));render();}
-function fitView(){const r=$('#stage').getBoundingClientRect();if(!r.width)return;const g=sheet(),k=Math.min((r.width-40)/g.W,(r.height-60)/g.H);E.view.k=clamp(k,.03,8);E.view.x=(r.width-g.W*E.view.k)/2;E.view.y=(r.height-g.H*E.view.k)/2-g.top*E.view.k-10;applyView();}
+function fitView(){const r=$('#stage').getBoundingClientRect();if(!r.width)return;const hud=48,pad=24,g=sheet(),aw=r.width-pad*2,ah=r.height-pad-hud,k=Math.min(aw/g.W,ah/g.H);E.view.k=clamp(k,.03,8);E.view.x=(r.width-g.W*E.view.k)/2;E.view.y=pad+(ah-g.H*E.view.k)/2-g.top*E.view.k;applyView();}
 function zoomAt(cx,cy,f){const r=$('#stage').getBoundingClientRect(),v=E.view,px=cx-r.left,py=cy-r.top,wx=(px-v.x)/v.k,wy=(py-v.y)/v.k;v.k=clamp(v.k*f,.03,24);v.x=px-wx*v.k;v.y=py-wy*v.k;applyView();}
 function zoomBy(f){const r=$('#stage').getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,f);}
 function centerOn(x,y){const r=$('#stage').getBoundingClientRect();E.view.x=r.width/2-x*E.view.k;E.view.y=r.height/2-y*E.view.k;applyView();}
@@ -806,12 +953,15 @@ function renderOverlay(){
   const lbl=(x,y,t)=>`<text x="${x}" y="${y}" font-family="${MAPFONT}" font-size="${r2(12/k)}" font-weight="700" fill="${sel}" stroke="#fff" stroke-width="${r2(3.5/k)}" paint-order="stroke" stroke-linejoin="round">${esc(t)}</text>`;
   const sw=r2(1.5/k),dash=`stroke-dasharray="${r2(5/k)} ${r2(4/k)}"`;let s='';
   for(const id of E.sel){const el=getEl(id);if(!el)continue;const b=bboxOf(el),p=4/k;
-    if(el.type==='station')s+=`<circle cx="${el.x}" cy="${el.y}" r="${r2(M.settings.marker*(el.size||1)*1.35+5/k)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;
+    if(el.type==='obj'){const cs=objCorners(el);s+=`<polygon points="${cs.map(q=>r2(q.x)+','+r2(q.y)).join(' ')}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;}
+    else if(el.type==='station')s+=`<circle cx="${el.x}" cy="${el.y}" r="${r2(M.settings.marker*(el.size||1)*1.35+5/k)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;
     else s+=`<rect x="${r2(b.x-p)}" y="${r2(b.y-p)}" width="${r2(b.w+2*p)}" height="${r2(b.h+2*p)}" fill="none" stroke="${sel}" stroke-width="${sw}" ${dash}/>`;}
   if(E.sel.size===1&&E.tool==='select'){const el=getEl([...E.sel][0]);if(el){const hs=9/k,h=(n,x,y)=>`<rect data-handle="${n}" x="${r2(x-hs/2)}" y="${r2(y-hs/2)}" width="${r2(hs)}" height="${r2(hs)}" fill="#fff" stroke="${sel}" stroke-width="${sw}" style="cursor:crosshair"/>`;
     if('x1' in el){s+=h('p1',el.x1,el.y1)+h('p2',el.x2,el.y2);if(el.type==='wall'||el.type==='line')s+=lbl(r2((el.x1+el.x2)/2+8/k),r2((el.y1+el.y2)/2-8/k),fmtLen(Math.hypot(el.x2-el.x1,el.y2-el.y1)));}
     else if(el.type==='polygon')el.pts.forEach((p,i)=>s+=h('v'+i,p[0],p[1]));
-    else if(['rect','ellipse','image'].includes(el.type))s+=h('se',el.x+el.w,el.y+el.h);}}
+    else if(['rect','ellipse','image'].includes(el.type))s+=h('se',el.x+el.w,el.y+el.h);
+    else if(el.type==='obj'){const cs=objCorners(el),a=(el.rot||0)*Math.PI/180,top={x:(cs[0].x+cs[1].x)/2,y:(cs[0].y+cs[1].y)/2},rx=top.x+Math.sin(a)*22/k,ry=top.y-Math.cos(a)*22/k;
+      s+=h('se',cs[2].x,cs[2].y)+`<line x1="${r2(top.x)}" y1="${r2(top.y)}" x2="${r2(rx)}" y2="${r2(ry)}" stroke="${sel}" stroke-width="${sw}"/><circle data-handle="rot" cx="${r2(rx)}" cy="${r2(ry)}" r="${r2(6/k)}" fill="#fff" stroke="${sel}" stroke-width="${sw}" style="cursor:grab"/>`;}}}
   const d=E.drag,c=E.cursor;
   if(d?.kind==='marquee'){const x=Math.min(d.a.x,d.b.x),y=Math.min(d.a.y,d.b.y);s+=`<rect x="${x}" y="${y}" width="${Math.abs(d.b.x-d.a.x)}" height="${Math.abs(d.b.y-d.a.y)}" fill="${sel}" fill-opacity=".08" stroke="${sel}" stroke-width="${sw}"/>`;}
   if(d?.kind==='draw'){const{a,b}=d,x=Math.min(a.x,b.x),y=Math.min(a.y,b.y),w=Math.abs(b.x-a.x),h2=Math.abs(b.y-a.y);
@@ -819,14 +969,15 @@ function renderOverlay(){
     else if(E.tool==='ellipse')s+=`<ellipse cx="${x+w/2}" cy="${y+h2/2}" rx="${w/2}" ry="${h2/2}" fill="none" stroke="${sel}" stroke-width="${sw}"/>`;
     else s+=`<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${E.tool==='calib'?'#e8590c':sel}" stroke-width="${r2(2/k)}"/>`+lbl(r2((a.x+b.x)/2+8/k),r2((a.y+b.y)/2-8/k),fmtLen(dist(a,b)));}
   if(E.chain&&c){const pts=E.chain.pts,q=E.chainCur||c;const all=[...pts,q];
-    s+=`<polyline points="${all.map(p=>p.x+','+p.y).join(' ')}" fill="none" stroke="${E.tool==='wall'?E.wallStyle.color:sel}" stroke-opacity="${E.tool==='wall'?.55:1}" stroke-width="${E.tool==='wall'?E.wallStyle.w:sw}"/>`;
+    s+=`<polyline points="${all.map(p=>p.x+','+p.y).join(' ')}" fill="none" stroke="${isWallTool(E.tool)?chainStyle().color:sel}" stroke-opacity="${isWallTool(E.tool)?.55:1}" stroke-width="${isWallTool(E.tool)?chainStyle().w:sw}"/>`;
     const l=pts[pts.length-1];s+=lbl(r2((l.x+q.x)/2+8/k),r2((l.y+q.y)/2-8/k),fmtLen(dist(l,q)));
     s+=`<circle cx="${pts[0].x}" cy="${pts[0].y}" r="${r2(5/k)}" fill="#fff" stroke="${sel}" stroke-width="${sw}"/>`;}
   if(!d&&c){
     if(E.tool==='station'&&E.cat){const ct=E.catType[E.cat]||{},cat=catOf(E.cat);s+=stationMarkup({code:E.cat,num:nextNum(E.cat),x:c.x,y:c.y,stype:ct.type??cat.type,toxic:ct.toxic??(knownTox(ct.type??cat.type)??cat.mode==='tox')},true);}
-    if(E.tool==='door'){const nw=nearestWall(c,40/k);if(nw){const width=Math.min(defaultDoorWidth(E.doorKind),wallLen(nw.wall)*.95);s+=doorMarkup({kind:E.doorKind,width,t:clampT(nw.t,nw.wall,width),flip:0,hinge:0},nw.wall,true,true);}}
+    if(E.tool==='objects'&&!isDoorKind(E.objKind)){const d=OBJMAP[E.objKind];if(d)s+=objMarkup({kind:E.objKind,x:c.x,y:c.y,w:d[3]*S(),h:d[4]*S(),rot:0},false,true);}
+    if(E.tool==='objects'&&isDoorKind(E.objKind)){const nw=nearestWall(c,40/k);if(nw){const width=Math.min(defaultDoorWidth(E.objKind),wallLen(nw.wall)*.95);s+=doorMarkup({kind:E.objKind,width,t:clampT(nw.t,nw.wall,width),flip:0,hinge:0},nw.wall,true,true);}}
   }
-  if(E.snapHit&&(d?.kind==='draw'||E.chain||E.tool==='wall'))s+=`<circle cx="${E.snapHit.x}" cy="${E.snapHit.y}" r="${r2(6/k)}" fill="none" stroke="#e8590c" stroke-width="${r2(2/k)}"/>`;
+  if(E.snapHit&&(d?.kind==='draw'||E.chain||isWallTool(E.tool)))s+=`<circle cx="${E.snapHit.x}" cy="${E.snapHit.y}" r="${r2(6/k)}" fill="none" stroke="#e8590c" stroke-width="${r2(2/k)}"/>`;
   $('#L-ov').innerHTML=s;
 }
 function renderAll(){render();renderPanel();updUndo();}
@@ -850,7 +1001,8 @@ const HINTS={
   pan:'Drag to move around the plan. Scroll to zoom.',
   wall:'Click to start a wall, then click each corner. Double-click or <kbd>Enter</kbd> to finish, click the first point to close. <kbd>Shift</kbd> locks angles.',
   room:'Drag to draw a room. It is made of four walls you can add doors to.',
-  door:'Pick a type in Properties, then click on a wall. It snaps into the wall.',
+  objects:'Pick an object in the panel, then click the plan. Doors and windows snap into the nearest wall. <kbd>Esc</kbd> to stop.',
+  fence:'Click to start a fence line, then click each corner. Double-click or <kbd>Enter</kbd> to finish.',
   rect:'Drag to draw a rectangle or zone.',ellipse:'Drag to draw an ellipse.',
   polygon:'Click each corner of the area. Double-click or <kbd>Enter</kbd> to finish.',
   line:'Drag to draw a line. <kbd>Shift</kbd> locks angles.',arrow:'Drag to draw an arrow.',dim:'Drag between two points to add a dimension.',
@@ -860,12 +1012,13 @@ const HINTS={
 function setTool(t,cat){
   if(E.chain)finishChain(false);
   E.tool=t;E.cat=t==='station'?cat:null;E.snapHit=null;
-  if(SHAPE_IDS.includes(t)&&E.lastShape!==t){E.lastShape=t;const sb=$('#shapesBtn');if(sb)sb.innerHTML=toolSvg(SHAPE_TOOLS.find(x=>x[0]===t)[3])+'<span class="more"></span>';}
-  $$('#tools .tool').forEach(b=>b.classList.toggle('on',b.dataset.tool===t||(b.dataset.tool==='shapes'&&SHAPE_IDS.includes(t))));
+  const grp=groupOf(t);if(grp&&E.last[grp]!==t){E.last[grp]=t;const gb=$(`#tools [data-group="${grp}"]`);if(gb)gb.outerHTML=groupBtn(grp);}
+  $$('#tools .tool').forEach(b=>b.classList.toggle('on',b.dataset.tool===t||(b.dataset.group&&b.dataset.group===grp)));
   const st=$('#stage');st.classList.toggle('draw',!['select','pan'].includes(t));st.classList.toggle('pan',t==='pan');
   let h=HINTS[t]||'';if(t==='station'){const c=catOf(cat);h=`Click the plan to place <b>${esc(c.code)}${pad(nextNum(c.code))}</b>. Each click adds the next number. <kbd>Esc</kbd> to stop.`;}
   $('#hint').innerHTML=h;
-  if(['door','rect','ellipse','polygon','line','arrow','text','wall','room'].includes(t)&&!E.sel.size)showTab('props');
+  if(t==='objects'){E.sel.clear();showTab('props');$('#panel').classList.add('open');}
+  else if(['rect','ellipse','polygon','line','arrow','text','wall','fence','room'].includes(t)&&!E.sel.size)showTab('props');
   else renderPanel();
   renderOverlay();
 }
@@ -893,15 +1046,16 @@ function chainClick(e,p){
 }
 function finishChain(closed){
   const ch=E.chain;E.chain=null;E.chainCur=null;if(!ch)return;const pts=ch.pts;
-  if(E.tool==='wall'&&pts.length>=2){pushHist();const ws=E.wallStyle,made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'wall',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,w:ws.w,color:ws.color,dash:ws.dash}));changed();
-    if(closed&&pts.length>=4){const u=pts.slice(0,-1),xs=u.map(p=>p.x),ys=u.map(p=>p.y),bx=Math.min(...xs),by=Math.min(...ys);nameRoom({x:bx,y:by,w:Math.max(...xs)-bx,h:Math.max(...ys)-by},u,made);}}
+  if(isWallTool(E.tool)&&pts.length>=2){pushHist();const ws=chainStyle(),made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'wall',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,w:ws.w,color:ws.color,dash:ws.dash}));changed();
+    if(closed&&pts.length>=4){const u=pts.slice(0,-1),xs=u.map(p=>p.x),ys=u.map(p=>p.y),bx=Math.min(...xs),by=Math.min(...ys);nameRoom({x:bx,y:by,w:Math.max(...xs)-bx,h:Math.max(...ys)-by},u,made,ws.dash);}}
   else if(E.tool==='polygon'){const u=closed?pts.slice(0,-1):pts;if(u.length>=3){pushHist();const st=E.style;const el=add({type:'polygon',pts:u.map(p=>[p.x,p.y]),stroke:st.stroke,fill:st.fill,noFill:st.noFill,fillOp:st.fillOp,sw:st.sw,dash:st.dash});E.sel=new Set([el.id]);changed();}else renderOverlay();}
   else renderOverlay();
 }
-async function nameRoom(box,poly,wallsMade){
+const chainStyle=()=>E.tool==='fence'?E.fenceStyle:E.wallStyle;
+async function nameRoom(box,poly,wallsMade,dashDefault=E.wallStyle.dash){
   const r=await modal({title:'Name this room',body:`<label class="f"><span>Room name</span><input name="name" placeholder="e.g. Boiler room, Dry store, Loading bay"></label>
     <div class="f"><span>Fill colour</span><div class="room-sw" role="radiogroup" aria-label="Fill colour">${ROOM_COLORS.map(c=>`<label title="${c==='none'?'No fill':c}"><input type="radio" name="fill" value="${c}" ${c===E.roomFill?'checked':''}><span style="background:${c==='none'?'transparent':c}">${c==='none'?'✕':''}</span></label>`).join('')}<label title="Custom colour"><input type="color" name="custom" value="#ffc9c9" style="width:30px;height:30px;padding:0;border:1px solid var(--line);border-radius:6px;position:static;opacity:1;pointer-events:auto"></label></div></div>
-    <div class="seg" role="radiogroup" aria-label="Wall line"><label><input type="radio" name="line" value="solid" ${E.wallStyle.dash?'':'checked'}><span>Solid walls</span></label><label><input type="radio" name="line" value="dashed" ${E.wallStyle.dash?'checked':''}><span>Dashed (fence line)</span></label></div>`,
+    <div class="seg" role="radiogroup" aria-label="Wall line"><label><input type="radio" name="line" value="solid" ${dashDefault?'':'checked'}><span>Solid walls</span></label><label><input type="radio" name="line" value="dashed" ${dashDefault?'checked':''}><span>Dashed (fence line)</span></label></div>`,
     buttons:[{label:'Skip',value:null},{label:'Save room',value:'ok',primary:true}],
     onOpen:w=>{$('input[name=custom]',w).addEventListener('input',e=>{$$('input[name=fill]',w).forEach(x=>x.checked=false);e.target.dataset.used='1';});
       w.addEventListener('change',e=>{if(e.target.name==='fill')delete $('input[name=custom]',w).dataset.used;});}});
@@ -914,10 +1068,15 @@ async function nameRoom(box,poly,wallsMade){
   if(name){const u=M.width/1600,size=Math.round(clamp(Math.min(box.w,box.h)*.11,12*u,30*u));add({type:'text',x:r2(box.x+box.w/2),y:r2(box.y+box.h/2-size*.55),text:name,size,color:'#343a40',font:'Arial',bold:true,italic:false,halo:true,align:'middle'});}
   changed();
 }
+function placeObject(p){
+  if(isDoorKind(E.objKind)){E.doorKind=E.objKind;return placeDoor(p);}
+  const d=OBJMAP[E.objKind];if(!d)return;pushHist();const el=add({type:'obj',kind:d[0],x:r2(p.x),y:r2(p.y),w:r2(d[3]*S()),h:r2(d[4]*S()),rot:0,label:'',color:'#1a1f24'});changed();
+  $('#hint').innerHTML=`Placed ${esc(d[1].toLowerCase())}. Click to add another, or press <kbd>Esc</kbd> and drag it to adjust. Drag the round handle to rotate.`;return el;
+}
 function placeDoor(p){
   const nw=nearestWall(p,40/E.view.k);if(!nw){toast('Click on a wall to place a door or window.');return;}
   pushHist();const width=Math.min(defaultDoorWidth(E.doorKind),wallLen(nw.wall)*.95);
-  const el=add({type:'door',kind:E.doorKind,wall:nw.wall.id,t:clampT(nw.t,nw.wall,width),width,flip:0,hinge:0});E.sel=new Set([el.id]);changed();
+  const el=add({type:'door',kind:E.doorKind,wall:nw.wall.id,t:clampT(nw.t,nw.wall,width),width,flip:0,hinge:0});if(E.tool!=='objects')E.sel=new Set([el.id]);changed();
 }
 function placeStation(p){
   const cat=catOf(E.cat),ct=E.catType[E.cat]||{},stype=ct.type??cat.type;
@@ -932,6 +1091,15 @@ async function calibrate(px){
     before:(v,d)=>{if(!(parseFloat(d.m)>0)){toast('Enter a length greater than zero.','warn');return false;}}});
   setTool('select');if(r.value!=='ok')return;pushHist();M.scale=r2(px/parseFloat(r.data.m)*1000)/1000;toast(`Scale set: 1 m = ${M.scale.toFixed(1)} px`);changed();showTab('map');
 }
+async function goField(field){
+  const[sc,k]=field.split(':');const open=()=>$('#panel').classList.add('open');
+  if(field==='key'){showTab('stations');open();focusField('[data-act="edit-legend"]');return;}
+  if(sc==='site'){if(await editSite(site,k)){crumbs([['Sites','#/'],[site.name,'#/site/'+M.siteId],[M.name,'#/map/'+M.id]]);changed();}return;}
+  showTab('map');open();
+  if(field==='brand:logo')return focusField('[data-act="logo"]');
+  focusField(`[data-s="${sc}"][data-k="${k}"]`);
+}
+function focusField(sel){const el=$('#tabBody '+sel);if(!el)return;el.scrollIntoView({block:'center',behavior:'smooth'});el.focus({preventScroll:true});el.select?.();const box=el.closest('.f')||el;box.classList.remove('flash');void box.offsetWidth;box.classList.add('flash');}
 function deleteSel(){if(!E.sel.size)return;pushHist();const ids=E.sel;M.elements=M.elements.filter(e=>!ids.has(e.id)&&!(e.type==='door'&&ids.has(e.wall)));E.sel=new Set();changed();}
 function duplicateSel(){
   if(!E.sel.size)return;pushHist();const map=new Map(),out=[],off=M.settings.grid||20;
@@ -967,8 +1135,8 @@ function bindEditor(){
     if(!e.ctrlKey&&(Math.abs(e.deltaX)>Math.abs(e.deltaY)*.5)&&e.deltaMode===0&&!Number.isInteger(e.deltaY)){E.view.x-=e.deltaX;E.view.y-=e.deltaY;applyView();return;}
     zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*(e.ctrlKey?.012:.0016)*(e.deltaMode===1?30:1)));},{passive:false});
   $('#tools').addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(!b)return;const t=b.dataset.tool;
-    if(t==='shapes'){if($('.popmenu'))return closePop();const narrow=matchMedia('(max-width:820px)').matches;
-      popMenu(b,SHAPE_TOOLS.map(x=>({v:x[0],label:x[1],icon:toolSvg(x[3]),kbd:x[2],on:E.tool===x[0]})),narrow?'above':'right',v=>setTool(v));return;}
+    if(b.dataset.group){const g=GROUPS[b.dataset.group];if($('.popmenu'))return closePop();const narrow=matchMedia('(max-width:820px)').matches;
+      popMenu(b,g.items.map(x=>({v:x[0],label:x[1],icon:toolSvg(x[3]),kbd:x[2],on:E.tool===x[0]})),narrow?'above':'right',v=>setTool(v));return;}
     setTool(t);});
   $('#panel .tabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab);});
   const tb=$('#tabBody');tb.addEventListener('input',onPanelInput);tb.addEventListener('change',onPanelChange);tb.addEventListener('click',onPanelClick);
@@ -985,10 +1153,10 @@ function onDown(e){
   if(e.button===1||e.button===2||E.space||t==='pan'){E.drag={kind:'pan',sx:e.clientX,sy:e.clientY,vx:E.view.x,vy:E.view.y};$('#stage').classList.add('panning');return;}
   if(e.button!==0)return;
   if(t==='select')return downSelect(e,p);
-  if(t==='wall'||t==='polygon')return chainClick(e,p);
+  if(isWallTool(t)||t==='polygon')return chainClick(e,p);
   if(['room','rect','ellipse','line','arrow','dim','calib'].includes(t)){const q=snapP(p,e);E.drag={kind:'draw',a:q,b:q};renderOverlay();return;}
   if(t==='text')return createText(p);
-  if(t==='door')return placeDoor(p);
+  if(t==='objects')return placeObject(p);
   if(t==='station')return placeStation(p);
 }
 function downSelect(e,p){
@@ -996,6 +1164,7 @@ function downSelect(e,p){
   if(h&&E.sel.size===1){const el=getEl([...E.sel][0]);const d={kind:'handle',h:h.dataset.handle,id:el.id,orig:clone(el),start:p,pushed:false};
     if(el.type==='wall'&&(d.h==='p1'||d.h==='p2')){const P=d.h==='p1'?{x:el.x1,y:el.y1}:{x:el.x2,y:el.y2};d.conn=[];for(const w of walls()){if(w.id===el.id)continue;if(dist({x:w.x1,y:w.y1},P)<.6)d.conn.push([w.id,'1']);if(dist({x:w.x2,y:w.y2},P)<.6)d.conn.push([w.id,'2']);}}
     E.drag=d;return;}
+  const fld=tg.closest('[data-field]');if(fld){goField(fld.dataset.field);return;}
   const f=tg.closest('[data-furn]');if(f){const part=f.dataset.furn,F=M.furn[part];E.sel.clear();E.drag={kind:'furn',part,start:p,ox:F.x,oy:F.y,pushed:false};renderAll();return;}
   const g=tg.closest('[data-id]');
   if(g&&g.closest('#vp')){const id=g.getAttribute('data-id');
@@ -1007,12 +1176,12 @@ function downSelect(e,p){
 function onMove(e){
   const p=toWorld(e);E.cursor=p;const d=E.drag;
   $('#coords').textContent=M.scale?`${(p.x/M.scale).toFixed(1)}, ${(p.y/M.scale).toFixed(1)} m · ${Math.round(E.view.k*100)}%`:`${Math.round(p.x)}, ${Math.round(p.y)} px · ${Math.round(E.view.k*100)}%`;
-  if(!d){if(E.chain){const l=E.chain.pts[E.chain.pts.length-1];E.chainCur=snapP(p,e,l);}else if(E.tool==='wall')snapP(p,e);renderOverlay();return;}
+  if(!d){if(E.chain){const l=E.chain.pts[E.chain.pts.length-1];E.chainCur=snapP(p,e,l);}else if(isWallTool(E.tool))snapP(p,e);renderOverlay();return;}
   const k=E.view.k;
   switch(d.kind){
     case 'pan':E.view.x=d.vx+e.clientX-d.sx;E.view.y=d.vy+e.clientY-d.sy;applyView();break;
     case 'move':{let dx=p.x-d.start.x,dy=p.y-d.start.y;if(!d.pushed){if(Math.hypot(dx,dy)*k<3)return;pushHist();d.pushed=true;}
-      const onlyFree=[...d.orig.values()].every(o=>o.type==='station'||o.type==='text'||o.type==='door');
+      const onlyFree=[...d.orig.values()].every(o=>o.type==='station'||o.type==='text'||o.type==='door'||o.type==='obj');
       if(M.settings.snap&&!e.altKey&&!onlyFree){const g=M.settings.grid;dx=Math.round(dx/g)*g;dy=Math.round(dy/g)*g;}
       for(const[id,o]of d.orig){const el=getEl(id);if(!el)continue;
         if(el.type==='door'){if(d.orig.size===1){const nw=nearestWall(p);if(nw){el.wall=nw.wall.id;el.t=clampT(nw.t,nw.wall,el.width);}}continue;}
@@ -1021,6 +1190,8 @@ function onMove(e){
     case 'handle':{const el=getEl(d.id);if(!d.pushed){pushHist();d.pushed=true;}const o=d.orig;
       if(d.h==='p1'||d.h==='p2'){const anchor=d.h==='p1'?{x:o.x2,y:o.y2}:{x:o.x1,y:o.y1};const q=snapP(p,e,anchor);el['x'+d.h[1]]=q.x;el['y'+d.h[1]]=q.y;
         for(const[wid,end]of d.conn||[]){const w=getEl(wid);if(w){w['x'+end]=q.x;w['y'+end]=q.y;}}}
+      else if(d.h==='rot'){let a=Math.atan2(p.x-el.x,-(p.y-el.y))*180/Math.PI;if(!e.altKey)a=Math.round(a/15)*15;el.rot=((Math.round(a)+540)%360)-180;}
+      else if(d.h==='se'&&el.type==='obj'){const a=-(el.rot||0)*Math.PI/180,dx=p.x-el.x,dy=p.y-el.y,lx=dx*Math.cos(a)-dy*Math.sin(a),ly=dx*Math.sin(a)+dy*Math.cos(a);let w=Math.max(4,Math.abs(lx)*2),h=Math.max(4,Math.abs(ly)*2);if(e.shiftKey){const ar=o.w/o.h;h=w/ar;}el.w=w;el.h=h;}
       else if(d.h==='se'){const q=snapP(p,e);let w=Math.max(4,q.x-el.x),h=Math.max(4,q.y-el.y);if(el.type==='image'&&!e.shiftKey){const ar=o.w/o.h;h=w/ar;}el.w=w;el.h=h;}
       else if(d.h[0]==='v'){const q=snapP(p,e);el.pts[+d.h.slice(1)]=[q.x,q.y];}
       render();break;}
@@ -1060,7 +1231,8 @@ document.addEventListener('keydown',e=>{
       for(const id of E.sel){const el=getEl(id);if(el&&el.type!=='door')moveEl(el,dx,dy);}changed();return;}
   }
   if(/^[1-9]$/.test(e.key)){const c=CATS[+e.key-1];if(c){setTool('station',c.code);showTab('stations');}return;}
-  const map={v:'select',h:'pan',w:'wall',r:'room',d:'door',b:'rect',e:'ellipse',p:'polygon',l:'line',a:'arrow',t:'text'};
+  const map={v:'select',h:'pan',w:'wall',f:'fence',r:'room',o:'objects',d:'objects',b:'rect',e:'ellipse',p:'polygon',l:'line',a:'arrow',t:'text'};
+  if((key==='['||key===']')&&E.sel.size){softPush();for(const id of E.sel){const el=getEl(id);if(el?.type==='obj')el.rot=((el.rot||0)+(key===']'?15:-15)+540)%360-180;}changed();return;}
   if(map[key])setTool(map[key]);
 });
 document.addEventListener('keyup',e=>{if(e.key===' '){E.space=false;$('#stage')?.classList.remove('space');}});
@@ -1099,10 +1271,12 @@ function stationsTab(){
 }
 function propsTab(){
   const sel=[...E.sel].map(getEl).filter(Boolean);
+  if(E.tool==='objects')return objLibrary();
   if(!sel.length){
     const t=E.tool;
-    if(t==='door')return `<div class="sec"><h3 class="sec-h">Door or window type</h3><div class="chips">${DOORS.map(d=>`<button class="chip ${E.doorKind===d[0]?'on':''}" data-door="${d[0]}">${d[1]}</button>`).join('')}</div><p class="hint">Click on a wall to place it. Drag it later to slide it along the wall or onto another wall.</p></div>`;
+    if(t==='objects')return objLibrary();
     if(t==='text')return `<div class="sec"><h3 class="sec-h">New text style</h3>${textFields('text',E.textStyle,false)}</div>`;
+    if(t==='fence')return `<div class="sec"><h3 class="sec-h">New fence line style</h3>${F.num('fence','w','Thickness (px)',E.fenceStyle.w,1,1)}${F.color('fence','color','Colour',E.fenceStyle.color)}${F.check('fence','dash','Dashed',E.fenceStyle.dash)}</div>`;
     if(t==='wall'||t==='room')return `<div class="sec"><h3 class="sec-h">New wall style</h3>${F.num('wall','w','Thickness (px)',E.wallStyle.w,1,1)}${F.color('wall','color','Colour',E.wallStyle.color)}${F.check('wall','dash','Dashed line (fence line)',E.wallStyle.dash)}<p class="hint">${t==='room'?'Drag a box. When you let go you can name the room and pick a fill colour.':'Click the first point again to close the shape and name it as a room.'}</p></div>`;
     if(['rect','ellipse','polygon','line','arrow'].includes(t))return `<div class="sec"><h3 class="sec-h">New shape style</h3>${styleFields('style',E.style,t)}</div>`;
     return `<div class="sec"><p class="hint">Nothing selected. Click something on the plan to edit it, or drag across an area to select several things.</p><p class="hint">Shortcuts: <kbd>Ctrl+D</kbd> duplicate, <kbd>Delete</kbd> remove, arrow keys nudge, <kbd>Ctrl+Z</kbd> undo.</p></div>`;
@@ -1116,7 +1290,10 @@ function propsTab(){
         ${F.sel('el','code','Category',el.code,CATS.map(x=>[x.code,`${x.code} · ${x.name}`]))}${F.num('el','num','Number',el.num,1,1)}${F.text('el','stype','Station type',el.stype,'e.g. Snap trap','stypes')}
         ${c.mode==='tox'?F.check('el','toxic','Toxic (shows red)',el.toxic):''}${F.area('el','notes','Notes',el.notes||'')}${F.range('el','size','Marker size',el.size||1,.5,3,.1)}${F.check('el','hideType','Hide the type label on the plan',el.hideType)}`;break;}
     case 'wall':body=`<h3 class="sec-h">Wall</h3>${F.num('el','len',`Length (${unit()})`,toU(wallLen(el)),M.scale?.01:1,0)}${F.num('el','w','Thickness (px)',el.w,1,1)}${F.color('el','color','Colour',el.color)}${F.check('el','dash','Dashed line (fence line)',el.dash)}<p class="hint">Drag the end handles to reshape. Joined walls move together.</p>`;break;
-    case 'door':{const w=getEl(el.wall);body=`<h3 class="sec-h">${esc(DOORS.find(d=>d[0]===el.kind)?.[1]||'Door')}</h3><div class="chips">${DOORS.map(d=>`<button class="chip ${el.kind===d[0]?'on':''}" data-door-el="${d[0]}">${d[1]}</button>`).join('')}</div>
+    case 'obj':{const d=OBJMAP[el.kind];body=`<div class="row" style="gap:10px"><span style="width:44px;height:34px;background:#fff;border:1px solid var(--line);border-radius:5px;display:grid;place-items:center">${objPreview(el.kind).replace('<svg ','<svg width="36" height="28" ')}</span><h3 class="sec-h" style="margin:0">${esc(d?d[1]:'Object')}</h3></div>
+      ${F.text('el','label','Label',el.label||'','Optional, shown under it')}${F.num('el','wU',`Width (${unit()})`,toU(el.w),M.scale?.01:1,0)}${F.num('el','hU',`Depth (${unit()})`,toU(el.h),M.scale?.01:1,0)}
+      ${F.range('el','rot','Rotation',el.rot||0,-180,180,1)}<div class="row"><button class="btn sm" data-act="rotl">↺ 15°</button><button class="btn sm" data-act="rotr">15° ↻</button><button class="btn sm" data-act="rot90">90°</button><span class="hint">${el.rot||0}°</span></div>${F.color('el','color','Line colour',el.color||'#1a1f24')}`;break;}
+    case 'door':{const w=getEl(el.wall);body=`<h3 class="sec-h">${esc(DOORS.find(d=>d[0]===el.kind)?.[1]||'Door')}</h3><div class="objgrid">${DOORS.map(d=>`<button class="objtile ${el.kind===d[0]?'on':''}" data-door-el="${d[0]}"><span class="pv">${objPreview(d[0])}</span><span>${d[1]}</span></button>`).join('')}</div>
       ${F.num('el','width',`Width (${unit()})`,toU(el.width),M.scale?.05:1,0)}<div class="row"><button class="btn sm" data-act="flip">Flip side</button><button class="btn sm" data-act="hinge">Swap hinge</button></div><p class="hint">Drag the door to slide it along ${w?'the wall':'a wall'}.</p>`;break;}
     case 'rect':case 'ellipse':body=`<h3 class="sec-h">${el.type==='rect'?'Rectangle':'Ellipse'}</h3>${F.num('el','wU',`Width (${unit()})`,toU(el.w),M.scale?.01:1,0)}${F.num('el','hU',`Height (${unit()})`,toU(el.h),M.scale?.01:1,0)}${styleFields('el',el,el.type)}`;break;
     case 'polygon':body=`<h3 class="sec-h">Area</h3>${styleFields('el',el,'polygon')}${M.scale?`<p class="hint">Area: ${polyArea(el.pts).toFixed(1)} m²</p>`:''}`;break;
@@ -1126,6 +1303,13 @@ function propsTab(){
     case 'image':body=`<h3 class="sec-h">${el.bg?'Background image':'Image'}</h3>${F.range('el','opacity','Opacity',el.opacity??1,.1,1,.05)}${F.num('el','w','Width (px)',el.w,1,1)}${F.check('el','locked','Lock (stops it being selected on the plan)',el.locked)}<div class="row"><button class="btn sm" data-act="fit-board">Resize page to this image</button></div>`;break;
   }
   return `<div class="sec">${body}</div><div class="divider"></div>${actions}`;
+}
+function objLibrary(){
+  const q=(E.objQ||'').toLowerCase(),tile=(id,name)=>`<button class="objtile ${E.objKind===id?'on':''}" data-obj="${id}" title="${esc(name)}"><span class="pv">${objPreview(id)}</span><span>${esc(name)}</span></button>`;
+  const groups=[['Doors & windows (snap to walls)',DOORS.map(d=>[d[0],d[1]])],...OBJ_GROUPS.map(g=>[g,OBJ.filter(o=>o[2]===g).map(o=>[o[0],o[1]])])]
+    .map(([g,items])=>[g,items.filter(i=>!q||i[1].toLowerCase().includes(q)||g.toLowerCase().includes(q))]).filter(g=>g[1].length);
+  return `<div class="objlib"><p class="hint">Pick an object, then click the plan. Each click adds another. Doors and windows snap into the nearest wall.</p><input type="search" id="objQ" placeholder="Search objects" value="${esc(E.objQ||'')}" aria-label="Search objects">
+    ${groups.map(([g,items])=>`<div class="sec"><h3 class="sec-h">${esc(g)}</h3><div class="objgrid">${items.map(i=>tile(i[0],i[1])).join('')}</div></div>`).join('')||'<p class="hint">No objects match that search.</p>'}</div>`;
 }
 function styleFields(sc,o,type){const closed=['rect','ellipse','polygon'].includes(type);
   return `${F.color(sc,'stroke','Line colour',o.stroke)}${F.num(sc,'sw','Line width',o.sw,.5,0)}${F.check(sc,'dash','Dashed line',o.dash)}
@@ -1152,7 +1336,7 @@ function mapTab(){
     ${F.text('set','revision','Version',st.revision,'01')}${F.text('set','preparedBy','Drawn by',st.preparedBy,'Your name')}
     <div class="kv"><span>Title</span><b>${esc(site?.name||'')}</b><span>Address</span><b>${esc(site?.address||'—')}</b><span>Site ref</span><b>${esc(site?.siteRef||'—')}</b><span>Contract no</span><b>${esc(site?.contractNo||'—')}</b></div>
     <div class="row"><button class="btn sm" data-act="edit-site">Edit site details</button></div></div>
-    <div class="sec"><h3 class="sec-h">Page header</h3>${F.check('set','showFrame','Show header and bottom bar',st.showFrame!==false)}${F.text('brand','title','Heading',BRAND.title)}
+    <div class="sec"><h3 class="sec-h">Page header</h3>${F.check('set','showFrame','Show header and bottom bar',st.showFrame!==false)}${F.text('brand','title','Heading',BRAND.title)}<p class="hint">Tip: click any detail on the page to jump to it here.</p>
       <div class="f"><span>Logo</span><div class="row">${BRAND.logo?`<img class="logo-prev" src="${BRAND.logo}" alt="Current logo">`:''}<button class="btn sm" data-act="logo">${BRAND.logo?'Change':'Upload image'}</button>${BRAND.logo?'<button class="btn sm ghost danger" data-act="nologo">Remove</button>':''}</div></div>
       <p class="hint">The heading and logo are shared by every plan.</p></div>
     <div class="sec"><h3 class="sec-h">Background</h3><div class="row"><button class="btn sm" data-act="sat">${ICON.globe}Satellite photo</button><button class="btn sm" data-act="import">${ICON.upload}Image or PDF</button></div>
@@ -1160,10 +1344,11 @@ function mapTab(){
     <div class="sec"><h3 class="sec-h">Stations</h3>${F.range('set','marker','Marker size',st.marker,4,30,1)}${F.range('set','label','Label size',st.label,6,30,1)}${F.check('set','showTypes','Show station type under each ID',st.showTypes)}</div>
     <div class="sec"><h3 class="sec-h">North arrow</h3>${F.check('furn','north.show','Show north arrow',f.north.show)}${f.north.show?F.range('furn','north.rot','Rotation',f.north.rot||0,-180,180,1)+F.range('furn','north.s','Size',f.north.s||1,.4,3,.05):''}</div>
     <div class="sec"><h3 class="sec-h">Scale</h3><p class="hint">${M.scale?`1 metre = ${M.scale.toFixed(2)} px. The plan area is ${(M.width/M.scale).toFixed(1)} × ${(M.height/M.scale).toFixed(1)} m.`:'No scale set. Lengths show in pixels.'}</p><div class="row"><button class="btn sm" data-act="calib">Calibrate from a known length</button>${M.scale?'<button class="btn sm ghost" data-act="noscale">Clear</button>':''}</div></div>
-    <div class="sec"><h3 class="sec-h">Page and grid</h3>${F.num('map','width','Plan width (px)',M.width,10,200)}${F.num('map','height','Plan height (px)',M.height,10,200)}${F.num('set','grid','Grid size (px)',st.grid,1,2)}<div class="row">${F.check('set','showGrid','Show grid',st.showGrid)}${F.check('set','snap','Snap to grid',st.snap)}</div><p class="hint">Hold <kbd>Alt</kbd> while drawing to skip snapping.</p></div>`;
+    <div class="sec"><h3 class="sec-h">Page and grid</h3><p class="hint">Page shape: <b>${({a4l:'A4 landscape',a4p:'A4 portrait',custom:'Custom'})[paperOf()]}</b></p><div class="row"><button class="btn sm" data-act="a4l">A4 landscape</button><button class="btn sm" data-act="a4p">A4 portrait</button></div>${F.num('map','width','Plan width (px)',M.width,10,200)}${F.num('map','height','Plan height (px)',M.height,10,200)}${F.num('set','grid','Grid size (px)',st.grid,1,2)}<div class="row">${F.check('set','showGrid','Show grid',st.showGrid)}${F.check('set','snap','Snap to grid',st.snap)}</div><p class="hint">Hold <kbd>Alt</kbd> while drawing to skip snapping.</p></div>`;
 }
 function onPanelInput(e){
-  const t=e.target;if(t.id==='regQ'){E.regQ=t.value;const pos=t.selectionStart;renderPanel();const n=$('#regQ');n.focus();n.setSelectionRange(pos,pos);return;}
+  const t=e.target;if(t.id==='objQ'){E.objQ=t.value;const pos=t.selectionStart;renderPanel();const n=$('#objQ');n.focus();n.setSelectionRange(pos,pos);return;}
+  if(t.id==='regQ'){E.regQ=t.value;const pos=t.selectionStart;renderPanel();const n=$('#regQ');n.focus();n.setSelectionRange(pos,pos);return;}
   const sc=t.dataset.s,k=t.dataset.k;if(!sc||!k)return;
   let v=t.type==='checkbox'?t.checked:(t.type==='number'||t.type==='range')?parseFloat(t.value):t.value;
   if(typeof v==='number'&&isNaN(v))return;
@@ -1177,6 +1362,7 @@ function setVal(sc,k,v){
   if(sc==='style'){E.style[k]=v;return;}
   if(sc==='text'){E.textStyle[k]=v;return;}
   if(sc==='wall'){E.wallStyle[k]=v;return;}
+  if(sc==='fence'){E.fenceStyle[k]=v;return;}
   if(sc==='brand'){BRAND[k]=v;saveBrand();render();return;}
   softPush();
   if(sc==='map'){if(k==='name'){M.name=v;crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[v,'#/map/'+M.id]]);}else if(v>=50)M[k]=Math.round(v);changed();return;}
@@ -1199,7 +1385,7 @@ function setVal(sc,k,v){
 async function onPanelClick(e){
   const sw=e.target.closest('[data-sw]');if(sw){const inp=sw.closest('.f').querySelector('input[type=color]');inp.value=sw.dataset.sw;setVal(sw.dataset.s,sw.dataset.k,sw.dataset.sw);return;}
   const cat=e.target.closest('[data-cat]');if(cat){const c=cat.dataset.cat;if(E.tool==='station'&&E.cat===c)setTool('select');else{E.sel.clear();setTool('station',c);}renderPanel();return;}
-  const dk=e.target.closest('[data-door]');if(dk){E.doorKind=dk.dataset.door;renderPanel();return;}
+  const ob=e.target.closest('[data-obj]');if(ob){E.objKind=ob.dataset.obj;if(E.tool!=='objects')setTool('objects');renderPanel();renderOverlay();$('#panel').classList.remove('open');return;}
   const de=e.target.closest('[data-door-el]');if(de){pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='door'){el.kind=de.dataset.doorEl;el.width=defaultDoorWidth(el.kind);const w=getEl(el.wall);if(w){el.width=Math.min(el.width,wallLen(w)*.95);el.t=clampT(el.t,w,el.width);}}}changed();return;}
   const loc=e.target.closest('[data-loc]');if(loc){const el=getEl(loc.dataset.loc);E.sel=new Set([el.id]);if(E.view.k<.6)E.view.k=1;centerOn(el.x,el.y);renderPanel();return;}
   const il=e.target.closest('[data-img-lock]');if(il){pushHist();const el=getEl(il.dataset.imgLock);el.locked=!el.locked;changed();return;}
@@ -1207,6 +1393,8 @@ async function onPanelClick(e){
   const b=e.target.closest('[data-act]');if(!b)return;
   switch(b.dataset.act){
     case 'stop':setTool('select');break;
+    case 'rotl':case 'rotr':case 'rot90':pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='obj')el.rot=((el.rot||0)+({rotl:-15,rotr:15,rot90:90})[b.dataset.act]+540)%360-180;}changed();break;
+    case 'a4l':case 'a4p':pushHist();setA4(b.dataset.act==='a4p');changed();fitView();toast('Page set to A4 '+(b.dataset.act==='a4p'?'portrait':'landscape'));break;
     case 'edit-legend':editLegend();break;
     case 'dup':duplicateSel();break;case 'del':deleteSel();break;
     case 'flip':case 'hinge':pushHist();for(const id of E.sel){const el=getEl(id);if(el?.type==='door')el[b.dataset.act]=el[b.dataset.act]?0:1;}changed();break;
@@ -1218,7 +1406,7 @@ async function onPanelClick(e){
     case 'noscale':pushHist();M.scale=null;changed();break;
     case 'edit-site':{if(await editSite(site)){crumbs([['Sites','#/'],[site.name,'#/site/'+M.siteId],[M.name,'#/map/'+M.id]]);changed();}break;}
     case 'logo':pick('image/*,.svg',async f=>{try{const im=await fileToImg(f[0]);let src=im.src;if(Math.max(im.w,im.h)>900&&!/svg/.test(src.slice(0,30))){const i=await loadImg(src),k=900/Math.max(im.w,im.h),c=document.createElement('canvas');c.width=Math.round(im.w*k);c.height=Math.round(im.h*k);c.getContext('2d').drawImage(i,0,0,c.width,c.height);src=c.toDataURL('image/png');}
-      BRAND.logo=src;await saveBrand();render();renderPanel();toast('Logo updated on all plans');}catch(e){toast('That image could not be used: '+e.message,'warn');}});break;
+      BRAND.logo=src;BRAND.logoAR=im.w/im.h||3;await saveBrand();render();renderPanel();toast('Logo updated on all plans');}catch(e){toast('That image could not be used: '+e.message,'warn');}});break;
     case 'nologo':BRAND.logo=null;await saveBrand();render();renderPanel();break;
     case 'sat':openSatellite();break;
     case 'import':$('#fileIn').click();break;
@@ -1267,18 +1455,22 @@ async function fileToImg(file,page=1){
 function setBackground(img,{scale=null,meta=null}={}){
   pushHist();const aid=uid();E.assets[aid]=img.src;E.assetsDirty=true;
   M.elements=M.elements.filter(e=>!(e.type==='image'&&e.bg));
-  M.elements.unshift({id:uid(),type:'image',asset:aid,x:0,y:0,w:img.w,h:img.h,opacity:1,locked:true,bg:true});
-  M.width=Math.round(img.w);M.height=Math.round(img.h);M.scale=scale;M.bgMeta=meta;
-  if(scale){M.settings.grid=Math.max(2,Math.round(scale));}
-  layoutFurn();changed();fitView();
+  const k=Math.min(M.width/img.w,M.height/img.h),w=r2(img.w*k),h=r2(img.h*k);
+  M.elements.unshift({id:uid(),type:'image',asset:aid,x:r2((M.width-w)/2),y:r2((M.height-h)/2),w,h,opacity:1,locked:true,bg:true});
+  M.scale=scale?r2(scale*k*1000)/1000:null;M.bgMeta=meta;
+  if(M.scale){M.settings.grid=Math.max(2,Math.round(M.scale));}
+  changed();fitView();
 }
 function placeImage(img,i=0){
   pushHist();const aid=uid();E.assets[aid]=img.src;E.assetsDirty=true;const s=Math.min(1,M.width*.6/img.w,M.height*.6/img.h);
   const el=add({type:'image',asset:aid,x:Math.round(M.width*.2+i*30),y:Math.round(M.height*.2+i*30),w:img.w*s,h:img.h*s,opacity:1,locked:false});E.sel=new Set([el.id]);changed();
 }
 async function importIntoEditor(files,forceMode){
-  const json=files.filter(f=>/\.json$/i.test(f.name)),imgs=files.filter(f=>!/\.json$/i.test(f.name));
-  if(json.length){await importMapFiles(json);toast('Plan files were added to this site. Open them from the site page.');}
+  const plans=[];for(const f of files)if(/\.(json|svg)$/i.test(f.name)&&await readPlanFile(f).catch(()=>null))plans.push(f);
+  const json=files.filter(f=>/\.json$/i.test(f.name)&&!plans.includes(f)),imgs=files.filter(f=>!/\.json$/i.test(f.name)&&!plans.includes(f));
+  if(json.length)toast(`${json.map(f=>f.name).join(', ')} is not a Station Planner plan file.`,'warn');
+  if(plans.length){for(const f of plans){const pl=await readPlanFile(f);const m={...pl.map,id:uid(),siteId:site.id,updated:Date.now(),thumb:null};await Store.put('maps',m);await Store.put('assets',{id:m.id,data:pl.assets});}
+    toast(`${plans.length} plan${plans.length>1?'s were':' was'} added to ${site.name}. Open ${plans.length>1?'them':'it'} from the site page.`);}
   if(!imgs.length)return;
   const bad=imgs.filter(f=>!/\.(png|jpe?g|gif|webp|bmp|svg|pdf)$/i.test(f.name)&&!f.type.startsWith('image/')&&f.type!=='application/pdf');
   if(bad.length){toast(`Can't import ${bad.map(f=>f.name).join(', ')}. Use PNG, JPG, GIF, WEBP, BMP, SVG, PDF or a plan .json file.`,'warn');}
@@ -1287,7 +1479,7 @@ async function importIntoEditor(files,forceMode){
   if(!mode){const hasBg=M.elements.some(e=>e.type==='image'&&e.bg),hasPdf=ok.some(f=>/\.pdf$/i.test(f.name));
     const r=await modal({title:`Import ${ok.length} file${ok.length>1?'s':''}`,body:`<ul class="filelist">${ok.map(f=>`<li>${esc(f.name)}</li>`).join('')}</ul>
       <div class="seg"><label><input type="radio" name="mode" value="bg" ${!M.elements.length||!hasBg?'checked':''}><span>Use as background</span></label><label><input type="radio" name="mode" value="place" ${M.elements.length&&hasBg?'checked':''}><span>Place as image</span></label></div>
-      <p class="hint">Background resizes the page to fit and locks the image so you can draw over it${hasBg?'. It replaces the current background':''}. ${ok.length>1?'Only the first file becomes the background; the rest are placed as images.':''}</p>
+      <p class="hint">Background fits the image inside the page and locks it so you can draw over it${hasBg?'. It replaces the current background':''}. ${ok.length>1?'Only the first file becomes the background; the rest are placed as images.':''}</p>
       ${hasPdf?`<label class="f"><span>PDF page</span><input type="number" name="page" value="1" min="1" step="1"></label>`:''}`,
       buttons:[{label:'Cancel',value:null},{label:'Import',value:'ok',primary:true}]});
     if(r.value!=='ok')return;mode=r.data.mode;page=parseInt(r.data.page||'1',10)||1;}
@@ -1303,7 +1495,7 @@ async function openSatellite(){
     body:`<div class="sat"><div class="sat-search"><input id="satQ" type="search" autocomplete="off" spellcheck="false" placeholder="Start typing an address" value="${esc(site?.address||'')}" aria-label="Address" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="satList"><ul class="sat-list" id="satList" role="listbox" hidden></ul></div>
       <div class="sat-frame" id="satFrame"><div class="sat-map" id="satMap"></div></div>
       <div class="sat-rot"><span class="lbl">Rotate</span><button type="button" class="btn sm" data-rot="-15" title="Rotate 15° anticlockwise">↺ 15°</button><input type="range" id="satRot" min="-180" max="180" step="1" value="0" aria-label="Rotation in degrees"><button type="button" class="btn sm" data-rot="15" title="Rotate 15° clockwise">15° ↻</button><output id="satDeg">0°</output><button type="button" class="btn sm ghost" data-rot="0">Reset</button></div>
-      <div class="sat-foot"><label class="chk"><input type="checkbox" name="hi" checked> High resolution (2×)</label><span>Frame the property and rotate it to suit the page. The scale and north arrow are set for you.</span></div></div>`,
+      <div class="sat-foot"><label class="chk"><input type="checkbox" name="hi" checked> High resolution (2×)</label><span>The frame matches your page shape. Frame the property and rotate it to suit. The scale and north arrow are set for you.</span></div></div>`,
     buttons:[{label:'Cancel',value:null},{label:'Use this view',value:'use',primary:true}],
     onOpen:async w=>{
       const inp=$('#satQ',w),list=$('#satList',w),mapEl=$('#satMap',w),fr=$('#satFrame',w);
@@ -1331,7 +1523,8 @@ async function openSatellite(){
       list.addEventListener('pointerdown',e=>{const li=e.target.closest('[data-i]');if(li){e.preventDefault();choose(+li.dataset.i);}});
       inp.addEventListener('blur',()=>setTimeout(()=>{list.hidden=true;inp.setAttribute('aria-expanded','false');},150));
       try{loadCss(CDN.leafletCss);await loadScript(CDN.leaflet);}catch(e){fr.innerHTML='<p style="color:#fff;padding:16px">The map could not load. Check the internet connection.</p>';return;}
-      const fw=fr.clientWidth,fh=fr.clientHeight,D=Math.ceil(Math.hypot(fw,fh));
+      let fw=fr.clientWidth,fh=Math.round(fw*M.height/M.width);const maxH=Math.round(innerHeight*.56);if(fh>maxH){fh=maxH;fw=Math.round(fh*M.width/M.height);}
+      fr.style.height=fh+'px';fr.style.width=fw+'px';fr.style.margin='0 auto';const D=Math.ceil(Math.hypot(fw,fh));
       Object.assign(mapEl.style,{width:D+'px',height:D+'px',left:Math.round((fw-D)/2)+'px',top:Math.round((fh-D)/2)+'px'});w.__frame={fw,fh};
       const g=site?.geo;lm=L.map(mapEl,{maxZoom:19,zoomSnap:1,attributionControl:false}).setView(g?[g.lat,g.lng]:[-40.9,174.9],g?g.zoom:5);
       L.tileLayer(ESRI,{maxZoom:19}).addTo(lm);setTimeout(()=>lm.invalidateSize(),60);
@@ -1440,7 +1633,7 @@ function sampleMap(siteId){
 async function boot(){
   await Store.open();
   try{const c=await Store.get('meta','cats');if(c?.value?.length)CATS=c.value;}catch(e){}
-  try{const b=await Store.get('meta','brand');if(b?.value)BRAND={...BRAND,...b.value};}catch(e){}
+  try{const b=await Store.get('meta','brand');if(b?.value)BRAND={...BRAND,...b.value};if(BRAND.logo&&!BRAND.logoAR){const i=await loadImg(BRAND.logo);BRAND.logoAR=(i.naturalWidth/i.naturalHeight)||3;}}catch(e){}
   try{const seeded=await Store.get('meta','seeded');if(!seeded&&!(await Store.all('sites')).length){
     const s={id:uid(),name:'Teagle Foods',address:'12 Example Road, East Tāmaki, Auckland',client:'Example contact',siteRef:'NZ0000000000001',contractNo:'00000000/00001',notes:'Example site showing how a plan is laid out. Edit or delete it any time.',created:Date.now(),updated:Date.now(),sample:true};
     await Store.put('sites',s);const m=sampleMap(s.id);await Store.put('maps',m);await Store.put('assets',{id:m.id,data:{}});}
