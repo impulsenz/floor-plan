@@ -156,4 +156,6 @@ API (all JSON; `{store}` is `sites`, `maps`, `assets` or `meta`):
 
 Settings live in `/etc/systemd/system/floorplan.service`. `ALLOWED_ORIGINS` limits which web addresses may use the server (for example `https://impulsenz.github.io`), and is `*` (any) for now.
 
+Sites and plans record an `owner` (the email of whoever created them). Only the owner or an admin may change or delete them; images and history follow their plan's owner. Records made before ownership existed have no owner, so only admins can change those. `GET /api/people` lists names for showing who owns what.
+
 With sign-in on, every `/api/{store}` and `/api/users` call needs `Authorization: Bearer <token>`. The token comes from `POST /api/auth/google {credential}` (a Google ID token, checked against Google's signing keys and your client ID). Only a hash of each token is stored, and tokens expire after `SESSION_MINUTES` (5) without activity. `/etc/floorplan.env` holds `GOOGLE_CLIENT_ID`, `ADMIN_EMAILS`, `ALLOWED_DOMAINS`, `ALLOWED_ORIGINS` and `SESSION_MINUTES`; restart with `sudo systemctl restart floorplan` after editing it.

@@ -185,10 +185,16 @@ db.exec(`
   );
 `);
 
+// Who created each site or plan. Older records (from before ownership) have no owner and only admins can change them.
+if (!db.prepare("SELECT 1 FROM pragma_table_info('records') WHERE name = 'owner'").get()) db.exec('ALTER TABLE records ADD COLUMN owner TEXT');
+
 const q = {
   list:     db.prepare('SELECT data FROM records WHERE store = ? ORDER BY updated DESC'),
   listSite: db.prepare('SELECT data FROM records WHERE store = ? AND site_id = ? ORDER BY updated DESC'),
   get:      db.prepare('SELECT data FROM records WHERE store = ? AND id = ?'),
+  row:      db.prepare('SELECT owner FROM records WHERE store = ? AND id = ?'),
+  setOwner: db.prepare('UPDATE records SET owner = ? WHERE store = ? AND id = ?'),
+  people:   db.prepare('SELECT email, name FROM users'),
   put:      db.prepare(`INSERT INTO records (store, id, site_id, data, updated) VALUES (?, ?, ?, ?, ?)
                         ON CONFLICT (store, id) DO UPDATE SET site_id = excluded.site_id, data = excluded.data, updated = excluded.updated`),
   del:      db.prepare('DELETE FROM records WHERE store = ? AND id = ?'),
@@ -371,6 +377,24 @@ async function handleUsers(req, res, parts, me) {
   return json(res, 405, { error: 'Method not allowed' });
 }
 
+/* ---------- who may change what ----------
+   Sites and plans belong to whoever created them. Users change and delete only their own;
+   admins change anything. A plan's images and undo history follow the plan's owner.
+   Shared settings (station types, heading, logo) can be created by anyone but changed only by admins. */
+const OWNED = new Set(['sites', 'maps']);
+function writeCheck(me, store, id, method) {
+  if (me.open || me.role === 'admin') return null;
+  const ownerOf = (st, key) => { const r = q.row.get(st, key); return r ? { owner: r.owner } : null; };
+  let rec = null, what = 'This';
+  if (OWNED.has(store)) { rec = ownerOf(store, id); what = store === 'sites' ? 'This site' : 'This plan'; }
+  else if (store === 'assets') { rec = ownerOf('maps', id); what = 'This plan'; }
+  else if (store === 'meta' && id.startsWith('hist:')) { rec = ownerOf('maps', id.slice(5)); what = 'This plan'; }
+  else if (store === 'meta') { return q.row.get('meta', id) ? 'Only admins can change shared settings.' : null; }
+  if (!rec) return null;                                   // new record: allowed, and it becomes theirs
+  if (rec.owner === me.email) return null;
+  return `${what} belongs to ${rec.owner || 'an admin'}. You can open it and make your own copy, but only the owner or an admin can change it.`;
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     cors(req, res);
@@ -395,6 +419,7 @@ const server = http.createServer(async (req, res) => {
     const me = sessionUser(req);
     if (!me) return json(res, 401, { error: 'Please sign in' });
     if (parts[0] === 'users') return await handleUsers(req, res, parts, me);
+    if (parts[0] === 'people' && req.method === 'GET') return json(res, 200, AUTH_ON ? q.people.all() : []);
 
     const [store, id] = parts;
     if (!STORES.has(store) || parts.length > 2) return json(res, 404, { error: 'Unknown path' });
@@ -411,11 +436,24 @@ const server = http.createServer(async (req, res) => {
       const row = q.get.get(store, id);
       return row ? send(res, 200, row.data) : json(res, 404, { error: 'Not found' });
     }
+    if (req.method === 'PUT' || req.method === 'DELETE') {
+      const deny = writeCheck(me, store, id, req.method);
+      if (deny) return json(res, 403, { error: deny });
+    }
     if (req.method === 'PUT') {
       const { text, obj } = await readJson(req);
       if (!obj || typeof obj !== 'object' || Array.isArray(obj) || obj.id !== id) return json(res, 400, { error: 'The record id must match the address' });
-      q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, text, Date.now());
-      return json(res, 200, { ok: true });
+      let body = text;
+      if (OWNED.has(store)) {
+        // the server decides the owner: whoever first created it (never changed by later edits, even an admin's)
+        const ex = q.row.get(store, id);
+        const owner = ex ? ex.owner : (me.open ? null : me.email);
+        obj.owner = owner || undefined;
+        body = JSON.stringify(obj);
+        q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, body, Date.now());
+        if (!ex) q.setOwner.run(owner, store, id);
+      } else q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, body, Date.now());
+      return json(res, 200, { ok: true, owner: obj.owner || null });
     }
     if (req.method === 'DELETE') {
       q.del.run(store, id);

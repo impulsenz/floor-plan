@@ -4,7 +4,8 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 
 ## What it does
 
-- **Sites as folders.** Create a site (e.g. *Teagle*), and every plan for that site is kept inside it.
+- **Sites as folders.** Create a site (e.g. *Teagle*), and every plan for that site is kept inside it. Each site card can show a photo of the site (add it when creating or editing the site); inside a site, plan cards show a preview of each map. Search finds sites by name, address, site ref, contract, client, owner or plan name, and **Mine** shows only your own.
+- **Your files and everyone else's.** You can create, edit and delete your own sites and plans. Anyone else's can be opened (view only, with export) and duplicated; the copy is yours to edit. Admins can edit and delete everything.
 - **Printed sheet layout.** A fixed-height black heading band across the top, with your logo on the right (upload it once in the Settings tab, shared by every plan). The heading never moves; the logo has size, left/right and up/down controls. A fixed-height bottom bar fills itself from the site and plan details (Title, Address, Department, Date, Version, Site Ref, Drawn By, Contract No) plus a KEY of every station type.
 - **Sites.** Every field on the site form except Notes is required, so the bottom bar is always complete.
 - **Stays on the page.** Stations, objects, text, shapes and walls can't be moved or drawn into the heading band or bottom bar.
@@ -50,7 +51,8 @@ Plans are saved on your own **Station Planner server** (Node.js + SQLite, behind
 - The server also serves the app, so its address is all you need.
 - To use the GitHub Pages copy, open it once with `?api=https://your-server-address`, or set the address with the **Server** button on the Sites page.
 - Plans made before the server existed can be copied up with **Server → Copy them to the server**.
-- **Google sign-in:** only approved Google accounts (or a whole company domain) can get in, admins manage the list under **Users and access**, and people are signed out after 5 minutes without activity. Setup steps are in [`server/README.md`](server/README.md#google-sign-in).
+- **Several servers.** **Server** on the Sites page (or your picture → Servers) shows each saved server as a card with its own name and picture. Click one to switch; each keeps its own sites, plans and sign-in.
+- **Google sign-in:** your Google picture sits at the top right of every page. Only approved Google accounts (or a whole company domain) can get in, admins manage the list under **Users and access**, and people are signed out after 5 minutes without activity. Setup steps are in [`server/README.md`](server/README.md#google-sign-in).
 
 ## Keyboard shortcuts
 
