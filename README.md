@@ -22,7 +22,7 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Rooms.** When you finish a room (or close a wall or fence outline), name it, pick a fill colour, and choose solid or dashed walls. The colour and name follow the walls: drag the round nodes at the corners to reshape a building or fence line and the fill reshapes with it. Click the room name to select the room and drag it, walls and all.
 - **Stations with auto-numbering.** Pick a type in the Stations tab (or press 1–8), then click the plan: T001, T002, T003… Drag to move. Each station records its type (e.g. *Snap trap*) and notes, shown in Properties and the Register. The ID sits to the right of the marker and moves to the left automatically when something is in the way (or set it to always left/right). Switching away from the Stations tab stops placing.
   - **Jumping ahead:** while placing, type a *Next number* (e.g. 40). New stations take the first free number from there, so 1–10, then 40, 41…, then set it back to 11 to carry on 11, 12… (numbers already used are skipped).
-  - **Outlines:** the Stations tab also sets the white outline around station IDs and the border around icons (thickness and colour); a single station can have its own.
+  - **Outlines:** the Stations tab also sets the outline around station IDs (thickness and colour); a single station can have its own.
   - **Sizes:** the Stations tab sets the icon and text size for every station on the plan. Click a single station to give it its own icon and text size (relative to the plan's), or put it back to the plan's sizes.
   - **New station type** adds a type with its own prefix, shape, colour and starting number.
 
