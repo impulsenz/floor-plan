@@ -260,6 +260,12 @@ button,input,select,textarea{font:inherit;color:inherit}
 .rq-list{max-height:min(38vh,360px);overflow:auto;border:1px solid var(--line);border-radius:8px}.rq-list.small{max-height:min(24vh,220px)}
 .rq-list thead th{position:sticky;top:0;background:var(--panel);z-index:1}.rq-list table{margin:0}.rq-none{padding:10px 12px;margin:0}
 .rq-act{white-space:nowrap}.rq-act .btn{margin-left:4px}.nowrap{white-space:nowrap}
+.ib.on{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+.game-hud{position:absolute;top:10px;right:10px;z-index:7;background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:10px;padding:8px 10px;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,.12);font-size:12.5px}
+.gh-title{font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.gh-row{display:flex;align-items:center;gap:7px;padding:2px 0}.gh-row i{width:10px;height:10px;border-radius:50%;flex:none}.gh-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gh-row b{font-variant-numeric:tabular-nums}.gh-row.me span{font-weight:700}
+.gh-keys{margin-top:6px;color:var(--ink-3);font-size:11px;line-height:1.7}.gh-keys kbd{font-size:10px;padding:0 4px}
+.gh-respawn{margin-top:8px;width:100%;justify-content:center}
 .live-peers{display:inline-flex;align-items:center;margin-right:8px}.live-peers[hidden]{display:none}
 .peer{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--pc);border:2px solid var(--pc);box-shadow:0 0 0 2px var(--panel);margin-left:-6px;overflow:hidden}
 .peer:first-child{margin-left:0}.peer img{width:100%;height:100%;object-fit:cover}
@@ -1134,6 +1140,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-top]
   if(a==='import'){if($('.popmenu'))return closePop();popMenu(b,[{v:'file',label:'Image or PDF file',icon:ICON.upload,note:'PNG, JPG, SVG, PDF'},{v:'sat',label:'Satellite photo',icon:ICON.globe,note:'Search an address'}],'below',v=>v==='file'?$('#fileIn').click():openSatellite());}
   if(a==='export')openExport();
   if(a==='print')printPlan();
+  if(a==='game'){if(G.on)G.stop();else G.start();}
   if(a==='bg'){if(M?.elements.some(e=>e.bg))openBg();else{if($('.popmenu'))return closePop();popMenu(b,[{v:'file',label:'Image or PDF file',icon:ICON.upload,note:'Use it as the background'},{v:'sat',label:'Satellite photo',icon:ICON.globe,note:'Search an address'}],b.closest('#tools')?'right':'below',v=>v==='file'?pick('.png,.jpg,.jpeg,.gif,.webp,.bmp,.svg,.pdf,image/*,application/pdf',f=>importIntoEditor(f,'bgimg')):openSatellite());}}
   if(a==='panel')$('#panel').classList.toggle('open');
 });
@@ -1168,18 +1175,18 @@ async function openMap(id){
   if(recovered&&pend.assets){E.assets={...E.assets,...pend.assets};E.assetsDirty=true;}
   {const h=(await Store.get('meta','hist:'+id).catch(()=>null))?.value;E.hist=Array.isArray(h?.hist)?h.hist.slice(-HIST_MAX):[];E.fut=Array.isArray(h?.fut)?h.fut.slice(-HIST_MAX):[];}E.changedSinceOpen=false;E.manualRev=false;E.dirty=!!recovered;E.histDirty=false;E.siteDirty=false;E.changeSeq=0;E.localOk=true;clearTimeout(syncT);syncT=null;E.sel.clear();E.tool='select';E.chain=null;E.drag=null;
   crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[M.name,'#/map/'+id]]);
-  $('#topActions').innerHTML=`<span id="livePeers" class="live-peers" hidden></span><button type="button" class="save-pill saved" id="saveSt" data-save></button><button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
+  $('#topActions').innerHTML=`<span id="livePeers" class="live-peers" hidden></span><button class="ib" data-top="game" title="Play: run around the plan and tag each other. Just for fun: nothing on the plan is changed." aria-label="Play"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M7 8h10a4 4 0 0 1 4 4v1.5a3 3 0 0 1-5.2 2L14.5 14h-5l-1.3 1.5A3 3 0 0 1 3 13.5V12a4 4 0 0 1 4-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 10.2v3M6.5 11.7h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="15.5" cy="11" r="1" fill="currentColor"/><circle cx="17.5" cy="13" r="1" fill="currentColor"/></svg></button><button type="button" class="save-pill saved" id="saveSt" data-save></button><button class="ib" data-top="undo" id="bUndo" title="Undo (Ctrl+Z)">${ICON.undo}</button><button class="ib" data-top="redo" id="bRedo" title="Redo (Ctrl+Y)">${ICON.redo}</button>
     <span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button><button class="ib" data-top="fit" title="Fit to screen (0)" aria-label="Fit to screen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/><rect x="8" y="8" width="8" height="8" rx="1"/></svg></button></span>
     <button class="btn" data-top="import" title="Import a plan image, PDF or satellite photo" aria-haspopup="menu">${ICON.upload}<span class="hide-narrow">Import</span></button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button><button class="ib" data-top="print" title="Print the plan" aria-label="Print"><svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path d="M5.5 7V2.5h9V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="2.5" y="7" width="15" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="5.5" y="11.5" width="9" height="6" fill="var(--panel)" stroke="currentColor" stroke-width="1.6"/></svg></button>
     <button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
-  if(E.readOnly)$('#topActions').innerHTML=`<span id="livePeers" class="live-peers" hidden></span><span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button></span>
+  if(E.readOnly)$('#topActions').innerHTML=`<span id="livePeers" class="live-peers" hidden></span><button class="ib" data-top="game" title="Play: run around the plan and tag each other. Just for fun: nothing on the plan is changed." aria-label="Play"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true"><path d="M7 8h10a4 4 0 0 1 4 4v1.5a3 3 0 0 1-5.2 2L14.5 14h-5l-1.3 1.5A3 3 0 0 1 3 13.5V12a4 4 0 0 1 4-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8 10.2v3M6.5 11.7h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="15.5" cy="11" r="1" fill="currentColor"/><circle cx="17.5" cy="13" r="1" fill="currentColor"/></svg></button><span class="hide-narrow" style="display:inline-flex;gap:2px;align-items:center"><button class="ib" data-top="zout" title="Zoom out (−)">−</button><button class="zoom" data-top="fit" id="zoomLbl" title="Fit plan to screen (0)">100%</button><button class="ib" data-top="zin" title="Zoom in (+)">+</button></span>
     <button class="btn" data-top="ro-copy">Duplicate to edit</button><button class="btn primary" data-top="export">${ICON.download}<span class="hide-narrow">Export</span></button><button class="ib" data-top="print" title="Print the plan" aria-label="Print"><svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path d="M5.5 7V2.5h9V7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><rect x="2.5" y="7" width="15" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="5.5" y="11.5" width="9" height="6" fill="var(--panel)" stroke="currentColor" stroke-width="1.6"/></svg></button><button class="ib only-narrow" data-top="panel" title="Show panel">${ICON.panel}</button>${themeBtn()}${accountBtn()}`;
   savedAt=recovered?0:(m.updated||0);setSave(recovered?'local':'saved',recovered?'Changes from this browser not yet sent':'');
   if(recovered)setTimeout(()=>{toast('This browser had changes that hadn\'t reached the server yet. They\'ve been restored and are being saved now.');saveNow(true);},600);
   $('#view').innerHTML=`<div class="editor${E.readOnly?' ro':''}">
     <nav class="tools" id="tools" aria-label="Drawing tools">${TOOLS.map(t=>t==='-'?'<div class="sep"></div>':typeof t==='string'?groupBtn(t.slice(2)):`<button type="button" class="tool" data-tool="${t[0]}" title="${t[1]} (${t[2]})" aria-label="${t[1]}">${toolSvg(t[3])}<span class="tl">${SHORT[t[0]]}</span></button>`).join('')}<div class="sep"></div><button type="button" class="tool" data-top="bg" title="Background: see-through, size, turn, move, lock" aria-label="Background"><svg viewBox="0 0 20 20" width="22" height="22" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M4 14l4-4.5 3 3 2-2 3 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="13.5" cy="7" r="1.4" fill="currentColor"/></svg><span class="tl">Background</span></button></nav>
     <section class="stage-wrap" id="stageWrap"><svg id="stage" xmlns="${NS}"><defs>${SPLIT_DEF}<pattern id="gridp" patternUnits="userSpaceOnUse" width="20" height="20"><path id="gridpath" d="M20 0H0V20" fill="none" stroke="#9aa5b1" stroke-opacity=".35" stroke-width="1"/></pattern></defs>
-      <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-drag"></g><g id="L-rdrag" pointer-events="none"></g><g id="L-ov"></g><g id="L-peers" pointer-events="none"></g></g></svg>
+      <g id="vp"><rect id="board" x="0" y="0" fill="#ffffff" style="filter:drop-shadow(0 2px 8px rgba(0,0,0,.18))"/><g id="L-img"></g><rect id="gridr" x="0" y="0" fill="url(#gridp)" pointer-events="none"/><g id="L-main"></g><g id="L-drag"></g><g id="L-rdrag" pointer-events="none"></g><g id="L-ov"></g><g id="L-peers" pointer-events="none"></g><g id="L-game" pointer-events="none"></g></g></svg>
       <div class="drawbar" id="drawbar" hidden><div class="seg" id="dbMode" role="radiogroup" aria-label="Drawing mode"><label><input type="radio" name="dbmode" value="click"><span>Click points</span></label><label><input type="radio" name="dbmode" value="free"><span>Freehand</span></label></div>
         <span class="dbinfo" id="dbInfo"></span><button type="button" class="btn sm primary" id="dbEnclose" hidden>Enclose space</button><button type="button" class="btn sm" id="dbFinish" hidden>Finish</button><button type="button" class="btn sm ghost" id="dbCancel">Cancel</button></div>
       ${E.readOnly?`<div class="ro-bar"><span><b>View only.</b> ${esc(ownerLabel(M)==='Admin'?'This plan belongs to an admin.':`This is ${ownerLabel(M)}'s plan.`)} Ask to edit it, or duplicate it to make your own copy.</span><button type="button" class="btn sm" data-ro-ask>Ask to edit</button><button type="button" class="btn sm primary" data-ro-copy>Duplicate to edit</button></div>`:''}
@@ -1200,7 +1207,7 @@ async function roCopy(){try{const n=await copyPlan(M,M.siteId,M.name+' (my copy)
 function bumpIfChanged(){if(!M||!E.changedSinceOpen)return;E.changedSinceOpen=false;E.manualRev=false;}   // the version already went up on the first change
 
 async function leaveEditor(){
-  if(route!=='map'||!M)return;Live.flush();Live.stop();
+  if(route!=='map'||!M)return;if(G.me)G.stop();G.end();Live.flush();Live.stop();
   if(E.readOnly){route='';return;}
   const changed_=E.changedSinceOpen;bumpIfChanged();
   if(changed_){E.siteDirty=true;E.dirty=true;try{await makeThumb();}catch(e){}
@@ -1358,7 +1365,8 @@ function render(){
   const g=$('#gridr');g.setAttribute('width',M.width);g.setAttribute('height',M.height);g.style.display=M.settings.showGrid?'':'none';
   const gp=$('#gridp'),gs=M.settings.grid||20;gp.setAttribute('width',gs);gp.setAttribute('height',gs);$('#gridpath').setAttribute('d',`M${gs} 0H0V${gs}`);
   renderImages();$('#L-main').innerHTML=mainMarkup(false);renderOverlay();Live.soon();
-  {const d=E.drag;if(d?.kind==='move'&&d.fast&&d.dx!==undefined)dragFast(d,d.dx,d.dy);}   // keep sliding after a redraw mid-drag
+  {const d=E.drag;if(d?.kind==='move'&&d.fast&&d.dx!==undefined)dragFast(d,d.dx,d.dy);}
+  if(G.dmg.size)for(const[id,n]of G.dmg){const node=document.querySelector(`#L-main > [data-id="${CSS.escape(id)}"]`);if(!node)continue;const max=G.targets.find(q=>q.id===id)?.hp||(getEl(id)?.type==='wall'?5:3);if(n>=max)node.style.display='none';else node.style.opacity=String(1-n/max*.55);}   // keep sliding after a redraw mid-drag
 }
 function renderOverlay(){
   if(route!=='map')return;const k=E.view.k,sel=getComputedStyle(document.documentElement).getPropertyValue('--sel').trim()||'#1c7ed6';
@@ -2233,6 +2241,7 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
     else if(m.type==='state')this.applyState(m.state);
     else if(m.type==='ops')this.applyOps(m.ops);
     else if(m.type==='drag')this.onDrag(m);
+    else if(m.type==='game')G.onMsg(m.from,m.g);
     else if(m.type==='cursor'){const c=this.cursors.get(m.from);
       if(m.on){if(c&&!c.hide){c.tx=m.x;c.ty=m.y;c.draft=m.draft||null;}else this.cursors.set(m.from,{x:m.x,y:m.y,tx:m.x,ty:m.y,draft:m.draft||null});}
       else if(c?.draft)c.hide=true;else this.cursors.delete(m.from);
@@ -2255,7 +2264,8 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
       for(const g of this.rdrag.values()){const dx=g.tx-g.x,dy=g.ty-g.y;if(Math.abs(dx)+Math.abs(dy)>.2){g.x+=dx*.4;g.y+=dy*.4;moving=true;}else{g.x=g.tx;g.y=g.ty;}g.el.setAttribute('transform',`translate(${r2(g.x)} ${r2(g.y)})`);}
       this.draw();if(moving)this.raf=requestAnimationFrame(step);};this.raf=requestAnimationFrame(step);},
   draw(){const L=$('#L-peers');if(!L)return;L.innerHTML=route==='map'&&M?this.markup(E.view.k):'';},
-  setPeers(list){const before=new Set(this.others().map(p=>p.id));this.peers=list||[];for(const k of [...this.cursors.keys()])if(!this.peers.some(p=>p.id===k))this.cursors.delete(k);
+  setPeers(list){const before=new Set(this.others().map(p=>p.id));this.peers=list||[];
+    for(const id of [...G.players.keys()])if(!G.players.get(id).me&&!this.peers.some(p=>p.id===id))G.players.delete(id);if(G.players.size)G.hud();else if(!G.on&&G.raf)G.end();for(const k of [...this.cursors.keys()])if(!this.peers.some(p=>p.id===k))this.cursors.delete(k);
     const fresh=this.others().filter(p=>!before.has(p.id));if(fresh.length&&before.size+fresh.length>0&&this.greeted)toast(`${fresh.map(p=>p.name).join(', ')} opened this plan too. You'll both see changes as they happen.`);
     if(!this.greeted&&this.others().length)toast(`${this.others().map(p=>p.name).join(', ')} ${this.others().length===1?'is':'are'} on this plan too. You'll see each other's changes as they happen.`);
     this.greeted=true;if(this.others().length)this.baseline();updPeers();renderOverlay();},
@@ -2297,6 +2307,109 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
 function updPeers(){const box=$('#livePeers');if(!box)return;const o=Live.others();
   box.innerHTML=o.map(p=>`<span class="peer" style="--pc:${p.colour}" title="${esc(p.name)} is on this plan too${p.edit?'':' (view only)'}">${p.picture?`<img src="${esc(p.picture)}" alt="" referrerpolicy="no-referrer">`:esc((p.name||'?').slice(0,1).toUpperCase())}</span>`).join('');
   box.title=o.length?`Live: ${o.map(p=>p.name).join(', ')} ${o.length===1?'is':'are'} on this plan with you`:'';box.hidden=!o.length;}
+
+/* ================= PLAY (just for fun) =================
+   Everyone on a plan can press Play to get a little character: WASD to run, Space to jump, arrow keys to shoot.
+   Hits score points; anything on the plan that gets hit is chipped, scorched and eventually blown away -
+   but only on screen: nothing is changed or saved, and it all comes back when the game ends. */
+const GZ=1.8;   // characters are drawn a bit bigger than the plan's own scale so they're easy to see
+const G={on:false,me:null,players:new Map(),bullets:[],parts:[],decals:[],dmg:new Map(),keys:new Set(),raf:null,last:0,sendT:0,shotT:0,targets:[],told:new Set(),bid:0,
+  s(){return (M?.width||1600)/1600;},
+  start(){if(!M||route!=='map')return;const s=this.s(),id=Live.id||'solo';this.on=true;
+    this.me={id,name:meName()||'You',colour:Live.colour||'#e8590c',x:0,y:0,ang:0,z:0,vz:0,hp:100,alive:true,score:this.players.get(id)?.score||0,me:true};
+    this.spawn();this.players.set(id,this.me);this.buildTargets();this.hud();this.loop();this.send({t:'st',...this.pub()},true);
+    $('[data-top="game"]')?.classList.add('on');toast('Game on! WASD to run, Space to jump, arrow keys to shoot. Esc or the controller button to stop. Nothing on the plan is really changed.');},
+  stop(){if(!this.me)return;this.send({t:'leave'},true);this.players.delete(this.me.id);this.me=null;this.on=false;this.keys.clear();$('[data-top="game"]')?.classList.remove('on');
+    if(!this.players.size)this.end();else this.hud();},
+  end(){cancelAnimationFrame(this.raf);this.raf=null;this.players.clear();this.bullets=[];this.parts=[];this.decals=[];const hadDmg=this.dmg.size;this.dmg.clear();this.me=null;this.on=false;
+    const L=$('#L-game');if(L)L.innerHTML='';$('#gameHud')?.remove();if(hadDmg&&route==='map')render();},
+  spawn(){const s=this.s(),m=40*s;let best=null;for(let i=0;i<20;i++){const p={x:m+Math.random()*(M.width-2*m),y:m+Math.random()*(M.height-2*m)};
+      const d=Math.min(...[...this.players.values()].filter(q=>q!==this.me&&q.alive).map(q=>Math.hypot(q.x-p.x,q.y-p.y)),1e9);if(!best||d>best.d)best={...p,d};}
+    Object.assign(this.me,{x:best.x,y:best.y,z:0,vz:0,hp:100,alive:true,deadT:0});},
+  pub(){const m=this.me;return{x:r2(m.x),y:r2(m.y),ang:r2(m.ang),z:r2(m.z),hp:m.hp,alive:m.alive,score:m.score,name:m.name,colour:m.colour};},
+  send(g,force){if(!Live.others().length)return;const now=performance.now();if(!force&&now-this.sendT<66)return;this.sendT=now;Live.post({type:'game',g});},
+  /* everything on the plan a bullet can hit (rooms' fills, the background and very big things are skipped) */
+  buildTargets(){const s=this.s(),big=M.width*M.height*.3;this.targets=[];
+    for(const e of M.elements){if(this.dmg.get(e.id)>=3)continue;if(e.type==='zone'||(e.type==='image'&&(e.bg||e.locked)))continue;
+      if(e.type==='wall'||e.type==='line'||e.type==='arrow'){this.targets.push({id:e.id,seg:[e.x1,e.y1,e.x2,e.y2],r:Math.max(3*s,(e.w||e.sw||2)/2),hp:e.type==='wall'?5:3});continue;}
+      const b=e.type==='svg'?e.bb:bboxOf(e);if(!b||!(b.w||b.h)||b.w*b.h>big)continue;this.targets.push({id:e.id,b,hp:3});}},
+  hitTarget(x,y){for(const t of this.targets){if(t.seg){const[a,b,c,d]=t.seg,L2=(c-a)**2+(d-b)**2||1,u=clamp(((x-a)*(c-a)+(y-b)*(d-b))/L2,0,1);if(Math.hypot(x-(a+u*(c-a)),y-(b+u*(d-b)))<=t.r)return t;}
+      else if(x>=t.b.x-1&&x<=t.b.x+t.b.w+1&&y>=t.b.y-1&&y<=t.b.y+t.b.h+1)return t;}return null;},
+  damage(id,x,y,fromNet){const n=(this.dmg.get(id)||0)+1;this.dmg.set(id,n);const t=this.targets.find(q=>q.id===id),max=t?.hp||3;
+    const node=document.querySelector(`#L-main > [data-id="${CSS.escape(id)}"]`)||document.querySelector(`#L-img [data-id="${CSS.escape(id)}"]`);
+    this.decals.push({x,y,r:(3+Math.random()*3)*this.s(),rot:Math.random()*360});if(this.decals.length>400)this.decals.shift();
+    this.burst(x,y,'#6b5b4b',6,.6);
+    if(n>=max){if(node)node.style.display='none';this.targets=this.targets.filter(q=>q.id!==id);const b=t?.b||{x:x-10,y:y-10,w:20,h:20};this.burst(b.x+b.w/2,b.y+b.h/2,'#f08c00',22,1.4);this.burst(b.x+b.w/2,b.y+b.h/2,'#495057',16,1);}
+    else if(node)node.style.opacity=String(1-n/max*.55);
+    if(!fromNet)this.send({t:'dmg',id,x:r2(x),y:r2(y)},true);},
+  burst(x,y,col,n,pow){const s=this.s();for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,v=(40+Math.random()*160)*s*pow;this.parts.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:.5+Math.random()*.5,max:1,col,r:(1+Math.random()*2.5)*s});}},
+  shoot(){const m=this.me,s=this.s(),tip=18*s,v=820*s,id=m.id+':'+(++this.bid);
+    const b={id,owner:m.id,x:m.x+Math.cos(m.ang)*tip,y:m.y+Math.sin(m.ang)*tip,vx:Math.cos(m.ang)*v,vy:Math.sin(m.ang)*v,life:1.1};this.bullets.push(b);
+    this.send({t:'shot',id,x:r2(b.x),y:r2(b.y),vx:r2(b.vx),vy:r2(b.vy)},true);},
+  die(by){const m=this.me;m.alive=false;m.deadT=performance.now();m.hp=0;this.burst(m.x,m.y,m.colour,30,1.6);this.burst(m.x,m.y,'#c92a2a',14,1);
+    const k=this.players.get(by);if(k)k.score=(k.score||0)+1;this.send({t:'dead',by},true);this.hud();setTimeout(()=>this.hud(),1100);},
+  respawn(){if(!this.me)return;this.spawn();this.send({t:'st',...this.pub()},true);this.hud();},
+  onMsg(from,g){if(!M||!g)return;let p=this.players.get(from);const peer=Live.peers.find(x=>x.id===from);
+    if(g.t==='leave'){this.players.delete(from);if(!this.players.size)this.end();else this.hud();return;}
+    if(!p){if(g.t!=='st')return;p={id:from,x:g.x,y:g.y,tx:g.x,ty:g.y,ang:g.ang,z:0,hp:100,alive:true,score:0};this.players.set(from,p);
+      if(!this.told.has(from)&&!this.on){this.told.add(from);toast(`${g.name||peer?.name||'Someone'} started a game on this plan. Press the controller button at the top to join in.`);}
+      if(!this.targets.length)this.buildTargets();this.loop();}
+    if(g.t==='st'){const wasDead=!p.alive;Object.assign(p,{tx:g.x,ty:g.y,ang:g.ang,z:g.z,hp:g.hp,score:g.score??p.score,name:g.name,colour:g.colour});
+      if(g.alive&&wasDead){p.x=g.x;p.y=g.y;}p.alive=g.alive;if(wasDead!==!g.alive)this.hud();}
+    else if(g.t==='shot')this.bullets.push({id:g.id,owner:from,x:g.x,y:g.y,vx:g.vx,vy:g.vy,life:1.1});
+    else if(g.t==='dmg'){if(!this.targets.length)this.buildTargets();this.damage(g.id,g.x,g.y,true);}
+    else if(g.t==='dead'){p.alive=false;p.deadT=performance.now();this.burst(p.x,p.y,p.colour||'#e8590c',30,1.6);const k=this.players.get(g.by);if(k)k.score=(k.score||0)+1;this.hud();}},
+  loop(){if(this.raf)return;this.last=performance.now();const step=t=>{this.raf=null;if(route!=='map'||!M){this.end();return;}
+      const dt=Math.min(.05,(t-this.last)/1000);this.last=t;this.tick(dt,t);this.draw(t);if(this.players.size||this.parts.length)this.raf=requestAnimationFrame(step);};
+    this.raf=requestAnimationFrame(step);},
+  tick(dt,t){const s=this.s(),m=this.me,K=this.keys,R=12*s*GZ;
+    if(m&&m.alive){let mx=(K.has('d')?1:0)-(K.has('a')?1:0),my=(K.has('s')?1:0)-(K.has('w')?1:0);const L=Math.hypot(mx,my);
+      if(L){mx/=L;my/=L;m.x=clamp(m.x+mx*260*s*dt,R,M.width-R);m.y=clamp(m.y+my*260*s*dt,R,M.height-R);}
+      let ax=(K.has('arrowright')?1:0)-(K.has('arrowleft')?1:0),ay=(K.has('arrowdown')?1:0)-(K.has('arrowup')?1:0);
+      if(!ax&&!ay&&this.aimQ){ax=this.aimQ[0];ay=this.aimQ[1];}this.aimQ=null;   // a quick tap still fires
+      if(ax||ay){m.ang=Math.atan2(ay,ax);if(t-this.shotT>170){this.shotT=t;this.shoot();}}else if(L)m.ang=Math.atan2(my,mx);
+      if((K.has(' ')||this.jumpQ)&&m.z<=0){m.vz=260*s;}this.jumpQ=false;m.vz-=900*s*dt;m.z=Math.max(0,m.z+m.vz*dt);if(m.z===0&&m.vz<0)m.vz=0;
+      this.send({t:'st',...this.pub()});}
+    for(const p of this.players.values())if(!p.me&&p.tx!==undefined){p.x+=(p.tx-p.x)*Math.min(1,dt*14);p.y+=(p.ty-p.y)*Math.min(1,dt*14);}
+    for(const b of this.bullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;
+      if(b.x<0||b.y<0||b.x>M.width||b.y>M.height){b.life=0;continue;}
+      for(const p of this.players.values()){if(p.id===b.owner||!p.alive||p.z>6*s)continue;if(Math.hypot(p.x-b.x,p.y-b.y)<R){b.life=0;this.burst(b.x,b.y,'#c92a2a',8,.8);
+        if(p.me){p.hp-=34;if(p.hp<=0)this.die(b.owner);else this.send({t:'st',...this.pub()},true);}break;}}
+      if(b.life>0){const tg=this.hitTarget(b.x,b.y);if(tg){b.life=0;if(b.owner===m?.id)this.damage(tg.id,b.x,b.y);else this.burst(b.x,b.y,'#6b5b4b',4,.5);}}}
+    this.bullets=this.bullets.filter(b=>b.life>0);
+    for(const q of this.parts){q.x+=q.vx*dt;q.y+=q.vy*dt;q.vx*=.92;q.vy*=.92;q.life-=dt;}this.parts=this.parts.filter(q=>q.life>0);},
+  /* a little round runner with a gun, a name, and a health bar; flattened with crosses for eyes when it's out */
+  char(p,t){const s=this.s()*GZ,R=12*s,col=p.colour||'#e8590c',dead=!p.alive,since=dead?(t-(p.deadT||t))/1000:0;
+    if(dead&&since>2.5)return `<g transform="translate(${r2(p.x)} ${r2(p.y)})" opacity=".45"><path d="M${r2(-5*s)} ${r2(-9*s)}h${r2(10*s)}M0 ${r2(-14*s)}v${r2(20*s)}" stroke="#495057" stroke-width="${r2(2.5*s)}" stroke-linecap="round"/><text y="${r2(18*s)}" text-anchor="middle" font-family="${MAPFONT}" font-size="${r2(9*s)}" font-weight="700" fill="#495057">${esc(p.name||'')}</text></g>`;
+    const sc=dead?Math.max(.2,1-since*.9):1+(p.z||0)/(90*s),spin=dead?since*540:0,op=dead?Math.max(0,1-since/1.2):1,deg=(p.ang||0)*180/Math.PI;
+    const eye=dead?`<path d="M${r2(-6*s)} ${r2(-5*s)}l${r2(4*s)} ${r2(4*s)}m0 ${r2(-4*s)}l${r2(-4*s)} ${r2(4*s)}M${r2(2*s)} ${r2(-5*s)}l${r2(4*s)} ${r2(4*s)}m0 ${r2(-4*s)}l${r2(-4*s)} ${r2(4*s)}" stroke="#111" stroke-width="${r2(1.4*s)}"/>`
+      :`<circle cx="${r2(-4*s)}" cy="${r2(-3*s)}" r="${r2(2.6*s)}" fill="#fff"/><circle cx="${r2(4*s)}" cy="${r2(-3*s)}" r="${r2(2.6*s)}" fill="#fff"/><circle cx="${r2(-4*s+Math.cos(p.ang||0)*1.2*s)}" cy="${r2(-3*s+Math.sin(p.ang||0)*1.2*s)}" r="${r2(1.3*s)}" fill="#111"/><circle cx="${r2(4*s+Math.cos(p.ang||0)*1.2*s)}" cy="${r2(-3*s+Math.sin(p.ang||0)*1.2*s)}" r="${r2(1.3*s)}" fill="#111"/>`;
+    const hp=dead?'':`<rect x="${r2(-R)}" y="${r2(-R-8*s)}" width="${r2(2*R)}" height="${r2(3*s)}" rx="${r2(1.5*s)}" fill="#0005"/><rect x="${r2(-R)}" y="${r2(-R-8*s)}" width="${r2(2*R*Math.max(0,p.hp??100)/100)}" height="${r2(3*s)}" rx="${r2(1.5*s)}" fill="${(p.hp??100)>50?'#2b8a3e':(p.hp??100)>25?'#f08c00':'#c92a2a'}"/>`;
+    const shadow=`<ellipse cx="0" cy="${r2(R*.9)}" rx="${r2(R*(1-(p.z||0)/(200*s)))}" ry="${r2(R*.35)}" fill="#000" opacity=".18"/>`;
+    return `<g transform="translate(${r2(p.x)} ${r2(p.y)})" opacity="${r2(op)}">${dead?'':shadow}<g transform="translate(0 ${r2(-(p.z||0))}) scale(${r2(sc)}) rotate(${r2(spin)})">
+      <g transform="rotate(${r2(deg)})"><rect x="${r2(4*s)}" y="${r2(-2.2*s)}" width="${r2(15*s)}" height="${r2(4.4*s)}" rx="${r2(1.5*s)}" fill="#343a40"/><rect x="${r2(6*s)}" y="${r2(1*s)}" width="${r2(4*s)}" height="${r2(5*s)}" rx="1" fill="#495057"/></g>
+      <circle r="${r2(R)}" fill="${col}" stroke="#fff" stroke-width="${r2(2*s)}"/>${eye}<path d="M${r2(-4*s)} ${r2(4*s)}q${r2(4*s)} ${r2(dead?-2*s:3*s)} ${r2(8*s)} 0" fill="none" stroke="#111" stroke-width="${r2(1.3*s)}" stroke-linecap="round"/></g>
+      ${hp}<text y="${r2(R+14*s)}" text-anchor="middle" font-family="${MAPFONT}" font-size="${r2(9.5*s)}" font-weight="700" fill="#fff" stroke="${col}" stroke-width="${r2(3*s)}" paint-order="stroke">${esc(p.name||'')} · ${p.score||0}</text></g>`;},
+  draw(t){const L=$('#L-game');if(!L)return;const s=this.s();let h='';
+    for(const d of this.decals)h+=`<g transform="translate(${r2(d.x)} ${r2(d.y)}) rotate(${r2(d.rot)})" pointer-events="none"><circle r="${r2(d.r*1.8)}" fill="#3b2f2f" opacity=".14"/><circle r="${r2(d.r)}" fill="#2b2222" opacity=".5"/><path d="M0 0l${r2(d.r*2.2)} ${r2(d.r*.6)}M0 0l${r2(-d.r*1.6)} ${r2(d.r*1.5)}M0 0l${r2(d.r*.4)} ${r2(-d.r*2)}" stroke="#2b2222" stroke-width="${r2(.7*s)}" opacity=".55"/></g>`;
+    {const s2=s*1.4;for(const b of this.bullets)h+=`<line x1="${r2(b.x)}" y1="${r2(b.y)}" x2="${r2(b.x-b.vx*.025)}" y2="${r2(b.y-b.vy*.025)}" stroke="#ffd43b" stroke-width="${r2(3*s2)}" stroke-linecap="round"/><circle cx="${r2(b.x)}" cy="${r2(b.y)}" r="${r2(2.2*s2)}" fill="#fab005" stroke="#e67700" stroke-width="${r2(.6*s2)}"/>`;}
+    if(0)for(const b of this.bullets)h+=`<line x1="${r2(b.x)}" y1="${r2(b.y)}" x2="${r2(b.x-b.vx*.025)}" y2="${r2(b.y-b.vy*.025)}" stroke="#ffd43b" stroke-width="${r2(3*s)}" stroke-linecap="round"/><circle cx="${r2(b.x)}" cy="${r2(b.y)}" r="${r2(2.2*s)}" fill="#fab005" stroke="#e67700" stroke-width="${r2(.6*s)}"/>`;
+    for(const p of this.players.values())h+=this.char(p,t);
+    for(const q of this.parts)h+=`<circle cx="${r2(q.x)}" cy="${r2(q.y)}" r="${r2(q.r)}" fill="${q.col}" opacity="${r2(Math.min(1,q.life*1.6))}"/>`;
+    L.innerHTML=h;},
+  hud(){const wrap=$('#stageWrap');if(!wrap)return;let el=$('#gameHud');if(!this.players.size){el?.remove();return;}
+    if(!el){el=document.createElement('div');el.id='gameHud';el.className='game-hud';wrap.appendChild(el);}
+    const list=[...this.players.values()].sort((a,b)=>(b.score||0)-(a.score||0)),m=this.me,dead=m&&!m.alive,ready=dead&&performance.now()-(m.deadT||0)>1000;
+    el.innerHTML=`<div class="gh-title">Scores</div>${list.map(p=>`<div class="gh-row${p.me?' me':''}"><i style="background:${p.colour}"></i><span>${esc(p.name||'?')}${p.me?' (you)':''}${p.alive?'':' 💀'}</span><b>${p.score||0}</b></div>`).join('')}
+      ${m?`<div class="gh-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> run · <kbd>Space</kbd> jump · arrows shoot · <kbd>Esc</kbd> stop</div>`:'<div class="gh-keys">Press the controller button at the top to join.</div>'}
+      ${dead?`<button class="btn primary gh-respawn" data-respawn ${ready?'':'disabled'}>${ready?'Respawn':'You got tagged…'}</button>`:''}`;
+    el.querySelector('[data-respawn]')?.addEventListener('click',()=>this.respawn());}};
+document.addEventListener('keydown',e=>{if(!G.on||!G.me||typing(e.target))return;const k=e.key.toLowerCase();
+  if(k==='escape'){e.preventDefault();e.stopImmediatePropagation();G.stop();return;}
+  if(['w','a','s','d',' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){e.preventDefault();e.stopImmediatePropagation();G.keys.add(k);
+    if(k===' ')G.jumpQ=true;const A={arrowright:[1,0],arrowleft:[-1,0],arrowdown:[0,1],arrowup:[0,-1]}[k];if(A)G.aimQ=A;}},true);
+document.addEventListener('keyup',e=>{if(!G.on)return;const k=e.key.toLowerCase();if(G.keys.delete(k)){e.preventDefault();e.stopImmediatePropagation();}},true);
+window.addEventListener('blur',()=>G.keys.clear());
 
 /* ================= SATELLITE ================= */
 async function openSatellite(){
@@ -2508,6 +2621,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='requests')openRequests();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
+  ['v21','24 Oct 2026',['Play: press the controller button to get a little character and tag each other on the plan (WASD run, Space jump, arrow keys shoot), with live scores and respawning. Anything hit gets scorched or blown away on screen only: nothing is changed or saved']],
   ['v20','24 Oct 2026',['You stay signed in until you sign out (no more sign-out after 5 minutes)','Access requests: search, Waiting / Can edit / All filters, and lists that scroll inside the window','Other people\'s pointers move smoothly','Smooth dragging: what you move slides without redrawing the whole plan, and glides on other people\'s screens too','Dragging snaps to a hidden grid 5 times finer than the one you see, so it glides instead of jumping']],
   ['v19','24 Oct 2026',['Live editing: when two or more people have the same plan open, everyone sees changes and each other\'s pointers as they happen','Ask to edit someone else\'s site or plan; the owner or an admin approves it under Access requests','Walls stay visible while you draw them, with a dot on every corner','Others on the plan see walls, fences, lines and boxes while you are still drawing them','Shapes get room-style fill colours; text align removed; no dashed outline around selected items']],
   ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved)','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
