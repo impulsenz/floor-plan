@@ -1334,6 +1334,8 @@ function renderImages(){
   for(const n of [...layer.children])if(!keep.has(n.getAttribute('data-id')))n.remove();
 }
 /* redraw at most once per screen frame while dragging (several mouse moves can arrive between frames) */
+/* moving things snaps to a hidden grid 5 times finer than the one you see, so dragging glides instead of jumping */
+const dragStep=()=>Math.max(1,(M.settings.grid||20)/5);
 function rafRender(){if(E.rafR)return;E.rafR=requestAnimationFrame(()=>{E.rafR=null;render();});}
 /* Dragging things: lift their drawing onto its own layer once, then just slide that layer as the mouse moves,
    so the rest of the plan isn't redrawn. Falls back to a once-per-frame redraw when other walls have to stretch. */
@@ -1589,7 +1591,7 @@ function duplicateSel(atMouse){
   const src=M.elements.filter(e=>want.has(e.id));
   let offX=M.settings.grid||20,offY=offX;const c=E.cursor,bb=groupBox(src);
   if(atMouse&&c&&bb&&c.x>=0&&c.y>=0&&c.x<=M.width&&c.y<=M.height){offX=c.x-(bb.x+bb.w/2);offY=c.y-(bb.y+bb.h/2);
-    if(M.settings.snap&&!src.every(o=>['station','text','obj','door'].includes(o.type))){const g=M.settings.grid||20;offX=Math.round(offX/g)*g;offY=Math.round(offY/g)*g;}
+    if(M.settings.snap&&!src.every(o=>['station','text','obj','door'].includes(o.type))){const g=dragStep();offX=Math.round(offX/g)*g;offY=Math.round(offY/g)*g;}
     if(bb.w<=M.width)offX=clamp(offX,-bb.x,M.width-(bb.x+bb.w));if(bb.h<=M.height)offY=clamp(offY,-bb.y,M.height-(bb.y+bb.h));}
   const off=null;
   for(const e of src){if(e.type==='door')continue;const n=clone(e);n.id=uid();map.set(e.id,n.id);moveEl(n,offX,offY);if(n.type==='station')n.num=nextNum(n.code,out.filter(o=>o.type==='station'&&o.code===n.code).map(o=>o.num));out.push(n);}
@@ -1691,7 +1693,7 @@ function onMove(e){
     case 'pan':E.view.x=d.vx+e.clientX-d.sx;E.view.y=d.vy+e.clientY-d.sy;applyView();break;
     case 'move':{let dx=p.x-d.start.x,dy=p.y-d.start.y;if(!d.pushed){if(Math.hypot(dx,dy)*k<3)return;pushHist();d.pushed=true;}
       const onlyFree=[...d.orig.values()].every(o=>o.type==='station'||o.type==='text'||o.type==='door'||o.type==='obj');
-      if(M.settings.snap&&!e.altKey&&!onlyFree){const g=M.settings.grid;dx=Math.round(dx/g)*g;dy=Math.round(dy/g)*g;}
+      if(M.settings.snap&&!e.altKey&&!onlyFree){const g=dragStep();dx=Math.round(dx/g)*g;dy=Math.round(dy/g)*g;}
       const bb=d.bb;if(bb){if(bb.w<=M.width)dx=clamp(dx,-bb.x,M.width-(bb.x+bb.w));if(bb.h<=M.height)dy=clamp(dy,-bb.y,M.height-(bb.y+bb.h));}
       for(const[id,o]of d.orig){const el=getEl(id);if(!el)continue;
         if(el.type==='door'){if(d.orig.size===1){const nw=nearestWall(p);if(nw){el.wall=nw.wall.id;el.t=clampT(nw.t,nw.wall,el.width);}}continue;}
