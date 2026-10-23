@@ -1432,7 +1432,7 @@ const HINTS={
   calib:'Drag along something with a known length, such as a wall or a door.',
 };
 function setTool(t,cat){
-  if(E.chain)finishChain(false);
+  if(E.chain)finishChain(false);if(Live.hadDraft)setTimeout(()=>Live.cursor(E.cursor,true,true));
   E.tool=t;E.cat=t==='station'?cat:null;E.snapHit=null;E.chain=null;
   const grp=groupOf(t);if(grp&&E.last[grp]!==t){E.last[grp]=t;const gb=$(`#tools [data-group="${grp}"]`);if(gb)gb.outerHTML=groupBtn(grp);}
   $$('#tools .tool').forEach(b=>b.classList.toggle('on',!!(b.dataset.tool===t||(b.dataset.group&&b.dataset.group===grp))));
@@ -1480,14 +1480,14 @@ function updDrawbar(){const bar=$('#drawbar');if(!bar)return;const show=route===
   $('#dbInfo').textContent=E.chain?`${n} node${n===1?'':'s'}`:(E.freehand&&freehandOK(E.tool)?'Hold and drag to draw':'Click to place nodes');}
 function chainClick(e,p){
   const k=E.view.k,last=E.chain?.pts[E.chain.pts.length-1],q=snapP(p,e,last);
-  if(!E.chain){E.chain={pts:[q]};renderOverlay();return;}
+  if(!E.chain){E.chain={pts:[q]};renderOverlay();Live.cursor(E.cursor,true,true);return;}
   if(dist(q,last)*k<5){finishChain(false);return;}
   setTimeout(updDrawbar);
   if(E.chain.pts.length>=2&&dist(q,E.chain.pts[0])*k<9){E.chain.pts.push({...E.chain.pts[0]});finishChain(true);return;}
-  E.chain.pts.push(q);updDrawbar();renderOverlay();
+  E.chain.pts.push(q);updDrawbar();renderOverlay();Live.cursor(E.cursor,true,true);
 }
 function finishChain(closed){
-  const ch=E.chain;E.chain=null;E.chainCur=null;setTimeout(updDrawbar);if(!ch)return;const pts=ch.pts;
+  const ch=E.chain;E.chain=null;E.chainCur=null;setTimeout(updDrawbar);setTimeout(()=>Live.cursor(E.cursor,true,true));if(!ch)return;const pts=ch.pts;
   if(E.tool==='line'&&pts.length>=2){pushHist();const st=E.style,made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'line',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,stroke:st.stroke,sw:st.sw,dash:st.dash}));E.sel=new Set(made.map(m=>m.id));changed();return;}
   if(isWallTool(E.tool)&&pts.length>=2){pushHist();const ws=chainStyle(),made=[];for(let i=0;i<pts.length-1;i++)if(dist(pts[i],pts[i+1])>1)made.push(add({type:'wall',x1:pts[i].x,y1:pts[i].y,x2:pts[i+1].x,y2:pts[i+1].y,w:ws.w,color:ws.color,dash:ws.dash,ls:ws.ls}));changed();
     if(closed&&pts.length>=4){const u=pts.slice(0,-1),xs=u.map(p=>p.x),ys=u.map(p=>p.y),bx=Math.min(...xs),by=Math.min(...ys);nameRoom({x:bx,y:by,w:Math.max(...xs)-bx,h:Math.max(...ys)-by},u,made,ws.dash);}}
@@ -1598,7 +1598,7 @@ function bindEditor(){
   /* Enclose and Finish keep what was drawn; Cancel throws it away. All three put the drawing tool away (Select). */
   $('#dbEnclose').onclick=()=>{encloseChain();setTool('select');};
   $('#dbFinish').onclick=()=>{finishChain(false);setTool('select');};
-  $('#dbCancel').onclick=()=>{E.chain=null;E.chainCur=null;setTool('select');renderOverlay();};
+  $('#dbCancel').onclick=()=>{E.chain=null;E.chainCur=null;setTool('select');renderOverlay();Live.cursor(E.cursor,true,true);};
   $('#panel .tabs').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)showTab(b.dataset.tab);});
   const tb=$('#tabBody');tb.addEventListener('input',onPanelInput);tb.addEventListener('change',onPanelChange);tb.addEventListener('click',onPanelClick);
   const wrap=$('#stageWrap');let dz=null;
@@ -1680,7 +1680,7 @@ function onMove(e){
   }
 }
 function onUp(){
-  const d=E.drag;E.drag=null;$('#stage').classList.remove('panning');if(!d)return;
+  const d=E.drag;E.drag=null;$('#stage').classList.remove('panning');if(!d)return;if(d.kind==='draw'||d.kind==='free')setTimeout(()=>Live.cursor(E.cursor,true,true));
   if(d.kind==='marquee'){const x=Math.min(d.a.x,d.b.x),y=Math.min(d.a.y,d.b.y),w=Math.abs(d.b.x-d.a.x),h=Math.abs(d.b.y-d.a.y);
     if(w*E.view.k>3||h*E.view.k>3){for(const el of M.elements){if(el.type==='image'&&el.locked)continue;const b=bboxOf(el);if(b.x<x+w&&b.x+b.w>x&&b.y<y+h&&b.y+b.h>y)E.sel.add(el.id);}if(E.sel.size)showTab('props');}
     renderAll();return;}
@@ -2191,7 +2191,7 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
     else if(m.type==='need-state')this.sendState(m.for);
     else if(m.type==='state')this.applyState(m.state);
     else if(m.type==='ops')this.applyOps(m.ops);
-    else if(m.type==='cursor'){if(m.on)this.cursors.set(m.from,{x:m.x,y:m.y});else this.cursors.delete(m.from);renderOverlay();}},
+    else if(m.type==='cursor'){if(m.on)this.cursors.set(m.from,{x:m.x,y:m.y,draft:m.draft||null});else{const c=this.cursors.get(m.from);if(c?.draft)this.cursors.set(m.from,{...c,hide:true});else this.cursors.delete(m.from);}renderOverlay();}},
   setPeers(list){const before=new Set(this.others().map(p=>p.id));this.peers=list||[];for(const k of [...this.cursors.keys()])if(!this.peers.some(p=>p.id===k))this.cursors.delete(k);
     const fresh=this.others().filter(p=>!before.has(p.id));if(fresh.length&&before.size+fresh.length>0&&this.greeted)toast(`${fresh.map(p=>p.name).join(', ')} opened this plan too. You'll both see changes as they happen.`);
     if(!this.greeted&&this.others().length)toast(`${this.others().map(p=>p.name).join(', ')} ${this.others().length===1?'is':'are'} on this plan too. You'll see each other's changes as they happen.`);
@@ -2215,8 +2215,21 @@ const Live={ctl:null,id:null,mapId:null,peers:[],cursors:new Map(),base:new Map(
       if(i>=0)M.elements[i]=el;else M.elements.splice(Math.min(u.at??M.elements.length,M.elements.length),0,el);this.base.set(el.id,JSON.stringify(el));if(E.sel.has(el.id))touchSel=true;}
     if(o.props){Object.assign(M,o.props);this.props=this.propsStr();E.changedSinceOpen=true;crumbs([['Sites','#/'],[site?.name||'Site','#/site/'+M.siteId],[M.name,'#/map/'+M.id]]);}
     render();if(touchSel||o.props)renderPanel();},
-  cursor(p,on){if(!this.others().length||!M)return;const now=Date.now();if(on&&now-this.curT<140)return;this.curT=now;this.post({type:'cursor',x:r2(p?.x||0),y:r2(p?.y||0),on});},
+  /* what I'm in the middle of drawing (wall/fence/line nodes, a room or shape being dragged out), so the others see it too */
+  draft(){const d=E.drag;if(E.chain?.pts?.length){const wt=isWallTool(E.tool),cs=wt?chainStyle():null;return{k:'chain',tool:E.tool,pts:E.chain.pts.map(p=>[r2(p.x),r2(p.y)]),stroke:E.chain.stroke?.map(p=>[r2(p.x),r2(p.y)]),cur:E.chainCur?[r2(E.chainCur.x),r2(E.chainCur.y)]:null,w:wt?cs.w:2,color:wt?cs.color:null,dash:wt?!!cs.dash:false};}
+    if(d?.kind==='draw')return{k:'box',tool:E.tool,a:[r2(d.a.x),r2(d.a.y)],b:[r2(d.b.x),r2(d.b.y)],w:E.tool==='room'?E.wallStyle.w:2};return null;},
+  cursor(p,on,force){if(!this.others().length||!M)return;const now=Date.now();
+    if(on&&!force&&now-this.curT<140){if(!this.curLater)this.curLater=setTimeout(()=>{this.curLater=null;this.cursor(E.cursor,!!E.cursor,true);},140-(now-this.curT));return;}   // last position always gets sent
+    clearTimeout(this.curLater);this.curLater=null;this.curT=now;const draft=E.readOnly?null:this.draft();
+    if(!on&&!draft&&!this.hadDraft&&p===null){this.post({type:'cursor',x:0,y:0,on:false});return;}this.hadDraft=!!draft;p=p||E.cursor||{x:0,y:0};this.post({type:'cursor',x:r2(p.x),y:r2(p.y),on:on||!!draft,draft});},
   markup(k){let s='';for(const[id,c]of this.cursors){const p=this.peers.find(x=>x.id===id);if(!p)continue;const col=p.colour||'#e8590c';
+    const dr=c.draft;if(dr?.k==='chain'){const pts=[...dr.pts,...(dr.stroke||[])],line=pts.map(q=>q.join(',')).join(' '),sw=r2(dr.color?dr.w:2/k),da=dr.dash?` stroke-dasharray="${r2(Math.max(4,dr.w*2.2))} ${r2(Math.max(3,dr.w*1.6))}"`:'';
+      if(pts.length>1)s+=`<polyline points="${line}" fill="none" stroke="${dr.color||col}" stroke-opacity=".85" stroke-width="${sw}" stroke-linejoin="round"${da} pointer-events="none"/>`;
+      const l=dr.pts[dr.pts.length-1];if(dr.cur&&!dr.stroke)s+=`<line x1="${l[0]}" y1="${l[1]}" x2="${dr.cur[0]}" y2="${dr.cur[1]}" stroke="${dr.color||col}" stroke-opacity=".4" stroke-width="${sw}"${da} pointer-events="none"/>`;
+      for(const q of dr.pts)s+=`<circle cx="${q[0]}" cy="${q[1]}" r="${r2(4/k)}" fill="#fff" stroke="${col}" stroke-width="${r2(1.6/k)}" pointer-events="none"/>`;}
+    if(dr?.k==='box'){const x=Math.min(dr.a[0],dr.b[0]),y=Math.min(dr.a[1],dr.b[1]),w=Math.abs(dr.b[0]-dr.a[0]),h=Math.abs(dr.b[1]-dr.a[1]);
+      s+=dr.tool==='ellipse'?`<ellipse cx="${x+w/2}" cy="${y+h/2}" rx="${w/2}" ry="${h/2}" fill="none" stroke="${col}" stroke-width="${r2(2/k)}" pointer-events="none"/>`:['line','arrow','dim','calib'].includes(dr.tool)?`<line x1="${dr.a[0]}" y1="${dr.a[1]}" x2="${dr.b[0]}" y2="${dr.b[1]}" stroke="${col}" stroke-width="${r2(2/k)}" pointer-events="none"/>`:`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}" fill-opacity=".06" stroke="${col}" stroke-opacity=".7" stroke-width="${dr.tool==='room'?dr.w:r2(2/k)}" pointer-events="none"/>`;}
+    if(c.hide)continue;
     s+=`<g transform="translate(${c.x} ${c.y}) scale(${r2(1/k)})" pointer-events="none"><path d="M0 0L0 16L4.5 12L8 19L10.5 18L7 11L13 11Z" fill="${col}" stroke="#fff" stroke-width="1.2"/><text x="14" y="24" font-family="${MAPFONT}" font-size="11.5" font-weight="700" fill="#fff" stroke="${col}" stroke-width="4" paint-order="stroke" stroke-linejoin="round">${esc(p.name)}</text></g>`;}return s;}};
 function updPeers(){const box=$('#livePeers');if(!box)return;const o=Live.others();
   box.innerHTML=o.map(p=>`<span class="peer" style="--pc:${p.colour}" title="${esc(p.name)} is on this plan too${p.edit?'':' (view only)'}">${p.picture?`<img src="${esc(p.picture)}" alt="" referrerpolicy="no-referrer">`:esc((p.name||'?').slice(0,1).toUpperCase())}</span>`).join('');
@@ -2431,7 +2444,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='requests')openRequests();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
-  ['v19','24 Oct 2026',['Live editing: when two or more people have the same plan open, everyone sees changes and each other\'s pointers as they happen','Ask to edit someone else\'s site or plan; the owner or an admin approves it under Access requests','Walls stay visible while you draw them, with a dot on every corner','Shapes get room-style fill colours; text align removed; no dashed outline around selected items']],
+  ['v19','24 Oct 2026',['Live editing: when two or more people have the same plan open, everyone sees changes and each other\'s pointers as they happen','Ask to edit someone else\'s site or plan; the owner or an admin approves it under Access requests','Walls stay visible while you draw them, with a dot on every corner','Others on the plan see walls, fences, lines and boxes while you are still drawing them','Shapes get room-style fill colours; text align removed; no dashed outline around selected items']],
   ['v18','24 Oct 2026',['Outline colour for text; ID outline (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved)','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
   ['v17','24 Oct 2026',['Background button moved to the left toolbar','Print button next to Export prints the plan straight from the browser on one A4 page']],
   ['v16','24 Oct 2026',['Words drawn one letter at a time in an SVG come in as one editable text (straight or turned)','Stations tab: icon and text size for every station on the plan; single stations can still have their own']],
