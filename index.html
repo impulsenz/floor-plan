@@ -281,6 +281,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .save-pill .spin{width:11px;height:11px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (max-width:720px){.save-pill{max-width:40px;padding:0 9px}.save-pill span{display:none}}
+.srv-info{display:flex;flex-direction:column;gap:3px;font-size:13px}.srv-info>div{display:flex;justify-content:space-between;gap:10px}.srv-info span{color:var(--ink-2)}.srv-info .mono{font-family:var(--f-mono);font-size:11.5px}
 .log{display:flex;flex-direction:column;gap:10px;max-height:52vh;overflow:auto;margin-top:8px}
 .log-e{border:1px solid var(--line);border-radius:8px;padding:8px 12px}
 .log-h{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
@@ -595,6 +596,8 @@ function applyAccent(k){const a=ACCENTS[k]||ACCENTS.orange;let st=document.getEl
 try{applyTheme(localStorage.getItem('psp-theme'));applyAccent(localStorage.getItem('psp-accent'));}catch(e){}
 function toggleTheme(){const cur=document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');Prefs.set('theme',cur==='dark'?'light':'dark');}
 /* Each person's own settings. Saved on the server against their account, so they follow them to any device. */
+/* "Drawn by" is whoever last changed the plan: the signed-in person's name */
+const meName=()=>Store.user?(Store.user.name||Store.user.email.split('@')[0]):(Prefs?.v?.drawnBy||'');
 const PREF_DEF={theme:'system',accent:'orange',drawnBy:'',portrait:false,showGrid:true,snap:true,siteFilter:'all',siteSort:'updated',exportQ:'std'};
 const Prefs={v:{...PREF_DEF},t:null,
   key(){return 'psp-prefs:'+(Store.base||'')+':'+(Store.user?.email||'')},
@@ -657,7 +660,7 @@ const FONTS={'Arial':'Arial, Helvetica, sans-serif','Arial Narrow':'"Arial Narro
 
 function newMap(siteId,name){return{id:uid(),siteId,name,created:Date.now(),updated:Date.now(),width:1600,height:a4Height(1600,!!Prefs.v.portrait),elements:[],scale:null,bgMeta:null,
   furn:{legend:{show:true,x:1320,y:20,s:1},title:{show:true,x:1200,y:950,s:1},north:{show:true,x:60,y:60,rot:0,s:1},scalebar:{show:true,x:40,y:1060,s:1}},
-  settings:{grid:20,snap:Prefs.v.snap!==false,showGrid:Prefs.v.showGrid!==false,marker:10,label:12,preparedBy:Prefs.v.drawnBy||'',revision:'01',department:'',planDate:isoDate(Date.now()),showFrame:true},thumb:null};}
+  settings:{grid:20,snap:Prefs.v.snap!==false,showGrid:Prefs.v.showGrid!==false,marker:10,label:12,preparedBy:meName(),revision:'01',department:'',planDate:isoDate(Date.now()),showFrame:true},thumb:null};}
 function isoDate(t){const d=new Date(t);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function layoutFurn(){const W=M.width,H=M.height,f=M.furn;const s=clamp(Math.min(W,H)/1100,.5,2.2);f.north=f.north||{show:true,rot:0};f.north.s=r2(s);f.north.x=Math.round(46*s);f.north.y=Math.round(46*s);}
 /* The printed sheet = black header band + plan area + bottom information bar. */
@@ -689,8 +692,10 @@ function geom(shape,r){
     default:return `<circle r="${r}" ATTR/>`;
   }
 }
-function shapeSvg(shape,r,fill){const g=geom(shape,r),sw=Math.max(1.2,r*.22);
-  return g.replace('ATTR',`fill="none" stroke="#000" stroke-opacity=".5" stroke-width="${r2(sw+1.6)}" stroke-linejoin="round"`)+g.replace('ATTR',`fill="${fill}" stroke="#fff" stroke-width="${r2(sw)}" stroke-linejoin="round"`);}
+function shapeSvg(shape,r,fill,ring=.22,ringC='#ffffff'){const g=geom(shape,r),sw=ring>0?Math.max(.6,r*ring):0;
+  return (ring>0?g.replace('ATTR',`fill="none" stroke="#000" stroke-opacity=".5" stroke-width="${r2(sw+1.6)}" stroke-linejoin="round"`):'')+g.replace('ATTR',`fill="${fill}" stroke="${ring>0?ringC:'none'}" stroke-width="${r2(sw)}" stroke-linejoin="round"`);}
+/* station outlines: plan-wide, unless a station has its own */
+const stLook=el=>{const st=M.settings;return{halo:el.haloW??st.stHalo??.29,haloC:el.haloC||st.stHaloC||'#ffffff',ring:el.ringW??st.stRing??.22,ringC:el.ringC||st.stRingC||'#ffffff'};};
 const SPLIT_DEF=`<linearGradient id="toxsplit" x1="0" y1="0" x2="1" y2="1"><stop offset=".5" stop-color="${TOX}"/><stop offset=".5" stop-color="${NONTOX}"/></linearGradient>`;
 function splitSvg(shape,r,c){const d=r2(r*.68),a=toxCol(c),b=nonCol(c),id='ts'+a.slice(1)+b.slice(1);
   return `<defs><linearGradient id="${id}" x1="0" y1="0" x2="1" y2="1"><stop offset=".5" stop-color="${a}"/><stop offset=".5" stop-color="${b}"/></linearGradient></defs>`+shapeSvg(shape,r,`url(#${id})`)+`<line x1="${d}" y1="${-d}" x2="${-d}" y2="${d}" stroke="#ffffff" stroke-width="${r2(Math.max(1,r*.16))}" stroke-linecap="round"/>`;}
@@ -805,7 +810,7 @@ function lineMarkup(el,ex){
 }
 function textMarkup(el){
   const lines=String(el.text||' ').split('\n'),ff=FONTS[el.font]||MAPFONT;
-  const hw=el.haloW??(el.halo===false?0:.2),halo=hw>0?` stroke="#ffffff" stroke-width="${r2(el.size*hw)}" paint-order="stroke" stroke-linejoin="round"`:'';
+  const hw=el.haloW??(el.halo===false?0:.2),halo=hw>0?` stroke="${el.haloC||'#ffffff'}" stroke-width="${r2(el.size*hw)}" paint-order="stroke" stroke-linejoin="round"`:'';
   const ts=lines.map((l,i)=>`<tspan x="${r2(el.x)}" dy="${i?1.2:.9}em">${esc(l)||' '}</tspan>`).join('');
   return `<g data-id="${el.id}"${el.rot?` transform="rotate(${r2(el.rot)} ${r2(el.x)} ${r2(el.y)})"`:''}><text x="${r2(el.x)}" y="${r2(el.y)}" font-family="${esc(ff)}" font-size="${el.size}" fill="${el.color}" font-weight="${el.bold?700:400}" font-style="${el.italic?'italic':'normal'}" text-anchor="${el.align||'start'}"${halo}>${ts}</text></g>`;
 }
@@ -829,10 +834,10 @@ function layoutLabels(){
 }
 function stationMarkup(el,ghost){
   const cat=catOf(el.code),r=M.settings.marker*(el.size||1),fs=M.settings.label*(el.tsize??el.size??1),col=stColor(el,cat);
-  const halo=`stroke="#ffffff" stroke-width="${r2(fs/3.5)}" paint-order="stroke" stroke-linejoin="round"`;
+  const lk=ghost?{halo:.29,haloC:'#ffffff',ring:.22,ringC:'#ffffff'}:stLook(el),halo=lk.halo>0?`stroke="${lk.haloC}" stroke-width="${r2(fs*lk.halo)}" paint-order="stroke" stroke-linejoin="round"`:'';
   const type=false?`<text y="${r2(r*1.25+fs*2.05)}" text-anchor="middle" font-family="${MAPFONT}" font-size="${r2(fs*.78)}" fill="#343a40" ${halo}>${esc(el.stype)}</text>`:'';
   const side=ghost?'right':(LABEL_SIDES.get(el.id)||'right'),gap=r*1.25+3;
-  return `<g ${ghost?'opacity=".55"':`data-id="${el.id}"`} transform="translate(${r2(el.x)} ${r2(el.y)})">${shapeSvg(cat.shape,r,col)}<text x="${r2(side==='left'?-gap:gap)}" y="${r2(fs*.36)}" text-anchor="${side==='left'?'end':'start'}" font-family="${MAPFONT}" font-weight="700" font-size="${fs}" fill="#111111" ${halo}>${stId(el)}</text>${type}</g>`;
+  return `<g ${ghost?'opacity=".55"':`data-id="${el.id}"`} transform="translate(${r2(el.x)} ${r2(el.y)})">${shapeSvg(cat.shape,r,col,lk.ring,lk.ringC)}<text x="${r2(side==='left'?-gap:gap)}" y="${r2(fs*.36)}" text-anchor="${side==='left'?'end':'start'}" font-family="${MAPFONT}" font-weight="700" font-size="${fs}" fill="#111111" ${halo}>${stId(el)}</text>${type}</g>`;
 }
 function objMarkup(el,ex,ghost){
   const d=OBJMAP[el.kind];if(!d)return'';const vw=d[5],vh=d[6],sx=el.w/vw,sy=el.h/vh,sw=r2(clamp(Math.min(el.w,el.h)*.035,.7,3)/Math.sqrt(sx*sy));
@@ -870,7 +875,7 @@ function frameMarkup(ex){
   const cell=(field,x,i,w,txt,label)=>T(x,row(i),fs,clip(txt,n(w)),bold)+hit(field,x-f(5),row(i)-fs*1.05,w+f(6),fs*1.45,label);
   s+=cell('site:name',c1,0,cw1,'Title: '+(site?.name||''),'Edit site name')+cell('site:address',c1,1,cw1,'Address: '+(site?.address||''),'Edit address')+cell('set:department',c1,2,cw1,'Department: '+(st.department||''),'Edit department');
   s+=cell('set:planDate',c2,0,cw2,'Date: '+date.toLocaleDateString('en-NZ',{day:'numeric',month:'long',year:'numeric'}),'Edit date')+cell('set:revision',c2,1,cw2,'Version: '+(st.revision||''),'Edit version')+cell('site:siteRef',c2,2,cw2,'Site Ref: '+(site?.siteRef||''),'Edit site ref');
-  s+=cell('set:preparedBy',c3,0,cw3,'Drawn By: '+(st.preparedBy||''),'Edit drawn by')+T(c3,row(1),fs,'MAP NOT TO SCALE',bold)+cell('site:contractNo',c3,2,cw3,'Contract No: '+(site?.contractNo||''),'Edit contract no');
+  s+=(Store.auth?T(c3,row(0),fs,clip('Drawn By: '+(st.preparedBy||''),n(cw3)),bold):cell('set:preparedBy',c3,0,cw3,'Drawn By: '+(st.preparedBy||''),'Edit drawn by'))+T(c3,row(1),fs,'MAP NOT TO SCALE',bold)+cell('site:contractNo',c3,2,cw3,'Contract No: '+(site?.contractNo||''),'Edit contract no');
   // key: two columns, readable size
   s+=T(kx+f(14),row(0),fs,'KEY:',bold)+hit('key',kx+f(4),y0+f(4),W-kx-f(8),fh-f(8),'Edit station types');
   const{used,tox}=usedCats(),cnt=used.length,cols=cnt<=4?1:cnt<=10?2:3,rows=Math.ceil(cnt/cols),ax=kx+f(64),aw=W-ax-f(10),top=y0+f(6),ah=fh-f(12),cw=aw/cols,rh=ah/Math.max(rows,1);
@@ -1073,7 +1078,7 @@ document.addEventListener('click',async e=>{const b=e.target.closest('[data-top]
   if(a==='edit-site'){if(await editSite(site))showSite(site.id);}
   if(a==='backup')backupSite(site);
   if(a==='undo')undo();if(a==='redo')redo();
-  if(a==='zin')zoomBy(1.25);if(a==='zout')zoomBy(.8);if(a==='fit')fitView();
+  if(a==='zin')zoomStep(1);if(a==='zout')zoomStep(-1);if(a==='fit')fitView();
   if(a==='import'){if($('.popmenu'))return closePop();popMenu(b,[{v:'file',label:'Image or PDF file',icon:ICON.upload,note:'PNG, JPG, SVG, PDF'},{v:'sat',label:'Satellite photo',icon:ICON.globe,note:'Search an address'}],'below',v=>v==='file'?$('#fileIn').click():openSatellite());}
   if(a==='export')openExport();
   if(a==='print')printPlan();
@@ -1139,8 +1144,7 @@ function bumpVersion(v){v=String(v||'').trim();let m=v.match(/^(.*?)(\d+)$/);if(
   m=v.match(/^(.*?)([A-Ya-y])$/);if(m)return m[1]+String.fromCharCode(m[2].charCodeAt(0)+1);return v?v+'.1':'01';}
 async function roCopy(){try{const n=await copyPlan(M,M.siteId,M.name+' (my copy)');toast(`Made ${n.name}. It's yours to edit.`);location.hash='#/map/'+n.id;}catch(e){toast(e.message,'warn');}}
 /* A plan that was changed gets the next version number (and today's date) when it is closed. */
-function bumpIfChanged(){if(!M||!E.changedSinceOpen)return;E.changedSinceOpen=false;
-  if(E.manualRev)E.manualRev=false;else{M.settings.revision=bumpVersion(M.settings.revision);M.settings.planDate=isoDate(Date.now());}}
+function bumpIfChanged(){if(!M||!E.changedSinceOpen)return;E.changedSinceOpen=false;E.manualRev=false;}   // the version already went up on the first change
 
 async function leaveEditor(){
   if(route!=='map'||!M)return;
@@ -1242,7 +1246,10 @@ const snap=()=>JSON.stringify({elements:M.elements,furn:M.furn,width:M.width,hei
 const HIST_MAX=100; /* undo steps kept, and saved with the plan */
 const HIST_BYTES=60e6,HIST_SAVE_BYTES=8e6;
 function trimHist(list,max){let t=0,i=list.length;while(i>0&&t+list[i-1].length<=max){t+=list[i-1].length;i--;}return i>0?list.slice(i):list;}
-function pushHist(){E.changedSinceOpen=true;E.histDirty=true;E.hist.push(snap());if(E.hist.length>HIST_MAX)E.hist.shift();E.hist=trimHist(E.hist,HIST_BYTES);E.fut=[];updUndo();}
+function pushHist(){if(!E.changedSinceOpen&&M&&M.settings&&!E.readOnly){if(Store.user)M.settings.preparedBy=meName();
+    // the first change after opening a plan starts a new version straight away (01 → 02), with today's date
+    if(!E.manualRev){M.settings.revision=bumpVersion(M.settings.revision);M.settings.planDate=isoDate(Date.now());}}
+  E.changedSinceOpen=true;E.histDirty=true;E.hist.push(snap());if(E.hist.length>HIST_MAX)E.hist.shift();E.hist=trimHist(E.hist,HIST_BYTES);E.fut=[];updUndo();}
 function softPush(){if(Date.now()-E.lastPush>900)pushHist();E.lastPush=Date.now();}
 function restore(s){Object.assign(M,JSON.parse(s));for(const id of [...E.sel])if(!getEl(id))E.sel.delete(id);E.chain=null;renderAll();scheduleSave();updUndo();}
 function undo(){if(!E.hist.length)return;E.histDirty=true;E.fut.push(snap());restore(E.hist.pop());}
@@ -1251,10 +1258,14 @@ function updUndo(){const u=$('#bUndo'),r=$('#bRedo');if(u)u.disabled=!E.hist.len
 function changed(){render();refreshPanel();scheduleSave();}
 
 /* ----- view ----- */
-function applyView(){const v=E.view;$('#vp').setAttribute('transform',`translate(${r2(v.x)} ${r2(v.y)}) scale(${v.k})`);const z=$('#zoomLbl');if(z)z.textContent=Math.round(v.k*100)+'%';$('#gridpath').setAttribute('stroke-width',r2(1/v.k));render();}
-function fitView(){const r=$('#stage').getBoundingClientRect();if(!r.width)return;const hud=48,pad=24,g=sheet(),aw=r.width-pad*2,ah=r.height-pad-hud,k=Math.min(aw/g.W,ah/g.H);E.view.k=clamp(k,.03,8);E.view.x=(r.width-g.W*E.view.k)/2;E.view.y=pad+(ah-g.H*E.view.k)/2-g.top*E.view.k;applyView();}
-function zoomAt(cx,cy,f){const r=$('#stage').getBoundingClientRect(),v=E.view,px=cx-r.left,py=cy-r.top,wx=(px-v.x)/v.k,wy=(py-v.y)/v.k;v.k=clamp(v.k*f,.03,24);v.x=px-wx*v.k;v.y=py-wy*v.k;applyView();}
+const zoomPct=()=>Math.round(E.view.k/(E.fitK||1)*100);
+function applyView(){const v=E.view;$('#vp').setAttribute('transform',`translate(${r2(v.x)} ${r2(v.y)}) scale(${v.k})`);const z=$('#zoomLbl');if(z)z.textContent=zoomPct()+'%';$('#gridpath').setAttribute('stroke-width',r2(1/v.k));render();}
+function fitView(){const r=$('#stage').getBoundingClientRect();if(!r.width)return;const hud=48,pad=24,g=sheet(),aw=r.width-pad*2,ah=r.height-pad-hud,k=Math.min(aw/g.W,ah/g.H);E.view.k=clamp(k,.03,8);E.fitK=E.view.k;E.view.x=(r.width-g.W*E.view.k)/2;E.view.y=pad+(ah-g.H*E.view.k)/2-g.top*E.view.k;applyView();}
+function zoomAt(cx,cy,f){const r=$('#stage').getBoundingClientRect(),v=E.view,px=cx-r.left,py=cy-r.top,wx=(px-v.x)/v.k,wy=(py-v.y)/v.k;v.k=clamp(v.k*f,.01,40);v.x=px-wx*v.k;v.y=py-wy*v.k;applyView();}
 function zoomBy(f){const r=$('#stage').getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,f);}
+/* zoom in or out by 5% of the fit-to-screen size (fit = 100%) */
+function zoomStep(dir,cx,cy){if(!E.fitK)fitView();const cur=E.view.k/(E.fitK||1)*100,snapped=dir>0?Math.floor(cur/5+1e-6)*5+5:Math.ceil(cur/5-1e-6)*5-5,pct=clamp(snapped,5,2000);
+  const r=$('#stage').getBoundingClientRect();zoomAt(cx??r.left+r.width/2,cy??r.top+r.height/2,(E.fitK*pct/100)/E.view.k);}
 function centerOn(x,y){const r=$('#stage').getBoundingClientRect();E.view.x=r.width/2-x*E.view.k;E.view.y=r.height/2-y*E.view.k;applyView();}
 function toWorld(e){const r=$('#stage').getBoundingClientRect();return{x:(e.clientX-r.left-E.view.x)/E.view.k,y:(e.clientY-r.top-E.view.y)/E.view.k};}
 
@@ -1538,7 +1549,8 @@ function bindEditor(){
   st.addEventListener('dblclick',e=>{if(route!=='map'||E.readOnly||E.tool!=='select'||e.target.closest('#vp [data-id],[data-handle],[data-node],[data-furn],[data-field]'))return;if(M.elements.some(x=>x.bg))openBg();});
   st.addEventListener('wheel',e=>{e.preventDefault();
     if(!e.ctrlKey&&(Math.abs(e.deltaX)>Math.abs(e.deltaY)*.5)&&e.deltaMode===0&&!Number.isInteger(e.deltaY)){E.view.x-=e.deltaX;E.view.y-=e.deltaY;applyView();return;}
-    zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*(e.ctrlKey?.012:.0016)*(e.deltaMode===1?30:1)));},{passive:false});
+    if(e.ctrlKey){zoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*.012));return;}   // trackpad pinch stays smooth
+    const now=Date.now();if(now-(E.lastWheel||0)<60)return;E.lastWheel=now;zoomStep(e.deltaY<0?1:-1,e.clientX,e.clientY);},{passive:false});
   $('#tools').addEventListener('mousedown',e=>e.preventDefault());
   $('#tools').addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(!b)return;const t=b.dataset.tool;
     if(b.dataset.group){const g=GROUPS[b.dataset.group];if($('.popmenu'))return closePop();const narrow=matchMedia('(max-width:820px)').matches;
@@ -1659,7 +1671,7 @@ document.addEventListener('keydown',e=>{
     case 'Escape':if(E.chain)finishChain(false);else if(E.tool!=='select')setTool('select');else{E.sel.clear();renderAll();}return;
     case 'Enter':if(E.chain)finishChain(false);return;
     case ' ':e.preventDefault();E.space=true;$('#stage').classList.add('space');return;
-    case '+':case '=':zoomBy(1.25);return;case '-':case '_':zoomBy(.8);return;case '0':fitView();return;
+    case '+':case '=':zoomStep(1);return;case '-':case '_':zoomStep(-1);return;case '0':fitView();return;
     case 'ArrowLeft':case 'ArrowRight':case 'ArrowUp':case 'ArrowDown':{if(!E.sel.size)return;e.preventDefault();softPush();const s=e.shiftKey?10:1;const dx=e.key==='ArrowLeft'?-s:e.key==='ArrowRight'?s:0,dy=e.key==='ArrowUp'?-s:e.key==='ArrowDown'?s:0;
       const ids=withZoneWalls(E.sel),att=attachedEnds(ids);
       const nb=groupBox([...ids].map(getEl).filter(Boolean));let ndx=dx,ndy=dy;if(nb){ndx=clamp(dx,-nb.x,M.width-(nb.x+nb.w));ndy=clamp(dy,-nb.y,M.height-(nb.y+nb.h));}
@@ -1679,7 +1691,7 @@ function refreshPanel(){const a=document.activeElement;if(a&&$('#tabBody')?.cont
 function renderPanel(){
   if(route!=='map')return;$$('#panel .tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===E.tab));
   const tb=$('#tabBody');const scroll=tb.scrollTop;
-  tb.innerHTML=E.tab==='stations'?stationsTab():E.tab==='props'?propsTab():E.tab==='register'?registerTab():mapTab();
+  tb.innerHTML=E.tab==='stations'?stationsTab():E.tab==='props'?propsTab():E.tab==='register'?registerTab():mapTab();if(E.tab!=='stations'&&E.tab!=='props'&&E.tab!=='register')loadSrvInfo();
   tb.scrollTop=scroll;
   $('#stypes').innerHTML=STATION_TYPES.map(t=>`<option value="${esc(t[0])}">`).join('');
 }
@@ -1705,6 +1717,7 @@ function stationsTab(){
   const own=M.elements.filter(e=>e.type==='station'&&(e.size&&e.size!==1||e.tsize!==undefined)).length;
   return `<div class="sec"><p class="hint">Pick a station type, then click the plan. Each click adds the next number, so T001, T002, T003. Drag stations in Select mode to move them.</p></div>
     <div class="sec"><h3 class="sec-h">Size of all stations on this plan</h3>${F.range('set','marker',`Icon size (${M.settings.marker})`,M.settings.marker,4,40,1)}${F.range('set','label',`Text size (${M.settings.label})`,M.settings.label,5,40,1)}
+      ${F.range('set','stHalo','ID outline',M.settings.stHalo??.29,0,.8,.01)}${F.color('set','stHaloC','ID outline colour',M.settings.stHaloC||'#ffffff')}${F.range('set','stRing','Icon border',M.settings.stRing??.22,0,.6,.01)}${F.color('set','stRingC','Icon border colour',M.settings.stRingC||'#ffffff')}
       <p class="hint">${own?`${own} station${own===1?' has':'s have'} its own size, which stays in proportion. <button type="button" class="btn sm" data-act="st-all-plan">Make all the same</button>`:'Click a single station to give it its own size.'}</p></div>${armed}
     <div class="cats">${CATS.map((c,i)=>`<button class="cat ${E.tool==='station'&&E.cat===c.code?'on':''}" data-cat="${esc(c.code)}">${catIcon(c,24)}<span class="cat-main"><span class="cat-code">${esc(c.code)}${pad(nextNum(c.code))}</span><span class="cat-name">${esc(c.name)}</span></span><span class="cat-count" title="On this plan">${counts[c.code]||0}</span>${i<9?`<kbd>${i+1}</kbd>`:'<span></span>'}</button>`).join('')}</div>
     <div class="key"><span><i style="background:${TOX}"></i>Toxic</span><span><i style="background:${NONTOX}"></i>Non-toxic</span></div>
@@ -1736,6 +1749,8 @@ function propsTab(){
       body=`<div class="row" style="gap:10px">${catIcon({...c,mode:'fixed',color:stColor(el,c)},30)}<span class="idbig">${stId(el)}</span></div>${dup?`<p class="warn">Another station already uses ${stId(el)}.</p>`:''}
         ${F.sel('el','code','Category',el.code,CATS.map(x=>[x.code,`${x.code} · ${x.name}`]))}${F.num('el','num','Number',el.num,1,1)}${F.text('el','stype','Station type',el.stype,'e.g. Snap trap','stypes')}
         ${c.mode==='tox'?F.check('el','toxic','Toxic bait (shows the toxic colour)',el.toxic):''}${F.sel('el','labelSide','Label side',el.labelSide||'auto',[['auto','Automatic (keeps it clear)'],['right','Always right'],['left','Always left']])}${F.area('el','notes','Notes',el.notes||'')}
+        <h3 class="sec-h" style="margin-top:6px">Outline of this station</h3>${(()=>{const lk=stLook(el);return F.range('el','haloW','ID outline',lk.halo,0,.8,.01)+F.color('el','haloC','ID outline colour',lk.haloC)+F.range('el','ringW','Icon border',lk.ring,0,.6,.01)+F.color('el','ringC','Icon border colour',lk.ringC);})()}
+        ${el.haloW!==undefined||el.haloC||el.ringW!==undefined||el.ringC?'<div class="row"><button class="btn sm" data-act="st-plan-look">Use the plan\'s outline</button></div>':''}
         <h3 class="sec-h" style="margin-top:6px">Size of this station</h3>${F.range('el','size',`Icon (${Math.round((el.size||1)*100)}%)`,el.size||1,.3,4,.05)}${F.range('el','tsize',`Text (${Math.round((el.tsize??el.size??1)*100)}%)`,el.tsize??el.size??1,.3,4,.05)}
         <div class="row">${el.size||el.tsize!==undefined?'<button class="btn sm" data-act="st-plan-size">Use the plan\'s sizes</button>':''}</div><p class="hint">Sizes are relative to the plan-wide sizes in the Stations tab.</p>`;break;}
     case 'wall':body=`<h3 class="sec-h">Wall</h3>${F.num('el','len',`Length (${unit()})`,toU(wallLen(el)),M.scale?.01:1,0)}${F.num('el','w','Thickness (px)',el.w,1,1)}${thickRow('el','w',el.w)}${F.color('el','color','Colour',el.color)}${F.sel('el','ls','Line style',wallLs(el),WALL_LS)}<p class="hint">Drag the wall to move it; the walls joined to it stretch to follow, and the room colour follows the new shape. Drag a round corner node to reshape.</p>`;break;
@@ -1773,7 +1788,7 @@ function styleFields(sc,o,type){const closed=['rect','ellipse','polygon'].includ
     ${closed?`${F.check(sc,'noFill','No fill',o.noFill)}${o.noFill?'':F.color(sc,'fill','Fill colour',o.fill)+F.range(sc,'fillOp','Fill opacity',o.fillOp,0,1,.05)}${type==='rect'?F.num(sc,'rx','Corner radius',o.rx||0,1,0):''}`:''}`;}
 function textFields(sc,o){return `${F.num(sc,'size','Size',o.size,1,4)}${F.color(sc,'color','Colour',o.color)}${F.sel(sc,'font','Font',o.font,Object.keys(FONTS).map(f=>[f,f]))}${F.sel(sc,'align','Align',o.align||'start',[['start','Left'],['middle','Centre'],['end','Right']])}
   <div class="row">${F.check(sc,'bold','Bold',o.bold)}${F.check(sc,'italic','Italic',o.italic)}</div>
-  ${(()=>{const hw=o.haloW??(o.halo===false?0:.2);return `<div class="f"><span>White outline</span><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-halo="-1" data-s="${sc}" aria-label="Thinner outline">−</button><input type="range" data-s="${sc}" data-k="haloW" min="0" max="0.6" step="0.02" value="${hw}" aria-label="Outline thickness" style="flex:1;min-width:0"><button class="btn sm" data-halo="1" data-s="${sc}" aria-label="Thicker outline">+</button><button class="btn sm ghost" data-halo="0" data-s="${sc}">None</button></div></div>`;})()}`;}
+  ${(()=>{const hw=o.haloW??(o.halo===false?0:.2);return `<div class="f"><span>Outline</span><div class="row" style="flex-wrap:nowrap"><button class="btn sm" data-halo="-1" data-s="${sc}" aria-label="Thinner outline">−</button><input type="range" data-s="${sc}" data-k="haloW" min="0" max="0.6" step="0.02" value="${hw}" aria-label="Outline thickness" style="flex:1;min-width:0"><button class="btn sm" data-halo="1" data-s="${sc}" aria-label="Thicker outline">+</button><button class="btn sm ghost" data-halo="0" data-s="${sc}">None</button></div></div>`;})()}${F.color(sc,'haloC','Outline colour',o.haloC||'#ffffff')}`;}
 function polyArea(pts){let a=0;for(let i=0;i<pts.length;i++){const[x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];a+=x1*y2-x2*y1;}return Math.abs(a/2)/(M.scale*M.scale);}
 
 function registerTab(){
@@ -1791,7 +1806,7 @@ function mapTab(){
   return `<div class="sec"><h3 class="sec-h">Bottom bar</h3><p class="hint">These fill the information bar along the bottom of the page.</p>
     ${F.text('set','department','Department',st.department,'e.g. Butter Plant')}
     <p class="hint">The version goes up by one, and the date updates, each time you close a plan you changed.</p><label class="f"><span>Date</span><input type="date" data-s="set" data-k="planDate" value="${esc(st.planDate||isoDate(M.created))}"></label>
-    ${F.text('set','revision','Version',st.revision,'01')}${F.text('set','preparedBy','Drawn by',st.preparedBy,'Your name')}
+    ${F.text('set','revision','Version',st.revision,'01')}${Store.auth?`<div class="f"><span>Drawn by</span><span><b>${esc(st.preparedBy||'—')}</b><br><span class="hint">The last person to change this plan. It fills in by itself.</span></span></div>`:F.text('set','preparedBy','Drawn by',st.preparedBy,'Your name')}
     <div class="kv"><span>Title</span><b>${esc(site?.name||'')}</b><span>Address</span><b>${esc(site?.address||'—')}</b><span>Site ref</span><b>${esc(site?.siteRef||'—')}</b><span>Contract no</span><b>${esc(site?.contractNo||'—')}</b></div>
     <div class="row"><button class="btn sm" data-act="edit-site">Edit site details</button></div></div>
     <div class="sec"><h3 class="sec-h">Page header</h3>${F.check('set','showFrame','Show header and bottom bar',st.showFrame!==false)}${F.text('brand','title','Heading',BRAND.title)}<p class="hint">Tip: click any detail on the page to jump to it here.</p>
@@ -1801,6 +1816,9 @@ function mapTab(){
     <div class="sec"><h3 class="sec-h">Background</h3><div class="row"><button class="btn sm" data-act="sat">${ICON.globe}Satellite photo</button><button class="btn sm" data-act="import">${ICON.upload}Image or PDF</button></div>
       ${imgs.length?`<div class="imglist">${imgs.map((e,i)=>`<div class="imgrow"><img src="${E.assets[e.asset]||''}" alt=""><span class="nm">${e.bg?'Background':'Image '+(i+1)}${e.locked?' · locked':''}</span><span class="row"><button class="btn sm" data-img-lock="${e.id}">${e.locked?'Unlock':'Lock'}</button><button class="btn sm ghost danger" data-img-del="${e.id}" aria-label="Remove image">✕</button></span></div>`).join('')}</div>`:''}
       ${(()=>{const bg=imgs.find(e=>e.bg);return bg?`<h3 class="sec-h" style="margin-top:6px">Adjust the background</h3>${imgControls(bg)}<div class="row"><button class="btn sm" data-act="import">Replace file</button></div>`:'';})()}</div>
+    <div class="sec"><h3 class="sec-h">On the server</h3><div id="srvInfo" class="srv-info"><span class="hint">Checking…</span></div>
+      <div class="row"><button class="btn sm" data-act="srv-refresh">Refresh</button><button class="btn sm" data-act="srv-link">Make a download link</button></div><div id="srvLink"></div>
+      <p class="hint">For testing: the link downloads this plan's saved data as a file. It works in any browser for 10 minutes, without signing in.</p></div>
     <div class="sec"><h3 class="sec-h">Stations</h3>${F.range('set','marker','Marker size',st.marker,4,30,1)}${F.range('set','label','Label size',st.label,6,30,1)}</div>
     <div class="sec"><h3 class="sec-h">North arrow</h3>${F.check('furn','north.show','Show north arrow',f.north.show)}${f.north.show?F.range('furn','north.rot','Rotation',f.north.rot||0,-180,180,1)+F.range('furn','north.s','Size',f.north.s||1,.4,3,.05):''}</div>
     <div class="sec"><h3 class="sec-h">Scale</h3><p class="hint">${M.scale?`1 metre = ${M.scale.toFixed(2)} px. The plan area is ${(M.width/M.scale).toFixed(1)} × ${(M.height/M.scale).toFixed(1)} m.`:'No scale set. Lengths show in pixels.'}</p><div class="row"><button class="btn sm" data-act="calib">Calibrate from a known length</button>${M.scale?'<button class="btn sm ghost" data-act="noscale">Clear</button>':''}</div></div>
@@ -1889,7 +1907,10 @@ async function onPanelClick(e){
   switch(b.dataset.act){
     case 'stop':setTool('select');break;
     case 'st-plan-size':pushHist();for(const id of E.sel){const x=getEl(id);if(x?.type==='station'){delete x.size;delete x.tsize;}}changed();renderPanel();break;
+    case 'st-plan-look':pushHist();for(const id of E.sel){const x=getEl(id);if(x?.type==='station'){delete x.haloW;delete x.haloC;delete x.ringW;delete x.ringC;}}changed();renderPanel();break;
     case 'st-all-plan':pushHist();for(const x of M.elements)if(x.type==='station'){delete x.size;delete x.tsize;}changed();renderPanel();break;
+    case 'srv-refresh':loadSrvInfo(true);break;
+    case 'srv-link':makeDlLink();break;
     case 'group':{pushHist();const g='g'+uid();for(const id of E.sel){const x=getEl(id);if(x)x.grp=g;}changed();toast('Grouped. Click any of them to pick the whole group.');break;}
     case 'ungroup':{pushHist();for(const id of E.sel){const x=getEl(id);if(x)delete x.grp;}changed();toast('Ungrouped');break;}
     case 'zonefill':pushHist();M.elements=M.elements.filter(x=>!(E.sel.has(x.id)&&x.type==='zone'));E.sel.clear();changed();break;
@@ -1982,7 +2003,7 @@ function setBackground(img,{scale=null,meta=null}={}){
   M.elements.unshift({id:uid(),type:'image',asset:aid,x:r2((M.width-w)/2),y:r2((M.height-h)/2),w,h,fitW:w,opacity:1,locked:true,bg:true,rot:0});
   M.scale=scale?r2(scale*k*1000)/1000:null;M.bgMeta=meta;
   if(M.scale){M.settings.grid=Math.max(2,Math.round(M.scale));}
-  changed();fitView();setTimeout(()=>{openBg();toast('Background added. The Background controls on the right let you fade, resize, turn or move it. Find them again with the Background button at the top, or double-click the background.');},150);
+  changed();fitView();
 }
 function placeImage(img,i=0){
   pushHist();const aid=uid();E.assets[aid]=img.src;E.assetsDirty=true;const s=Math.min(1,M.width*.6/img.w,M.height*.6/img.h);
@@ -2159,7 +2180,7 @@ async function openSatellite(){
   setBackground(img,{scale:img.pxPerM,meta:{lat:geo.lat,lng:geo.lng,zoom:img.zoom,rot:geo.rot}});
   M.furn.north.rot=geo.rot;M.furn.north.show=true;changed();
   if(site){site.geo=geo;Store.put('sites',site);}
-  toast(`Satellite background set. Scale: 1 m = ${img.pxPerM.toFixed(2)} px.`);showTab('stations');
+  showTab('stations');
 }
 const r_hold={img:null,geo:null};
 async function captureTiles(lm,hi,rot,fw,fh){
@@ -2187,6 +2208,18 @@ async function printPlan(){if(!M)return;if(!E.readOnly)saveLocal();toast('Openin
   const imgs=[...d.images,...d.querySelectorAll('image')];await new Promise(r=>setTimeout(r,imgs.length?800:250));
   try{f.contentWindow.focus();f.contentWindow.print();}catch(e){toast('Printing was blocked by the browser. Use Export › PDF and print that instead.','warn');}
   setTimeout(()=>f.remove(),60000);}
+/* What the server holds for this plan (sizes and when it was saved), and a short-lived link to download it. */
+let srvInfoC={key:null,html:''};
+async function loadSrvInfo(force){const box=$('#srvInfo');if(!box||!M)return;const key=M.id+':'+savedAt;if(!force&&srvInfoC.key===key){box.innerHTML=srvInfoC.html;return;}srvInfoC={key,html:box.innerHTML};
+  try{const j=await Store.req('GET','/info/'+encodeURIComponent(M.id));if(!j)throw new Error('Nothing on the server for this plan yet, or the server needs updating (re-run the setup command).');const row=(l,o)=>`<div><span>${l}</span><b>${o?fmtBytes(o.size):'—'}</b></div>`;
+    box.innerHTML=row('Plan drawing',j.map)+row('Pictures',j.assets)+row('Undo history',j.hist)+`<div><span>Total</span><b>${fmtBytes((j.map?.size||0)+(j.assets?.size||0)+(j.hist?.size||0))}</b></div>
+      <div><span>Last saved</span><b>${j.map?.updated?esc(new Date(j.map.updated).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})):'—'}</b></div><div><span>Owner</span><b>${esc(ownerLabel(M)||'—')}</b></div><div><span>Plan ID</span><b class="mono">${esc(M.id)}</b></div>`;srvInfoC.html=box.innerHTML;}
+  catch(e){box.innerHTML=`<span class="hint">${esc(/Unknown path|404/.test(e.message)?'This server needs updating to show this (re-run the setup command).':e.message)}</span>`;srvInfoC.key=null;}}
+async function makeDlLink(){const out=$('#srvLink');if(!out)return;out.innerHTML='<span class="hint">Making a link…</span>';
+  try{if(E.dirty)await saveNow(true);const j=await Store.req('POST','/links',{id:M.id});const url=Store.base+'/api/dl/'+j.key;
+    out.innerHTML=`<div class="row" style="flex-wrap:nowrap;margin-top:6px"><input readonly value="${esc(url)}" id="dlUrl" style="flex:1;min-width:0;height:30px;border:1px solid var(--line);border-radius:6px;padding:0 8px;background:var(--panel);font-size:12px"><button class="btn sm" data-copy-dl>Copy</button></div><p class="hint">Works until ${esc(new Date(j.expires).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}))}.</p>`;}
+  catch(e){out.innerHTML=`<span class="hint">${esc(/Unknown path|404/.test(e.message)?'This server needs updating for download links (re-run the setup command).':e.message)}</span>`;}}
+document.addEventListener('click',e=>{if(e.target.closest('[data-copy-dl]')){const i=$('#dlUrl');i.select();navigator.clipboard?.writeText(i.value).then(()=>toast('Link copied'),()=>{document.execCommand('copy');toast('Link copied');});}});
 const EXPORT_STD=3,EXPORT_HD=4.8;   // HD is 60% more resolution than standard
 async function openExport(){
   const base=safeName(`${site?.name||'Site'} - ${M.name}${M.settings.revision?' v'+M.settings.revision:''}`);
@@ -2309,6 +2342,7 @@ function openAccountMenu(btn){const u=Store.user;if(!u)return;
   const items=[{v:'info',label:u.email,note:u.role==='admin'?'Admin':'User'}];if(u.role==='admin')items.push({v:'users',label:'Users and access'});items.push({v:'prefs',label:'Settings',note:'Theme and your defaults'},{v:'log',label:'Change log',note:"What's new in the app"},{v:'server',label:'Servers'},{v:'out',label:'Sign out'});
   popMenu(btn,items,'below',async v=>{if(v==='prefs')openPrefs();if(v==='log')openChangeLog();if(v==='users')openUsers();if(v==='server')openServerDialog();if(v==='out')signOut();});}
 const APP_LOG=[
+  ['v18','24 Oct 2026',['Outline colour for text; ID outline and icon border (thickness and colour) for all stations or one station','No pop-up messages when a background is added','Fit to screen is 100%; zoom goes up and down in 5% steps','Settings tab shows what is saved on the server (sizes, last saved) and makes a 10-minute test download link','Drawn By fills in by itself with the last person who changed the plan','Version goes up as soon as you start changing a plan']],
   ['v17','24 Oct 2026',['Background button moved to the left toolbar','Print button next to Export prints the plan straight from the browser on one A4 page']],
   ['v16','24 Oct 2026',['Words drawn one letter at a time in an SVG come in as one editable text (straight or turned)','Stations tab: icon and text size for every station on the plan; single stations can still have their own']],
   ['v15','24 Oct 2026',['Background button at the top (or double-click the background) for its settings','Groups from SVG drawings stay together; Group and Ungroup (Ctrl+G); resize and turn a group with handles or buttons','Much less data: plans kept on the device, sent at most once a minute when changed and when you leave, and only downloaded again if they changed','Save indicator moved to the left of undo']],
@@ -2337,7 +2371,6 @@ async function openPrefs(){
     <div class="f"><span>Theme</span>${seg('theme',[['system','Match device'],['light','Light'],['dark','Dark']],v.theme)}</div>
     <div class="f"><span>Colour</span><div class="acc-row">${Object.entries(ACCENTS).map(([k,a])=>`<label class="acc-sw" title="${a[0]}"><input type="radio" name="accent" value="${k}" ${v.accent===k?'checked':''}><span style="--sw:${a[1]}"></span><em>${a[0]}</em></label>`).join('')}</div></div>
     <h3 class="sec-h">New floor plans</h3>
-    <label class="f"><span>Drawn by</span><input name="drawnBy" value="${esc(v.drawnBy||'')}" placeholder="Your name, filled in on new plans"></label>
     <div class="f"><span>Page</span>${seg('portrait',[['false','A4 landscape'],['true','A4 portrait']],!!v.portrait)}</div>
     <div class="f"><span>Grid</span><div class="row"><label class="chk"><input type="checkbox" name="showGrid" ${v.showGrid!==false?'checked':''}> Show grid</label><label class="chk"><input type="checkbox" name="snap" ${v.snap!==false?'checked':''}> Snap to grid</label></div></div>
     <h3 class="sec-h">Sites page</h3>
@@ -2347,7 +2380,7 @@ async function openPrefs(){
     onOpen:w=>{w.addEventListener('change',e=>{if(e.target.name==='theme'){applyTheme(e.target.value);}if(e.target.name==='accent')applyAccent(e.target.value);});}});
   if(r.value!=='ok'){Prefs.v=was;Prefs.apply();return;}
   const d=r.data,w=document;
-  Prefs.set({theme:d.theme||v.theme,accent:d.accent||v.accent,drawnBy:String(d.drawnBy||'').trim(),portrait:d.portrait==='true',showGrid:!!d.showGrid,snap:!!d.snap,siteFilter:d.siteFilter||v.siteFilter,siteSort:d.siteSort||v.siteSort});
+  Prefs.set({theme:d.theme||v.theme,accent:d.accent||v.accent,portrait:d.portrait==='true',showGrid:!!d.showGrid,snap:!!d.snap,siteFilter:d.siteFilter||v.siteFilter,siteSort:d.siteSort||v.siteSort});
   toast('Settings saved');if(route==='sites')showSites();
 }
 async function signOut(){if(route==='map')await leaveEditor();try{await fetch(Store.base+'/api/auth/logout',{method:'POST',headers:Store.hdr(false)});}catch(e){}

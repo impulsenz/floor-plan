@@ -10,7 +10,8 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Printed sheet layout.** A fixed-height black heading band across the top, with your logo on the right (upload it once in the Settings tab, shared by every plan). The heading never moves; the logo has size, left/right and up/down controls. A fixed-height bottom bar fills itself from the site and plan details (Title, Address, Department, Date, Version, Site Ref, Drawn By, Contract No) plus a KEY of every station type.
 - **Sites.** Every field on the site form except Notes is required, so the bottom bar is always complete.
 - **Stays on the page.** Stations, objects, text, shapes and walls can't be moved or drawn into the heading band or bottom bar.
-- **Versions.** Each time you close a plan you changed, its version goes up by one (01 → 02) and its date updates. Typing a version yourself overrides this for that session.
+- **Versions.** The first change after you open a plan starts a new version (01 → 02) and updates the date; further changes in that sitting stay on the same version. Typing a version yourself overrides this for that session.
+- **Drawn By** fills itself in with the name of the last person who changed the plan (it can't be typed over when sign-in is on).
 - **A4 by default.** New plans are sized so the whole printed sheet is A4 landscape. Switch to A4 portrait in the Settings tab. Imported backgrounds and satellite photos fit inside the page instead of changing its shape.
 - **Click to edit.** Click any detail in the bottom bar or header (department, version, contract no, logo…) to jump straight to that field.
 - **Drawing.** A Draw drawer (wall, fence line, line, arrow), rooms (drag a box), and a Shapes drawer (rectangle/zone, ellipse, area outline). Text has colour, size, font, bold/italic and an adjustable white outline (thicker, thinner or none) for readability on photos.
@@ -21,6 +22,7 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Rooms.** When you finish a room (or close a wall or fence outline), name it, pick a fill colour, and choose solid or dashed walls. The colour and name follow the walls: drag the round nodes at the corners to reshape a building or fence line and the fill reshapes with it. Click the room name to select the room and drag it, walls and all.
 - **Stations with auto-numbering.** Pick a type in the Stations tab (or press 1–8), then click the plan: T001, T002, T003… Drag to move. Each station records its type (e.g. *Snap trap*) and notes, shown in Properties and the Register. The ID sits to the right of the marker and moves to the left automatically when something is in the way (or set it to always left/right). Switching away from the Stations tab stops placing.
   - **Jumping ahead:** while placing, type a *Next number* (e.g. 40). New stations take the first free number from there, so 1–10, then 40, 41…, then set it back to 11 to carry on 11, 12… (numbers already used are skipped).
+  - **Outlines:** the Stations tab also sets the white outline around station IDs and the border around icons (thickness and colour); a single station can have its own.
   - **Sizes:** the Stations tab sets the icon and text size for every station on the plan. Click a single station to give it its own icon and text size (relative to the plan's), or put it back to the plan's sizes.
   - **New station type** adds a type with its own prefix, shape, colour and starting number.
 
@@ -54,6 +56,8 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Change log** (your picture → Change log) lists what's new in each app version.
 - **Ctrl+D** puts the copy where your mouse is.
 - **Undo history** of 100 steps per plan, saved with the plan so you can still undo after closing and reopening it.
+- **Zoom:** fit to screen is 100%; the + and − buttons, keys and mouse wheel go up and down in 5% steps.
+- **On the server** (Settings tab): how big this plan's drawing, pictures and undo history are on the server, when it was last saved, and a 10-minute download link for testing.
 - Scale calibration from any known length, grid with snapping, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
 
 ## Storage
