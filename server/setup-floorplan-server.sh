@@ -209,6 +209,23 @@ db.exec(`
     email   TEXT NOT NULL,
     PRIMARY KEY (store, rec_id, email)
   );
+  CREATE TABLE IF NOT EXISTS activity (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,   -- everything people change, for admins to look back over
+    at       INTEGER NOT NULL,
+    first_at INTEGER NOT NULL,
+    email    TEXT,
+    name     TEXT,
+    action   TEXT NOT NULL,          -- created | changed | deleted | signed in | user added | ...
+    store    TEXT,
+    rec_id   TEXT,
+    site_id  TEXT,
+    rec_name TEXT,
+    detail   TEXT,                   -- JSON summary of what changed
+    count    INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE INDEX IF NOT EXISTS activity_at ON activity (at);
+  CREATE INDEX IF NOT EXISTS activity_site ON activity (site_id, at);
+  CREATE INDEX IF NOT EXISTS activity_who ON activity (email, at);
   CREATE TABLE IF NOT EXISTS prefs (
     email   TEXT PRIMARY KEY,          -- each person's own settings (theme etc.), so they follow them to any device
     data    TEXT NOT NULL,
@@ -225,6 +242,10 @@ const SUMMARY = `SELECT json_object('id', id, 'siteId', site_id, 'name', json_ex
   'settings', json_object('department', json_extract(data, '$.settings.department'), 'preparedBy', json_extract(data, '$.settings.preparedBy'), 'revision', json_extract(data, '$.settings.revision'))) AS data
   FROM records WHERE store = 'maps'`;
 const q = {
+  logNew:   db.prepare('INSERT INTO activity (at, first_at, email, name, action, store, rec_id, site_id, rec_name, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+  logLast:  db.prepare("SELECT id, at, detail, count FROM activity WHERE email IS ? AND store = ? AND rec_id = ? AND action = 'changed' ORDER BY id DESC LIMIT 1"),
+  logMerge: db.prepare('UPDATE activity SET at = ?, detail = ?, count = count + 1, rec_name = ?, site_id = ? WHERE id = ?'),
+  logTidy:  db.prepare('DELETE FROM activity WHERE at < ?'),
   list:     db.prepare('SELECT data FROM records WHERE store = ? ORDER BY updated DESC'),
   listSite: db.prepare('SELECT data FROM records WHERE store = ? AND site_id = ? ORDER BY updated DESC'),
   get:      db.prepare('SELECT data, updated FROM records WHERE store = ? AND id = ?'),
@@ -416,6 +437,7 @@ async function handleAuth(req, res, parts, ip) {
     }
     if (!q.user.get(email)) q.addUser.run(email, 'user', Date.now(), 'domain');
     q.seenUser.run(claims.name || null, claims.picture || null, Date.now(), email);
+    logAct({ email, name: claims.name }, 'signed in', null, null, null, null, null);
     const token = crypto.randomBytes(32).toString('base64url');
     // one sign-in at a time: signing in here ends this account's session in any other browser
     q.tidyRepl.run(Date.now() - 2 * 86400000);
@@ -444,13 +466,16 @@ async function handleUsers(req, res, parts, me) {
     if (ADMIN_EMAILS.includes(email) && role !== 'admin') return json(res, 400, { error: `${email} is an admin in the server settings and stays an admin` });
     const existing = q.user.get(email);
     if (existing?.role === 'admin' && role !== 'admin' && q.admins.get().n <= 1) return json(res, 400, { error: 'There must be at least one admin' });
+    const had = q.user.get(email);
     q.addUser.run(email, role, Date.now(), me.email);
+    logAct(me, had ? (had.role !== role ? 'changed role' : 'updated user') : 'added user', 'users', email, null, `${email} (${role})`, null);
     return json(res, 200, { ok: true });
   }
   if (req.method === 'DELETE') {
     if (ADMIN_EMAILS.includes(email)) return json(res, 400, { error: `${email} is an admin in the server settings and can't be removed here` });
     if (email === me.email) return json(res, 400, { error: "You can't remove yourself" });
     q.delUser.run(email); q.endUser.run(email);
+    logAct(me, 'removed user', 'users', email, null, email, null);
     return json(res, 200, { ok: true });
   }
   return json(res, 405, { error: 'Method not allowed' });
@@ -483,6 +508,7 @@ async function handleRequests(req, res, parts, me) {
     const owner = q.row.get(rq.store, rq.rec_id)?.owner ?? rq.owner;
     if (!admin && owner !== me.email) return json(res, 403, { error: 'Only the owner or an admin can decide this' });
     const { obj } = await readJson(req, 2048), d = obj?.decision;
+    if (['approve', 'deny', 'revoke'].includes(d)) logAct(me, { approve: 'gave edit access', deny: 'turned down access', revoke: 'removed edit access' }[d], rq.store, rq.rec_id, rq.site_id, `${rq.name || ''} → ${rq.requester}`, null);
     if (d === 'approve') { q.addGrant.run(rq.store, rq.rec_id, rq.requester); q.reqSet.run('approved', Date.now(), me.email, rq.id); }
     else if (d === 'deny') { q.reqSet.run('denied', Date.now(), me.email, rq.id); }
     else if (d === 'revoke') { q.delGrant.run(rq.store, rq.rec_id, rq.requester); q.reqSet.run('revoked', Date.now(), me.email, rq.id); }
@@ -490,6 +516,56 @@ async function handleRequests(req, res, parts, me) {
     return json(res, 200, { ok: true });
   }
   return json(res, 405, { error: 'Method not allowed' });
+}
+
+/* ---------- activity log (admins only) ----------
+   Every change to a site or plan is recorded with who made it and a short summary of what changed.
+   Saves by the same person to the same plan within 15 minutes are merged into one entry. */
+const KIND = { wall: 'walls', door: 'doors and windows', zone: 'rooms', rect: 'shapes', ellipse: 'shapes', polygon: 'shapes', line: 'lines', arrow: 'arrows',
+  dim: 'dimensions', text: 'texts', obj: 'objects', image: 'pictures', svg: 'drawing parts' };
+const stId = e => (e.code || '') + String(e.num || 0).padStart(3, '0');
+function planDiff(oldObj, newObj) {
+  const d = { add: {}, rm: {}, ch: {}, stAdd: [], stRm: [], stMove: [], fields: [] };
+  const A = new Map((oldObj?.elements || []).map(e => [e.id, e])), B = new Map((newObj?.elements || []).map(e => [e.id, e]));
+  const bump = (o, k) => { o[k] = (o[k] || 0) + 1; };
+  for (const [id, e] of B) {
+    const o = A.get(id);
+    if (e.type === 'station') { if (!o) d.stAdd.push(stId(e)); else if (Math.hypot((o.x || 0) - (e.x || 0), (o.y || 0) - (e.y || 0)) > 1 || stId(o) !== stId(e)) d.stMove.push(stId(e)); continue; }
+    if (!o) bump(d.add, KIND[e.type] || e.type); else if (JSON.stringify(o) !== JSON.stringify(e)) bump(d.ch, KIND[e.type] || e.type);
+  }
+  for (const [id, e] of A) if (!B.has(id)) { if (e.type === 'station') d.stRm.push(stId(e)); else bump(d.rm, KIND[e.type] || e.type); }
+  if (oldObj && newObj) {
+    if (oldObj.name !== newObj.name) d.fields.push('name');
+    for (const k of ['department', 'revision', 'planDate', 'preparedBy']) if ((oldObj.settings || {})[k] !== (newObj.settings || {})[k]) d.fields.push({ department: 'department', revision: 'version', planDate: 'date', preparedBy: 'drawn by' }[k]);
+    for (const k of ['width', 'height', 'scale']) if (oldObj[k] !== newObj[k]) { d.fields.push('page size or scale'); break; }
+  }
+  return d;
+}
+function siteDiff(oldObj, newObj) {
+  const f = [];
+  for (const [k, l] of [['name', 'name'], ['address', 'address'], ['siteRef', 'site ref'], ['contractNo', 'contract no'], ['client', 'contact'], ['notes', 'notes'], ['image', 'photo']]) if ((oldObj || {})[k] !== (newObj || {})[k]) f.push(l);
+  return { fields: f };
+}
+function mergeDiff(a, b) {
+  const out = { add: { ...a.add }, rm: { ...a.rm }, ch: { ...a.ch }, stAdd: [...(a.stAdd || [])], stRm: [...(a.stRm || [])], stMove: [...(a.stMove || [])], fields: [...(a.fields || [])] };
+  for (const k of ['add', 'rm', 'ch']) for (const [t, n] of Object.entries(b[k] || {})) out[k][t] = (out[k][t] || 0) + n;
+  for (const k of ['stAdd', 'stRm', 'stMove', 'fields']) for (const v of b[k] || []) if (!out[k].includes(v)) out[k].push(v);
+  for (const k of ['stAdd', 'stRm', 'stMove']) out[k] = out[k].slice(-60);
+  return out;
+}
+const emptyDiff = d => !d || (!Object.keys(d.add || {}).length && !Object.keys(d.rm || {}).length && !Object.keys(d.ch || {}).length && !(d.stAdd || []).length && !(d.stRm || []).length && !(d.stMove || []).length && !(d.fields || []).length);
+let logCount = 0;
+function logAct(me, action, store, recId, siteId, recName, detail) {
+  try {
+    const now = Date.now(), email = me?.open ? null : (me?.email || null), name = me?.name || (email ? email.split('@')[0] : 'Someone');
+    if (action === 'changed') {
+      if (emptyDiff(detail)) return;
+      const last = q.logLast.get(email, store, recId);
+      if (last && now - last.at < 15 * 60000) { q.logMerge.run(now, JSON.stringify(mergeDiff(JSON.parse(last.detail || '{}'), detail)), recName, siteId, last.id); return; }
+    }
+    q.logNew.run(now, now, email, name, action, store || null, recId || null, siteId || null, recName || null, detail ? JSON.stringify(detail) : null);
+    if (++logCount % 500 === 0) q.logTidy.run(now - 2 * 365 * 86400000);     // keep two years
+  } catch (e) { console.error('activity log:', e.message); }
 }
 
 /* ---------- who may change what ----------
@@ -593,6 +669,20 @@ const server = http.createServer(async (req, res) => {
       }
       return json(res, 405, { error: 'Method not allowed' });
     }
+    // ----- activity log: admins only -----
+    if (parts[0] === 'activity' && parts.length === 1 && req.method === 'GET') {
+      if (me.role !== 'admin') return json(res, 403, { error: 'Only admins can see the activity log' });
+      const P = url.searchParams, where = [], args = [];
+      if (P.get('site')) { where.push('site_id = ?'); args.push(P.get('site')); }
+      if (P.get('map')) { where.push("store = 'maps' AND rec_id = ?"); args.push(P.get('map')); }
+      if (P.get('user')) { where.push('email = ?'); args.push(P.get('user')); }
+      if (P.get('kind') === 'changes') where.push("action NOT IN ('signed in')");
+      if (P.get('before')) { where.push('at < ?'); args.push(Number(P.get('before'))); }
+      if (P.get('q')) { where.push("(LOWER(COALESCE(rec_name,'') || ' ' || COALESCE(name,'') || ' ' || COALESCE(email,'') || ' ' || action || ' ' || COALESCE(detail,'')) LIKE ?)"); args.push('%' + P.get('q').toLowerCase() + '%'); }
+      const lim = Math.min(500, Math.max(1, Number(P.get('limit')) || 200));
+      const rows = db.prepare(`SELECT * FROM activity ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY at DESC LIMIT ${lim}`).all(...args);
+      return json(res, 200, rows);
+    }
     // ----- asking for edit access to someone else's site or plan -----
     if (parts[0] === 'grants' && parts.length === 1 && req.method === 'GET') return json(res, 200, me.open ? [] : q.myGrants.all(me.email));
     if (parts[0] === 'requests') return await handleRequests(req, res, parts, me);
@@ -633,6 +723,7 @@ const server = http.createServer(async (req, res) => {
       if (!obj || typeof obj !== 'object' || Array.isArray(obj) || obj.id !== id) return json(res, 400, { error: 'The record id must match the address' });
       let body = text;
       let now = Date.now(); const prev = q.stamp.get(store, id); if (prev && prev.updated >= now) now = prev.updated + 1;
+      const before = OWNED.has(store) || (store === 'meta' && !id.startsWith('hist:')) ? q.get.get(store, id) : null;
       if (OWNED.has(store)) {
         // the server decides the owner: whoever first created it (never changed by later edits, even an admin's)
         const ex = q.row.get(store, id);
@@ -642,10 +733,15 @@ const server = http.createServer(async (req, res) => {
         q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, body, now);
         if (!ex) q.setOwner.run(owner, store, id);
       } else q.put.run(store, id, typeof obj.siteId === 'string' ? obj.siteId : null, body, now);
+      if (store === 'maps' || store === 'sites') {
+        let old = null; try { old = before ? JSON.parse(before.data) : null; } catch {}
+        logAct(me, before ? 'changed' : 'created', store, id, store === 'maps' ? obj.siteId : id, obj.name, store === 'maps' ? planDiff(old, obj) : (before ? siteDiff(old, obj) : null));
+      } else if (store === 'meta' && (id === 'cats' || id === 'brand') && before && before.data !== body) logAct(me, 'changed shared settings', 'meta', id, null, id === 'cats' ? 'Station types' : 'Heading and logo', null);
       // the new version tag lets the browser keep its own copy instead of downloading it again
       return json(res, 200, { ok: true, owner: obj.owner || null, etag: `"r${now}"` });
     }
     if (req.method === 'DELETE') {
+      if (store === 'maps' || store === 'sites') { const r0 = q.get.get(store, id); let o = null; try { o = r0 ? JSON.parse(r0.data) : null; } catch {} if (o) logAct(me, 'deleted', store, id, store === 'maps' ? o.siteId : id, o.name, null); }
       q.del.run(store, id);
       return json(res, 200, { ok: true });
     }

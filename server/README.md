@@ -154,6 +154,7 @@ API (all JSON; `{store}` is `sites`, `maps`, `assets` or `meta`):
 | GET | `/api/info/{planId}` | sizes and last-saved times of a plan's drawing, pictures and undo history |
 | GET / POST | `/api/live/{planId}` | live editing: a server-sent event stream of other people's changes, and sending your own |
 | GET / POST | `/api/requests[/{id}]` | ask for edit access; list, approve, turn down or remove it |
+| GET | `/api/activity?site=&map=&user=&q=&before=` | the activity log (admins only) |
 | GET | `/api/grants` | the sites and plans you've been given edit access to |
 | GET | `/api/{store}` | every record (`?siteId=` filters plans by site) |
 | GET | `/api/{store}/{id}` | one record, or 404 |

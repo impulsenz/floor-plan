@@ -7,6 +7,7 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Sites as folders.** Create a site (e.g. *Teagle*), and every plan for that site is kept inside it. Each site card can show a photo of the site (add it when creating or editing the site); inside a site, plan cards show a preview of each map. Search finds sites by name, address, site ref, contract, client, owner or plan name, and **My sites** shows only your own.
 - **Your settings follow you.** Your picture → **Settings**: theme (match device, light or dark), accent colour, the *Drawn by* name and page shape for new floor plans, grid defaults, and how the Sites page is filtered and sorted. They're saved to your account on the server, so they're the same on any device you sign in on.
 - **Live editing.** When two or more people have the same plan open, each change shows up for the others as it's made, including walls, fences, lines and boxes while they're still being drawn, along with their pointers and a picture of who's there at the top. Nothing to switch on; it only sends anything while someone else is on the plan.
+- **Activity log** (admins only: your picture → Activity log): every change to sites and plans with who made it, when, and a summary of what changed (stations added, removed or moved, walls, rooms, text, details). Filter by site, plan or person, or search. Saves by the same person to the same plan within 15 minutes show as one entry.
 - **Ask to edit.** On someone else's site or plan, **Ask to edit** sends a request to its owner (and admins). They approve or turn it down under your picture → **Access requests**, and can remove the access later. Access to a site covers all its plans; only the owner or an admin can delete.
 - **Your files and everyone else's.** You can create, edit and delete your own sites and plans. Anyone else's can be opened (view only, with export) and duplicated; the copy is yours to edit. Admins can edit and delete everything.
 - **Printed sheet layout.** A fixed-height black heading band across the top, with your logo on the right (upload it once in the Settings tab, shared by every plan). The heading never moves; the logo has size, left/right and up/down controls. A fixed-height bottom bar fills itself from the site and plan details (Title, Address, Department, Date, Version, Site Ref, Drawn By, Contract No) plus a KEY of every station type.
@@ -26,7 +27,6 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
   - **Jumping ahead:** while placing, type a *Next number* (e.g. 40). New stations take the first free number from there, so 1–10, then 40, 41…, then set it back to 11 to carry on 11, 12… (numbers already used are skipped).
   - **Outlines:** the Stations tab also sets the outline around station IDs (thickness and colour); a single station can have its own.
   - **Sizes:** the Stations tab sets the icon and text size for every station on the plan. Click a single station to give it its own icon and text size (relative to the plan's), or put it back to the plan's sizes.
-  - **New station type** adds a type with its own prefix, shape, colour and starting number.
 
   | Prefix | Meaning | Colour |
   |---|---|---|
@@ -35,7 +35,7 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
   | F | Fence line station | Red by default (toxic bait); green if set to non-toxic |
   | W | Vertebrate control | Red by default (toxic bait); green if set to non-toxic |
 
-  Types that can be either are shown in the legend as one shape split diagonally, half red and half green. The toxic and non-toxic colours can be changed for each type under **Edit types**.
+  Types that can be either are shown in the legend as one shape split diagonally, half red and half green.
 
   | Prefix | Meaning | Colour |
   |---|---|---|
@@ -45,7 +45,7 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 
   | CP | Control panel | Purple |
 
-  All types are circles by default. Prefixes, names, shapes and colours can be changed under **Edit types**.
+  All types are circles by default.
 - **Satellite background** (Import › Satellite photo). Start typing an address and pick it from the drop-down, frame the property, and rotate it with the slider or ±15° buttons. The photo becomes the plan background with the scale and north arrow set automatically (Esri World Imagery).
 - **SVG drawings come in as editable pieces** that look exactly like the original (same fonts, letter spacing, positions, line styles and colours): every shape, line and text is its own item you can move, recolour, edit or delete. You can also use the SVG as a background or one picture instead.
 - **Letter-by-letter text** (common in PDF-to-SVG conversions) is joined back into whole words and lines, so a label like T1071 is one editable text.
@@ -53,14 +53,14 @@ Floor plans and bait-station maps for pest control sites. One HTML file, runs in
 - **Background settings** (the **Background** button in the left toolbar, double-click the background, or Settings tab → Background): make the background see-through, resize, turn (slider or 90° steps), flip, move with arrows or unlock and drag it, centre, fit to page, reset, or replace the file.
 - **Import** PNG, JPG, GIF, WEBP, BMP, SVG and PDF (any page) as a background or a movable image. On a site page, Import plan accepts `.json` and `.svg` plan files; SVGs exported from Station Planner come back fully editable, and any other drawing becomes a new plan with it as the background.
 - **Export** PNG, JPG, PDF and SVG with no margins (an A4 plan exports as an exact A4 page), with backgrounds included, in **Standard** (3×, print resolution) or **HD** quality (60% more resolution). The Register tab exports a station register as CSV, and sites back up as JSON.
-- **Print** (next to Export) prints the plan straight from the browser, sharp and filling one A4 page in the plan's orientation.
+- **Print** (next to Export) prints just the plan, filling one A4 page in the plan's orientation, with no date, title or web address added by the browser.
 - **Register tab:** every station in one list, search and filter, duplicate-number warnings, and *Close gaps* renumbering.
 - **Change log** (your picture → Change log) lists what's new in each app version.
 - **Ctrl+D** puts the copy where your mouse is.
 - **Undo history** of 100 steps per plan, saved with the plan so you can still undo after closing and reopening it.
 - **Zoom:** fit to screen is 100%; the + and − buttons, keys and mouse wheel go up and down in 5% steps.
 - **On the server** (Settings tab): how big this plan's drawing, pictures and undo history are on the server, and when it was last saved.
-- Scale calibration from any known length, grid with snapping, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
+- grid with snapping, marquee select, duplicate, keyboard shortcuts, touch pinch-zoom, light and dark themes.
 
 ## Storage
 
