@@ -1766,7 +1766,7 @@ function refreshPanel(){const a=document.activeElement;if(a&&$('#tabBody')?.cont
 function renderPanel(){
   if(route!=='map')return;$$('#panel .tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===E.tab));
   const tb=$('#tabBody');const scroll=tb.scrollTop;
-  tb.innerHTML=E.tab==='stations'?stationsTab():E.tab==='props'?propsTab():E.tab==='register'?registerTab():mapTab();if(E.tab!=='stations'&&E.tab!=='props'&&E.tab!=='register')loadSrvInfo();
+  tb.innerHTML=E.tab==='stations'?stationsTab():E.tab==='props'?propsTab():E.tab==='register'?registerTab():mapTab();
   tb.scrollTop=scroll;
   $('#stypes').innerHTML=STATION_TYPES.map(t=>`<option value="${esc(t[0])}">`).join('');
 }
@@ -1888,11 +1888,8 @@ function mapTab(){
       <div class="f"><span>Logo</span><div class="row">${BRAND.logo?`<img class="logo-prev" src="${BRAND.logo}" alt="Current logo">`:''}<button class="btn sm" data-act="logo">${BRAND.logo?'Change':'Upload image'}</button>${BRAND.logo?'<button class="btn sm ghost danger" data-act="nologo">Remove</button>':''}</div></div>
       ${BRAND.logo?`${F.range('brand','logoSize','Logo size',BRAND.logoSize??.78,.3,1,.01)}${F.range('brand','logoRight','Move left / right',-(BRAND.logoRight??16),-1100,0,2)}${F.range('brand','logoDY','Move up / down',BRAND.logoDY||0,-.3,.3,.005)}<div class="row"><button class="btn sm ghost" data-act="logoreset">Reset logo position</button></div>`:''}
       <p class="hint">The heading stays fixed. The heading and logo are shared by every plan.</p></div>
-    <div class="sec"><h3 class="sec-h">On the server</h3><div id="srvInfo" class="srv-info"><span class="hint">Checking…</span></div>
-      <div class="row"><button class="btn sm" data-act="srv-refresh">Refresh</button></div></div>
     <div class="sec"><h3 class="sec-h">Stations</h3>${F.range('set','marker','Marker size',st.marker,4,30,1)}${F.range('set','label','Label size',st.label,6,30,1)}</div>
     <div class="sec"><h3 class="sec-h">North arrow</h3>${F.check('furn','north.show','Show north arrow',f.north.show)}${f.north.show?F.range('furn','north.rot','Rotation',f.north.rot||0,-180,180,1)+F.range('furn','north.s','Size',f.north.s||1,.4,3,.05):''}</div>
-    <div class="sec"><h3 class="sec-h">Scale</h3><p class="hint">${M.scale?`1 metre = ${M.scale.toFixed(2)} px. The plan area is ${(M.width/M.scale).toFixed(1)} × ${(M.height/M.scale).toFixed(1)} m.`:'No scale set. Lengths show in pixels.'}</p>${M.scale?'<div class="row"><button class="btn sm ghost" data-act="noscale">Clear scale</button></div>':''}</div>
     <div class="sec"><h3 class="sec-h">Page and grid</h3><p class="hint">Page shape: <b>${({a4l:'A4 landscape',a4p:'A4 portrait',custom:'Custom'})[paperOf()]}</b></p><div class="row"><button class="btn sm" data-act="a4l">A4 landscape</button><button class="btn sm" data-act="a4p">A4 portrait</button></div>${F.num('map','width','Plan width (px)',M.width,10,200)}${F.num('map','height','Plan height (px)',M.height,10,200)}${F.num('set','grid','Grid size (px)',st.grid,1,2)}<div class="row">${F.check('set','showGrid','Show grid',st.showGrid)}${F.check('set','snap','Snap to grid',st.snap)}</div><p class="hint">Hold <kbd>Alt</kbd> while drawing to skip snapping.</p></div>`;
 }
 /* Adjust a background (or any picture): see-through, size, turn, flip, move, lock */
@@ -1983,7 +1980,6 @@ async function onPanelClick(e){
     case 'st-plan-size':pushHist();for(const id of E.sel){const x=getEl(id);if(x?.type==='station'){delete x.size;delete x.tsize;}}changed();renderPanel();break;
     case 'st-plan-look':pushHist();for(const id of E.sel){const x=getEl(id);if(x?.type==='station'){delete x.haloW;delete x.haloC;}}changed();renderPanel();break;
     case 'st-all-plan':pushHist();for(const x of M.elements)if(x.type==='station'){delete x.size;delete x.tsize;}changed();renderPanel();break;
-    case 'srv-refresh':loadSrvInfo(true);break;
     case 'group':{pushHist();const g='g'+uid();for(const id of E.sel){const x=getEl(id);if(x)x.grp=g;}changed();toast('Grouped. Click any of them to pick the whole group.');break;}
     case 'ungroup':{pushHist();for(const id of E.sel){const x=getEl(id);if(x)delete x.grp;}changed();toast('Ungrouped');break;}
     case 'zonefill':pushHist();M.elements=M.elements.filter(x=>!(E.sel.has(x.id)&&x.type==='zone'));E.sel.clear();changed();break;
@@ -2332,13 +2328,6 @@ async function printPlan(){if(!M)return;toast('Getting the page ready to print�
     f.onload=()=>setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){window.open(url,'_blank');}},400);
     f.src=url;document.body.appendChild(f);setTimeout(()=>{f.remove();URL.revokeObjectURL(url);},180000);}
   catch(e){console.error(e);toast('Could not get the page ready to print: '+e.message,'warn');}}
-/* What the server holds for this plan: sizes and when it was saved. */
-let srvInfoC={key:null,html:''};
-async function loadSrvInfo(force){const box=$('#srvInfo');if(!box||!M)return;const key=M.id+':'+savedAt;if(!force&&srvInfoC.key===key){box.innerHTML=srvInfoC.html;return;}srvInfoC={key,html:box.innerHTML};
-  try{const j=await Store.req('GET','/info/'+encodeURIComponent(M.id));if(!j)throw new Error('Nothing on the server for this plan yet, or the server needs updating (re-run the setup command).');const row=(l,o)=>`<div><span>${l}</span><b>${o?fmtBytes(o.size):'—'}</b></div>`;
-    box.innerHTML=row('Plan drawing',j.map)+row('Pictures',j.assets)+row('Undo history',j.hist)+`<div><span>Total</span><b>${fmtBytes((j.map?.size||0)+(j.assets?.size||0)+(j.hist?.size||0))}</b></div>
-      <div><span>Last saved</span><b>${j.map?.updated?esc(new Date(j.map.updated).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'})):'—'}</b></div><div><span>Owner</span><b>${esc(ownerLabel(M)||'—')}</b></div><div><span>Plan ID</span><b class="mono">${esc(M.id)}</b></div>`;srvInfoC.html=box.innerHTML;}
-  catch(e){box.innerHTML=`<span class="hint">${esc(/Unknown path|404/.test(e.message)?'This server needs updating to show this (re-run the setup command).':e.message)}</span>`;srvInfoC.key=null;}}
 const EXPORT_STD=3,EXPORT_HD=4.8;   // HD is 60% more resolution than standard
 async function openExport(){
   const base=safeName(`${site?.name||'Site'} - ${M.name}${M.settings.revision?' v'+M.settings.revision:''}`);
