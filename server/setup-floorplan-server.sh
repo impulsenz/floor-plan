@@ -583,9 +583,6 @@ const server = http.createServer(async (req, res) => {
         if (obj.type === 'cursor') {     // pointer position, plus whatever they're in the middle of drawing
           const draft = obj.draft && JSON.stringify(obj.draft).length < 60000 ? obj.draft : null;
           liveCast(planId, { type: 'cursor', from, x: +obj.x || 0, y: +obj.y || 0, on: !!obj.on, draft }, from); return json(res, 200, { ok: true }); }
-        if (obj.type === 'game') {        // the just-for-fun game: anyone on the plan can play, nothing is stored
-          if (JSON.stringify(obj.g || {}).length > 4000) return json(res, 413, { error: 'Too big' });
-          liveCast(planId, { type: 'game', from, g: obj.g }, from); return json(res, 200, { ok: true }); }
         const deny = writeCheck(me, 'maps', planId, 'PUT');
         if (deny) return json(res, 403, { error: deny });
         if (obj.type === 'ops') liveCast(planId, { type: 'ops', from, by: me.name || me.email, ops: obj.ops }, from);
